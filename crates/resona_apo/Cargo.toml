@@ -1,0 +1,13 @@
+[package]
+name = "resona_apo"
+version = "0.1.0"
+edition = "2021"
+authors = ["ResonaDSP Team"]
+description = "Native Windows System Audio Processing Object (sAPO) DLL"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+eq_apo_core = { path = "../eq_apo_core" }
+serde_json = "1.0"

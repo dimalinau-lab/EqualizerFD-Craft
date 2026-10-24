@@ -1,0 +1,29 @@
+feature,area,priority,original,clone,notes
+Endpoint APO hooking for playback devices (SFX/MFX/EFX/LFX/GFX),device_hooking,must,yes,partial,Enumeration inspection and reg backup implemented
+Endpoint APO hooking for recording/capture devices,device_hooking,must,yes,partial,Enumeration inspection and reg backup implemented
+Device Selector UI with install modes and troubleshooting toggles,device_hooking,must,yes,yes,Interactive modal UI + CLI registry backup and inspection
+In-process audiodg.exe zero-latency lock-free DSP engine,dsp_engine,must,yes,partial,eq_apo_core verified at 131x real-time speedup
+Live-reload file watcher for instant config sync without restart,dsp_engine,must,yes,yes,Live reactive sync between UI controls and config text
+Master Preamp gain control (-Infinity to +20 dB),eq_filters,must,yes,yes,Implemented in ChannelProcessingChain and UI slider
+Biquad Parametric Peaking Filter (Fc Gain Q/BW),eq_filters,must,yes,yes,Implemented in BiquadFilter and interactive canvas nodes
+Biquad Low-Shelf and High-Shelf Filters (Fc Gain Q/Slope),eq_filters,must,yes,yes,Implemented in BiquadFilter and UI cards
+Biquad Low-Pass and High-Pass Filters (1st and 2nd order Fc Q),eq_filters,must,yes,yes,Implemented in BiquadFilter and UI cards
+Biquad Band-Pass Notch and All-Pass Filters,eq_filters,should,yes,yes,Implemented in BiquadFilter
+Arbitrary-band Graphic Equalizer with spline/linear interpolation,eq_filters,must,yes,yes,Monotone cubic Hermite spline interpolation in GraphicEQ
+ISO Standard Fixed Graphic Equalizer (15-band 31-band 1/3 octave),eq_filters,should,yes,yes,Standard ISO 31-band grid implemented in GraphicEQ
+Channel scoping directive (Channel: L R C SUB RL RR all),routing_matrix,must,yes,yes,Implemented in ConfigFile parser and Pipeline
+Channel Copy and arithmetic expression matrix (e.g. L=0.5*L+0.5*R),routing_matrix,must,yes,yes,ChannelMatrix with linear expression parsing
+Per-Device conditional directive (Device: name or GUID),routing_matrix,must,yes,yes,Device directive parsing and endpoint GUID matching
+Channel Time Delay filter (milliseconds/samples),dsp_engine,should,yes,yes,Delay line buffer implemented in ChannelProcessingChain
+Convolution Engine with Impulse Response WAV file loader,dsp_engine,should,yes,no,Room correction and cabinet simulation via FFTW
+64-bit VST 2.4 Plugin Host with embedded GUI and state persistence,vst_support,should,yes,no,Runs 3rd-party audio plugins inside audiodg pipeline
+Modular config inclusion (Include: filename.txt),ui_editor,must,yes,yes,Recursive from_config_with_includes implemented
+Room EQ Wizard (REW) generic text export parser and import,measurement_import,should,yes,yes,Import button in UI and REW filter mapping
+Real-time visual Frequency Response Curve plot with clipping alert,ui_editor,must,yes,yes,Interactive HTML5 canvas with draggable EQ nodes and clip meter
+Interactive visual Editor GUI for pipeline blocks (Editor.exe),ui_editor,must,yes,yes,Studio web UI with block cards and real-time curve
+DSP throughput and buffer latency benchmark tool (Benchmark.exe),diagnostics,could,yes,yes,eq_apo_cli bench tool implemented
+VoiceMeeter client interop (VoicemeeterClient.exe),integrations,could,yes,no,Special client for VB-Audio VoiceMeeter feeds
+Modern VST3 plugin hosting support,vst_support,should,no,no,Major improvement over original VST 2.4 only
+Local HTTP/WebSocket JSON API for remote control and profile toggling,integrations,could,no,no,Modern headless/web control capability
+32-bit legacy x86 VST plugin bridging,vst_support,could,no,skip,Requires separate 32-bit out-of-process IPC bridge
+Direct ASIO exclusive hardware stream processing,dsp_engine,could,no,skip,ASIO architecture deliberately bypasses Windows Audio Engine

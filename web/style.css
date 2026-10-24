@@ -1,0 +1,1225 @@
+/* =========================================================================
+   Equalizer FD CRAFT Studio (Desktop Theme)
+   Native Windows Desktop Look & Feel
+   Zero Emojis - Clean Typography & High-Contrast Layout
+   ========================================================================= */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+body.desktop-app {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 12px;
+  background-color: #f0f0f0;
+  color: #1a1a1a;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Windows Menu Bar */
+.win-menubar {
+  background-color: #f0f0f0;
+  border-bottom: 1px solid #dcdcdc;
+  display: flex;
+  height: 25px;
+  align-items: center;
+  padding: 0 4px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.menu-item {
+  position: relative;
+  padding: 3px 8px;
+  cursor: default;
+  border-radius: 2px;
+}
+
+.menu-item:hover {
+  background-color: #e5f1fb;
+  outline: 1px solid #70c0e7;
+}
+
+.menu-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: #ffffff;
+  border: 1px solid #999999;
+  box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.2);
+  min-width: 280px;
+  width: max-content;
+  z-index: 1000;
+  padding: 3px 0;
+}
+
+.menu-item:hover .menu-dropdown {
+  display: block;
+}
+
+.menu-dropdown button {
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 5px 16px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  white-space: nowrap;
+  gap: 20px;
+}
+
+.menu-dropdown button:hover {
+  background-color: #0078d7;
+  color: #ffffff;
+}
+
+.menu-dropdown .shortcut {
+  color: #666666;
+  font-size: 11px;
+}
+
+.menu-dropdown button:hover .shortcut {
+  color: #e0f2fe;
+}
+
+.menu-divider {
+  height: 1px;
+  background-color: #e0e0e0;
+  margin: 3px 0;
+}
+
+/* Windows Toolbar (Responsive Windowed Mode) */
+.win-toolbar {
+  background-color: #f7f7f7;
+  border-bottom: 1px solid #d0d0d0;
+  padding: 3px 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 36px;
+  height: auto;
+  flex-shrink: 0;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tool-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  width: 26px;
+  height: 26px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.tool-btn:hover {
+  background-color: #e5f1fb;
+  border-color: #70c0e7;
+}
+
+.toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background-color: #d0d0d0;
+  margin: 0 4px;
+}
+
+.instant-mode-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Stream Bridge Chip */
+.stream-bridge-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #e0f2fe;
+  border: 1px solid #7dd3fc;
+  padding: 2px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.stream-toggle-btn {
+  padding: 2px 8px;
+  font-weight: 600;
+  font-size: 11px;
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.stream-toggle-btn:hover {
+  filter: brightness(1.1);
+}
+
+.target-selector-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  flex-shrink: 1;
+}
+
+.sel-label {
+  color: #333333;
+  white-space: nowrap;
+}
+
+.win-select {
+  font-family: inherit;
+  font-size: 12px;
+  background-color: #ffffff;
+  border: 1px solid #ababab;
+  border-radius: 2px;
+  padding: 2px 6px;
+  height: 25px;
+  outline: none;
+  max-width: 240px;
+  text-overflow: ellipsis;
+}
+
+.win-select:focus {
+  border-color: #0078d7;
+}
+
+.toolbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.status-indicator-clean {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-indicator-clean.ok {
+  background-color: #dff6dd;
+  color: #107c41;
+  border: 1px solid #107c41;
+}
+
+.status-indicator-clean.clip {
+  background-color: #fde7e9;
+  color: #a80000;
+  border: 1px solid #a80000;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+/* Main Split Container (Windowed Mode Layout) */
+.win-main-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: #e8e8e8;
+  min-height: 0;
+  height: 100%;
+}
+
+/* Blocks Workspace (Top half) */
+.blocks-workspace {
+  flex: 1 1 0;
+  min-height: 100px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overflow-anchor: none;
+  scroll-behavior: auto;
+  padding: 8px 12px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background-color: #ffffff;
+  border-bottom: 2px solid #cbd5e1;
+}
+
+/* Empty Workspace Placeholder (Windowed Mode Friendly) */
+.blocks-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #475569;
+  text-align: center;
+  gap: 10px;
+}
+
+.empty-state-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.empty-state-desc {
+  font-size: 11px;
+  color: #64748b;
+  max-width: 460px;
+  line-height: 1.4;
+}
+
+/* Dynamic Multi-Tab Bar (Task 10) */
+.config-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  border-bottom: 1px solid #c0c0c0;
+  margin-bottom: 8px;
+  overflow-x: auto;
+  padding-bottom: 1px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  background: #ffffff;
+  z-index: 50;
+}
+
+.tab-item {
+  background-color: #f0f0f0;
+  border: 1px solid #c0c0c0;
+  border-bottom: none;
+  padding: 4px 10px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  border-radius: 3px 3px 0 0;
+  white-space: nowrap;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.tab-item:hover {
+  background-color: #f8fafc;
+}
+
+.tab-item.active {
+  background-color: #ffffff;
+  font-weight: 600;
+  border-top: 2px solid #0078d7;
+  border-bottom: 1px solid #ffffff;
+  margin-bottom: -1px;
+  color: #0f172a;
+}
+
+.tab-close {
+  color: #888888;
+  font-size: 13px;
+  font-weight: bold;
+  line-height: 1;
+  border-radius: 2px;
+  padding: 0 3px;
+}
+
+.tab-close:hover {
+  color: #ffffff;
+  background-color: #dc2626;
+}
+
+.tab-new-btn {
+  background: none;
+  border: 1px dashed #adadad;
+  border-radius: 3px 3px 0 0;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  color: #64748b;
+  line-height: 1;
+}
+
+.tab-new-btn:hover {
+  background-color: #e2e8f0;
+  border-color: #0078d7;
+  color: #0078d7;
+}
+
+.blocks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Equalizer FD CRAFT Filter Block Card */
+.filter-block-card {
+  background-color: #ffffff;
+  border: 1px solid #b5b5b5;
+  border-radius: 2px;
+  box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.filter-block-header {
+  background: linear-gradient(180deg, #f7f9fa 0%, #e9edf1 100%);
+  border-bottom: 1px solid #c8d0d8;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.block-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Power On/Off Toggle Button */
+.power-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid #15803d;
+  background-color: #22c55e;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.power-btn.off {
+  background-color: #94a3b8;
+  border-color: #64748b;
+  color: #f1f5f9;
+}
+
+.power-btn:hover {
+  filter: brightness(1.1);
+  transform: scale(1.05);
+}
+
+.power-btn svg {
+  display: block;
+  pointer-events: none;
+}
+
+.block-title-text {
+  font-weight: 600;
+  font-size: 12px;
+  color: #24292f;
+}
+
+.block-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-icon-sm {
+  background: none;
+  border: 1px solid transparent;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  font-size: 12px;
+  color: #555555;
+}
+
+.btn-icon-sm:hover {
+  background-color: #e0e0e0;
+}
+
+.btn-icon-sm.delete:hover {
+  background-color: #e81123;
+  color: #ffffff;
+}
+
+.filter-block-content {
+  padding: 8px 12px;
+  background-color: #ffffff;
+}
+
+/* Preamp control */
+.preamp-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.preamp-label {
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 120px;
+}
+
+.win-slider {
+  flex: 1;
+  height: 6px;
+  accent-color: #0078d7;
+  cursor: pointer;
+}
+
+.win-input-num {
+  font-family: "Segoe UI", sans-serif;
+  font-size: 12px;
+  width: 85px;
+  padding: 3px 6px;
+  border: 1px solid #ababab;
+  text-align: right;
+  border-radius: 2px;
+}
+
+/* Parametric table in block */
+.param-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.param-table th {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #d0d0d0;
+  color: #444444;
+  font-weight: 600;
+}
+
+.param-table td {
+  padding: 6px 8px;
+  vertical-align: middle;
+}
+
+.param-table td.cell-center {
+  text-align: center;
+}
+
+.flt-del-btn {
+  width: 22px;
+  height: 22px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: bold;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+
+.flt-del-btn:hover {
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+/* Filter Explanation Hint Box and Info Badge (Task 11) */
+.flt-hint-text {
+  font-size: 11px;
+  color: #1e293b;
+  background: #f0fdf4;
+  border-left: 3px solid #16a34a;
+  padding: 4px 8px;
+  margin-top: 4px;
+  border-radius: 0 3px 3px 0;
+  line-height: 1.4;
+}
+
+.flt-info-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #e0f2fe;
+  color: #0284c7;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: help;
+  margin-left: 4px;
+  border: 1px solid #7dd3fc;
+  vertical-align: middle;
+  transition: all 0.15s ease;
+}
+
+.flt-info-badge:hover {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0369a1;
+}
+
+/* 15-band Graphic EQ Sliders */
+.graphic-eq-bank {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 6px 0;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.geq-slider-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 32px;
+}
+
+.geq-v-slider {
+  writing-mode: bt-lr;
+  -webkit-appearance: slider-vertical;
+  height: 90px;
+  width: 12px;
+  accent-color: #0078d7;
+}
+
+.geq-freq-label {
+  font-size: 10px;
+  color: #555555;
+  font-weight: 500;
+}
+
+.geq-db-val {
+  font-size: 10px;
+  font-weight: 600;
+  color: #111111;
+}
+
+/* VST Plugin & Boss RC-505 Cards */
+.plugin-desc-banner {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-left: 3px solid #16a34a;
+  border-radius: 3px;
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #1e293b;
+  margin-bottom: 10px;
+}
+
+.plugin-desc-banner.rc505-desc {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  border-left-color: #2563eb;
+}
+
+.param-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px 16px;
+  margin-bottom: 10px;
+}
+
+.param-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.param-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.param-val-badge {
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  background: #e2e8f0;
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: #0f172a;
+}
+
+.param-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.param-slider {
+  flex: 1;
+  height: 4px;
+  accent-color: #0284c7;
+  cursor: pointer;
+}
+
+.preset-pills-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #cbd5e1;
+}
+
+.preset-pill-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.pill-btn {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pill-btn:hover {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+
+.vst-meta-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+/* Green Plus Button (Equalizer FD CRAFT style) */
+.add-block-control {
+  margin-top: 8px;
+  position: relative;
+}
+
+.add-btn-dropdown-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.win-add-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid #1e7e34;
+  background: linear-gradient(180deg, #28a745 0%, #218838 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.win-add-button:hover {
+  background: linear-gradient(180deg, #2fb34a 0%, #1e7e34 100%);
+}
+
+.plus-icon {
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+/* Popup Add Menu - Default opens UPWARD above the + button to prevent jumping & clipping */
+.add-menu-popup {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  background-color: #ffffff;
+  border: 1px solid #94a3b8;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+  min-width: 250px;
+  z-index: 1000;
+  padding: 4px 0;
+  overscroll-behavior: contain;
+}
+
+.add-menu-popup.open-down {
+  bottom: auto;
+  top: calc(100% + 6px);
+}
+
+.menu-category {
+  position: relative;
+  padding: 5px 20px 5px 14px;
+  font-size: 12px;
+  cursor: default;
+  user-select: none;
+}
+
+.menu-category:hover {
+  background-color: #0078d7;
+  color: #ffffff;
+}
+
+.menu-category::after {
+  content: ">";
+  position: absolute;
+  right: 10px;
+  font-size: 11px;
+}
+
+/* Invisible bridge so mouse moving diagonally to sub-menu never breaks hover */
+.menu-category::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -12px;
+  width: 12px;
+  height: 100%;
+}
+
+.sub-menu {
+  display: none;
+  position: absolute;
+  left: calc(100% + 1px);
+  bottom: -4px;
+  top: auto;
+  background-color: #ffffff;
+  border: 1px solid #94a3b8;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+  min-width: 270px;
+  max-height: 360px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 0;
+  z-index: 1001;
+}
+
+/* For upper categories when popup opens down, align top */
+.add-menu-popup.open-down .menu-category.align-top .sub-menu {
+  top: -4px;
+  bottom: auto;
+}
+
+.menu-category:hover .sub-menu {
+  display: block;
+}
+
+.sub-menu button {
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 5px 16px;
+  font-size: 12px;
+  color: #1a1a1a;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.sub-menu button:hover {
+  background-color: #0078d7;
+  color: #ffffff;
+}
+
+/* Analysis Panel (Bottom half, adaptive to windowed mode) */
+.analysis-panel {
+  min-height: 140px;
+  max-height: 40vh;
+  height: 200px;
+  background-color: #1a1d20;
+  border-top: 2px solid #334155;
+  display: flex;
+  flex-direction: column;
+  transition: height 0.2s ease;
+  flex-shrink: 0;
+}
+
+.analysis-panel.collapsed {
+  height: 26px;
+  min-height: 26px;
+}
+
+.analysis-panel.collapsed .analysis-canvas-wrap {
+  display: none;
+}
+
+.analysis-panel-header {
+  background-color: #24292e;
+  border-bottom: 1px solid #111111;
+  padding: 3px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.panel-header-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.toggle-btn {
+  background: none;
+  border: none;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.analysis-meta {
+  color: #8b949e;
+  font-size: 11px;
+  display: flex;
+  gap: 8px;
+  font-family: Consolas, monospace;
+}
+
+.meta-separator {
+  color: #444d56;
+}
+
+.analysis-canvas-wrap {
+  flex: 1;
+  position: relative;
+  background-color: #1a1d20;
+  overflow: hidden;
+}
+
+#analysisCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.curve-tooltip {
+  position: absolute;
+  background-color: rgba(0, 0, 0, 0.85);
+  color: #00d2ff;
+  border: 1px solid #0078d7;
+  border-radius: 2px;
+  padding: 2px 6px;
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+/* Native Modal Dialogs */
+.win-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.win-dialog {
+  background-color: #f8fafc;
+  border: 1px solid #0078d7;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+.dialog-header {
+  background: #ffffff;
+  padding: 8px 14px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #0f172a;
+  border-bottom: 1px solid #cbd5e1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dialog-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #64748b;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.dialog-close:hover {
+  color: #dc2626;
+}
+
+.dialog-body {
+  padding: 14px;
+  overflow-y: auto;
+}
+
+.dialog-textarea {
+  width: 100%;
+  height: 280px;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  border: 1px solid #ababab;
+  padding: 8px;
+  border-radius: 3px;
+}
+
+.dialog-footer {
+  padding: 10px 14px;
+  background: #f1f5f9;
+  border-top: 1px solid #cbd5e1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+}
+
+.dialog-note {
+  margin-right: auto;
+  font-size: 11px;
+  color: #666666;
+}
+
+.win-btn {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 5px 16px;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #334155;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.win-btn:hover {
+  background-color: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+.win-btn.primary {
+  background-color: #0284c7;
+  color: #ffffff;
+  border-color: #0369a1;
+  font-weight: 600;
+}
+
+.win-btn.primary:hover {
+  background-color: #0369a1;
+}
+
+/* Configurator Table */
+.configurator-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid #ababab;
+  margin: 8px 0;
+}
+
+.cfg-tab {
+  background-color: #e1e1e1;
+  border: 1px solid #ababab;
+  border-bottom: none;
+  padding: 5px 14px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.cfg-tab.active {
+  background-color: #ffffff;
+  font-weight: 600;
+  border-top: 2px solid #0078d7;
+}
+
+.cfg-table-wrap {
+  max-height: 220px;
+  overflow-y: auto;
+  background-color: #ffffff;
+  border: 1px solid #ababab;
+  margin-bottom: 10px;
+}
+
+.cfg-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cfg-table th {
+  background-color: #f1f5f9;
+  border-bottom: 1px solid #cbd5e1;
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.cfg-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 11px;
+}
+
+.cfg-troubleshoot {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 10px;
+}
+
+.trouble-subbox {
+  margin-top: 6px;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Toast Notifications */
+.toast-notification {
+  position: fixed;
+  bottom: 28px;
+  right: 20px;
+  background-color: #1e293b;
+  color: #ffffff;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  border-left: 4px solid #10b981;
+  z-index: 9999;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+
+.toast-notification.hidden {
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+}
+
+/* VST Catalog Styles */
+.vst-catalog-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  gap: 12px;
+  transition: all 0.15s ease;
+}
+
+.vst-catalog-card:hover {
+  border-color: #16a34a;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.vst-card-left {
+  flex: 1;
+}
+
+.vst-card-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: #0f172a;
+  margin-bottom: 2px;
+}
+
+.vst-card-dll {
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  color: #166534;
+  background: #f0fdf4;
+  padding: 1px 5px;
+  border-radius: 3px;
+  display: inline-block;
+  margin-bottom: 6px;
+}
+
+.vst-card-cat {
+  font-size: 10px;
+  color: #475569;
+  background: #f1f5f9;
+  padding: 1px 6px;
+  border-radius: 10px;
+  margin-left: 6px;
+  display: inline-block;
+}
+
+.vst-card-desc {
+  font-size: 11px;
+  color: #334155;
+  line-height: 1.4;
+  margin-bottom: 3px;
+}
+
+.vst-card-how {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.35;
+}

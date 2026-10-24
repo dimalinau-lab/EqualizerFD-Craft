@@ -1,0 +1,84 @@
+# =========================================================================
+# Equalizer FD CRAFT - .gitignore
+# Excludes build artifacts, temporary files, logs, local device configs
+# and private machine data, preserving only source code and deliverables.
+# =========================================================================
+
+# --- Rust & Cargo Build Artifacts ---
+target/
+**/target/
+**/*.rs.bk
+
+# --- Compiled Binaries & Intermediate Object Files ---
+*.exe
+*.dll
+*.so
+*.dylib
+*.pdb
+*.ilk
+*.lib
+*.exp
+*.o
+*.obj
+*.a
+*.rcgu.o
+
+# Whitelist root deliverables & bundled driver tools
+!/EqualizerFD-Craft.exe
+!/ResonaAPO.dll
+!/EqualizerFD-Craft.ico
+!tools/vbcable/**
+
+# --- External VST Plugin Library (~500 MB distributed via Releases) ---
+vst_plugins/
+vst_plugins_repo/
+*.vst3
+*.component
+
+# --- User & Local Machine Configurations & Device Backups ---
+# Local configuration files containing personal hardware GUIDs and system paths
+config.txt
+preset_*.txt
+test_*.txt
+*.reg
+backup_*.reg
+
+# Whitelist clean configuration template for new users
+!/config.example.txt
+
+# --- Logs, Runtime Dumps & Archives ---
+*.log
+run_log.txt
+stdout.txt
+stderr.txt
+*.dump
+*.dmp
+*.crash
+*.bin
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# --- Development Scripts, Scratches & Browser Caches ---
+scratch/
+browser/
+test_*.ps1
+test_*.bat
+
+# --- Agent Tasks & Internal Storage ---
+.agents/
+
+# --- IDE, Editor & OS Artifacts ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store

@@ -1,0 +1,16 @@
+{
+  "name": "ResonaDSP",
+  "avoid": [
+    "Equalizer APO",
+    "EqualizerAPO",
+    "Jonas Thedering"
+  ],
+  "domains": [
+    "sourceforge.net/projects/equalizerapo",
+    "equalizerapo.com"
+  ],
+  "colors": [
+    "#f0f0f0",
+    "#333333"
+  ]
+}

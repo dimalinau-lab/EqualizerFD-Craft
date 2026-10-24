@@ -1,0 +1,26 @@
+[package]
+name = "equalizer_fd_craft"
+version = "1.0.0"
+edition = "2021"
+authors = ["Equalizer FD CRAFT Team"]
+
+[[bin]]
+name = "EqualizerFD-Craft"
+path = "src/main.rs"
+
+[dependencies]
+eq_apo_core = { path = "../eq_apo_core" }
+eq_apo_device = { path = "../eq_apo_device" }
+resona_apo = { path = "../resona_apo" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Shell",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Com",
+    "Win32_System_Threading",
+    "Win32_Security"
+] }
