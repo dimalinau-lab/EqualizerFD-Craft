@@ -70,6 +70,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilen
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "EqualizerFDCraft"; ValueData: """{app}\{#MyAppExeName}"""; Tasks: autostart; Flags: uninsdeletevalue
 
 [Run]
+Filename: "icacls.exe"; Parameters: """{app}\vst_plugins"" /grant ""*S-1-5-19:(OI)(CI)RX"" ""*S-1-15-2-1:(OI)(CI)RX"" /T /C /Q"; Flags: runhidden; Tasks: vstplugins
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]

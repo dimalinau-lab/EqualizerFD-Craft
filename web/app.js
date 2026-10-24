@@ -74,7 +74,7 @@ function createDefaultBlocks() {
 }
 
 // --- VST Plugins Catalog (APO-PLUGINS Suite) ---
-let VST_BASE_DIR = 'vst_plugins\\';
+let VST_BASE_DIR = 'D:\\\\testik\\\\vst_plugins\\\\';
 fetch('/api/info')
   .then(res => res.json())
   .then(data => {
@@ -3345,8 +3345,10 @@ async function populateDeviceDropdown() {
 async function initApp() {
   renderTabs();
   resizeAnalysisCanvas();
-  await populateDeviceDropdown();
-  await checkAutostart();
+
+  // Populate devices and autostart asynchronously without blocking UI or config
+  populateDeviceDropdown();
+  checkAutostart();
 
   // Load server config into initial tab only if no saved state exists in browser localStorage
   if (!savedTabs || savedTabs.length === 0) {

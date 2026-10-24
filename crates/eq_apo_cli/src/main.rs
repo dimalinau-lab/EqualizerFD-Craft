@@ -194,10 +194,13 @@ pub fn launch_desktop_program() {
         return;
     }
 
-    // 1. Start system tray notification area icon & menu
+    // 1. Ensure ACL permissions for VST plugins directory (D:\testik\vst_plugins)
+    devices::ensure_vst_permissions();
+
+    // 2. Start system tray notification area icon & menu
     tray::start_tray_service();
 
-    // 2. Start background embedded server on port 49200
+    // 3. Start background embedded server on port 49200
     let _ = server::start_embedded_server(APP_PORT);
 
     // 3. Launch standalone desktop application window

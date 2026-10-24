@@ -285,7 +285,11 @@ fn handle_client(mut stream: TcpStream) {
                     .ok()
                     .and_then(|p| p.parent().map(|p| p.to_string_lossy().to_string()))
                     .unwrap_or_else(|| ".".to_string());
-                let vst_dir = format!("{}\\vst_plugins\\", exe_dir.trim_end_matches('\\'));
+                let vst_dir = if std::path::Path::new(r"D:\testik\vst_plugins").exists() {
+                    r"D:\testik\vst_plugins\".to_string()
+                } else {
+                    format!("{}\\vst_plugins\\", exe_dir.trim_end_matches('\\'))
+                };
                 let resp = serde_json::json!({
                     "app_dir": exe_dir,
                     "vst_dir": vst_dir,

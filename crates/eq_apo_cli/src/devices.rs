@@ -90,143 +90,6 @@ fn decode_cmd_output(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).to_string()
 }
 
-pub fn enumerate_endpoints(endpoint_type: &str) -> Vec<AudioEndpointInfo> {
-    let mut endpoints = Vec::new();
-    let root_path = format!(r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\{}", endpoint_type);
-
-    let output = cmd_hidden("reg")
-        .args(["query", &root_path])
-        .output();
-
-    let output_str = match output {
-        Ok(out) => String::from_utf8_lossy(&out.stdout).to_string(),
-        Err(_) => return endpoints,
-    };
-
-    for line in output_str.lines() {
-        let trimmed = line.trim();
-        if !trimmed.starts_with(&root_path) {
-            continue;
-        }
-
-        // Subkey is e.g. HKLM\...\Audio\Render\{guid}
-        if let Some(guid) = trimmed.strip_prefix(&format!(r"{}\", root_path)) {
-            let guid = guid.trim();
-            let state_query = cmd_hidden("reg")
-                .args(["query", trimmed, "/v", "DeviceState"])
-                .output();
-
-            let is_active = match state_query {
-                Ok(st) => {
-                    let st_str = String::from_utf8_lossy(&st.stdout);
-                    st_str.contains("0x1")
-                }
-                Err(_) => false,
-            };
-
-            if !is_active {
-                continue;
-            }
-
-            let prop_path = format!(r"{}\Properties", trimmed);
-            let prop_query = cmd_hidden("reg")
-                .args(["query", &prop_path])
-                .output();
-
-            let mut friendly_name = String::new();
-            let mut hw_desc = String::new();
-            let mut conn_type = String::new();
-
-            if let Ok(p_out) = prop_query {
-                let p_str = decode_cmd_output(&p_out.stdout);
-                for p_line in p_str.lines() {
-                    let p_line_trim = p_line.trim();
-                    let parts: Vec<&str> = p_line_trim.split_whitespace().collect();
-                    if parts.len() >= 3 && parts[1] == "REG_SZ" {
-                        let val = parts[2..].join(" ");
-                        if parts[0].eq_ignore_ascii_case(PKEY_DEVICE_FRIENDLY_NAME) {
-                            friendly_name = val;
-                        } else if parts[0].eq_ignore_ascii_case(DEVPKEY_DEVICE_DESC) {
-                            hw_desc = val;
-                        } else if parts[0].eq_ignore_ascii_case(PKEY_BUS_TYPE) {
-                            conn_type = val;
-                        }
-                    }
-                }
-            }
-
-            if friendly_name.is_empty() {
-                continue;
-            }
-
-            // Determine user-friendly hardware descriptor & connector
-            let connector = if conn_type.eq_ignore_ascii_case("USB") || hw_desc.to_lowercase().contains("usb") {
-                "USB Audio".to_string()
-            } else if hw_desc.to_lowercase().contains("realtek") || conn_type.contains("HDAUDIO") || conn_type.contains("INTE") {
-                "Realtek HD Audio".to_string()
-            } else if hw_desc.to_lowercase().contains("sonar") || hw_desc.to_lowercase().contains("cable") || hw_desc.to_lowercase().contains("virtual") {
-                "Virtual Endpoint".to_string()
-            } else if conn_type.contains("BTH") || hw_desc.to_lowercase().contains("bluetooth") {
-                "Bluetooth Audio".to_string()
-            } else {
-                "Audio Endpoint".to_string()
-            };
-
-            // Display name: combine friendly name + hardware model (e.g. "Microphone (fifine SC3)")
-            let display_name = if !hw_desc.is_empty() && !friendly_name.to_lowercase().contains(&hw_desc.to_lowercase()) {
-                format!("{} ({})", friendly_name, hw_desc)
-            } else {
-                friendly_name.clone()
-            };
-
-            let fx_path = format!(r"{}\FxProperties", trimmed);
-            let fx_query = cmd_hidden("reg")
-                .args(["query", &fx_path])
-                .output();
-
-            let mut has_fx = false;
-            let mut apo_installed = false;
-            let mut hook_mode = "Driver default".to_string();
-            let mut active_clsid = None;
-
-            if let Ok(fx_out) = fx_query {
-                if fx_out.status.success() {
-                    has_fx = true;
-                    let fx_str = String::from_utf8_lossy(&fx_out.stdout).to_uppercase();
-
-                    let is_resona = fx_str.contains(&RESONA_APO_PRE_MIX_CLSID.to_uppercase());
-                    let is_eq_apo = fx_str.contains(&EQUALIZER_APO_PRE_MIX_CLSID.to_uppercase());
-
-                    if is_resona {
-                        apo_installed = true;
-                        hook_mode = "Installed (Native ResonaAPO)".to_string();
-                        active_clsid = Some(RESONA_APO_PRE_MIX_CLSID.to_string());
-                    } else if is_eq_apo {
-                        apo_installed = true;
-                        hook_mode = "Installed (EqualizerFD-Craft)".to_string();
-                        active_clsid = Some(EQUALIZER_APO_PRE_MIX_CLSID.to_string());
-                    }
-                }
-            }
-
-            endpoints.push(AudioEndpointInfo {
-                guid: guid.to_string(),
-                name: display_name,
-                raw_name: friendly_name,
-                hw_desc,
-                connector,
-                endpoint_type: endpoint_type.to_string(),
-                has_fx_properties: has_fx,
-                apo_installed,
-                hook_mode,
-                active_sapo_clsid: active_clsid,
-            });
-        }
-    }
-
-    endpoints
-}
-
 #[cfg(windows)]
 mod winreg_native {
     use std::ffi::c_void;
@@ -237,7 +100,9 @@ mod winreg_native {
     pub const HKEY_LOCAL_MACHINE: HKEY = 0x80000002u32 as usize as HKEY;
     pub const KEY_SET_VALUE: u32 = 0x0002;
     pub const KEY_QUERY_VALUE: u32 = 0x0001;
+    pub const KEY_ENUMERATE_SUB_KEYS: u32 = 0x0008;
     pub const REG_SZ: u32 = 1;
+    pub const REG_EXPAND_SZ: u32 = 2;
     pub const REG_DWORD: u32 = 4;
     pub const ERROR_SUCCESS: LSTATUS = 0;
 
@@ -249,6 +114,26 @@ mod winreg_native {
             ulOptions: u32,
             samDesired: u32,
             phkResult: *mut HKEY,
+        ) -> LSTATUS;
+
+        pub fn RegEnumKeyExW(
+            hKey: HKEY,
+            dwIndex: u32,
+            lpName: *mut u16,
+            lpcchName: *mut u32,
+            lpReserved: *mut u32,
+            lpClass: *mut u16,
+            lpcchClass: *mut u32,
+            lpftLastWriteTime: *mut c_void,
+        ) -> LSTATUS;
+
+        pub fn RegQueryValueExW(
+            hKey: HKEY,
+            lpValueName: *const u16,
+            lpReserved: *mut u32,
+            lpType: *mut u32,
+            lpData: *mut u8,
+            lpcbData: *mut u32,
         ) -> LSTATUS;
 
         pub fn RegSetValueExW(
@@ -284,6 +169,99 @@ mod winreg_native {
             Ok(hkey)
         } else {
             Err(status)
+        }
+    }
+
+    pub fn enum_subkeys(hkey: HKEY) -> Vec<String> {
+        let mut subkeys = Vec::new();
+        let mut index = 0;
+        let mut name_buf = [0u16; 256];
+        loop {
+            let mut name_len = name_buf.len() as u32;
+            let res = unsafe {
+                RegEnumKeyExW(
+                    hkey,
+                    index,
+                    name_buf.as_mut_ptr(),
+                    &mut name_len,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                )
+            };
+            if res != ERROR_SUCCESS {
+                break;
+            }
+            let sub = String::from_utf16_lossy(&name_buf[..name_len as usize]);
+            subkeys.push(sub);
+            index += 1;
+        }
+        subkeys
+    }
+
+    pub fn query_str(hkey: HKEY, name: &str) -> Option<String> {
+        let name_w = to_wide(name);
+        let mut data_type = 0u32;
+        let mut cb_data = 0u32;
+        unsafe {
+            let res = RegQueryValueExW(
+                hkey,
+                name_w.as_ptr(),
+                std::ptr::null_mut(),
+                &mut data_type,
+                std::ptr::null_mut(),
+                &mut cb_data,
+            );
+            if res != ERROR_SUCCESS || cb_data == 0 {
+                return None;
+            }
+            let mut buf = vec![0u8; cb_data as usize];
+            let res = RegQueryValueExW(
+                hkey,
+                name_w.as_ptr(),
+                std::ptr::null_mut(),
+                &mut data_type,
+                buf.as_mut_ptr(),
+                &mut cb_data,
+            );
+            if res != ERROR_SUCCESS {
+                return None;
+            }
+            if data_type == REG_SZ || data_type == REG_EXPAND_SZ {
+                let u16_len = cb_data as usize / 2;
+                let u16_slice = std::slice::from_raw_parts(buf.as_ptr() as *const u16, u16_len);
+                let trimmed = if let Some(pos) = u16_slice.iter().position(|&c| c == 0) {
+                    &u16_slice[..pos]
+                } else {
+                    u16_slice
+                };
+                Some(String::from_utf16_lossy(trimmed))
+            } else {
+                None
+            }
+        }
+    }
+
+    pub fn query_dword(hkey: HKEY, name: &str) -> Option<u32> {
+        let name_w = to_wide(name);
+        let mut data_type = 0u32;
+        let mut val = 0u32;
+        let mut cb_data = 4u32;
+        unsafe {
+            let res = RegQueryValueExW(
+                hkey,
+                name_w.as_ptr(),
+                std::ptr::null_mut(),
+                &mut data_type,
+                &mut val as *mut u32 as *mut u8,
+                &mut cb_data,
+            );
+            if res == ERROR_SUCCESS && data_type == REG_DWORD {
+                Some(val)
+            } else {
+                None
+            }
         }
     }
 
@@ -328,6 +306,135 @@ mod winreg_native {
     pub fn close_key(hkey: HKEY) {
         unsafe {
             let _ = RegCloseKey(hkey);
+        }
+    }
+}
+
+pub fn enumerate_endpoints(endpoint_type: &str) -> Vec<AudioEndpointInfo> {
+    let mut endpoints = Vec::new();
+
+    #[cfg(windows)]
+    {
+        use winreg_native::*;
+        let root_sub = format!(r"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\{}", endpoint_type);
+        if let Ok(h_root) = open_key(&root_sub, KEY_QUERY_VALUE | KEY_ENUMERATE_SUB_KEYS) {
+            let guids = enum_subkeys(h_root);
+            for guid in guids {
+                let dev_sub = format!(r"{}\{}", root_sub, guid);
+                if let Ok(h_dev) = open_key(&dev_sub, KEY_QUERY_VALUE) {
+                    let is_active = query_dword(h_dev, "DeviceState").map(|st| st == 1).unwrap_or(false);
+                    close_key(h_dev);
+                    if !is_active {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+
+                let prop_sub = format!(r"{}\{}\Properties", root_sub, guid);
+                let mut friendly_name = String::new();
+                let mut hw_desc = String::new();
+                let mut conn_type = String::new();
+                if let Ok(h_prop) = open_key(&prop_sub, KEY_QUERY_VALUE) {
+                    friendly_name = query_str(h_prop, PKEY_DEVICE_FRIENDLY_NAME).unwrap_or_default();
+                    hw_desc = query_str(h_prop, DEVPKEY_DEVICE_DESC).unwrap_or_default();
+                    conn_type = query_str(h_prop, PKEY_BUS_TYPE).unwrap_or_default();
+                    close_key(h_prop);
+                }
+
+                if friendly_name.is_empty() {
+                    continue;
+                }
+
+                let connector = if conn_type.eq_ignore_ascii_case("USB") || hw_desc.to_lowercase().contains("usb") {
+                    "USB Audio".to_string()
+                } else if hw_desc.to_lowercase().contains("realtek") || conn_type.contains("HDAUDIO") || conn_type.contains("INTE") {
+                    "Realtek HD Audio".to_string()
+                } else if hw_desc.to_lowercase().contains("sonar") || hw_desc.to_lowercase().contains("cable") || hw_desc.to_lowercase().contains("virtual") {
+                    "Virtual Endpoint".to_string()
+                } else if conn_type.contains("BTH") || hw_desc.to_lowercase().contains("bluetooth") {
+                    "Bluetooth Audio".to_string()
+                } else {
+                    "Audio Endpoint".to_string()
+                };
+
+                let display_name = if !hw_desc.is_empty() && !friendly_name.to_lowercase().contains(&hw_desc.to_lowercase()) {
+                    format!("{} ({})", friendly_name, hw_desc)
+                } else {
+                    friendly_name.clone()
+                };
+
+                let fx_sub = format!(r"{}\{}\FxProperties", root_sub, guid);
+                let mut has_fx = false;
+                let mut apo_installed = false;
+                let mut hook_mode = "Driver default".to_string();
+                let mut active_clsid = None;
+
+                if let Ok(h_fx) = open_key(&fx_sub, KEY_QUERY_VALUE) {
+                    has_fx = true;
+                    let sfx = query_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},5").unwrap_or_default();
+                    let efx = query_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},7").unwrap_or_default();
+                    close_key(h_fx);
+
+                    let is_soundpad = efx.eq_ignore_ascii_case("{27384E53-9860-0AC3-9519-C60EBCAA2C71}");
+                    let is_resona = sfx.eq_ignore_ascii_case(RESONA_APO_PRE_MIX_CLSID);
+                    let is_eq_apo = sfx.eq_ignore_ascii_case(EQUALIZER_APO_PRE_MIX_CLSID);
+
+                    if is_eq_apo && is_soundpad {
+                        apo_installed = true;
+                        hook_mode = "Installed (Equalizer FD CRAFT + Soundpad Coexistence)".to_string();
+                        active_clsid = Some(EQUALIZER_APO_PRE_MIX_CLSID.to_string());
+                    } else if is_resona {
+                        apo_installed = true;
+                        hook_mode = "Installed (Native ResonaAPO)".to_string();
+                        active_clsid = Some(RESONA_APO_PRE_MIX_CLSID.to_string());
+                    } else if is_eq_apo {
+                        apo_installed = true;
+                        hook_mode = "Installed (EqualizerFD-Craft)".to_string();
+                        active_clsid = Some(EQUALIZER_APO_PRE_MIX_CLSID.to_string());
+                    } else if is_soundpad {
+                        hook_mode = "Soundpad standalone".to_string();
+                    }
+                }
+
+                endpoints.push(AudioEndpointInfo {
+                    guid,
+                    name: display_name,
+                    raw_name: friendly_name,
+                    hw_desc,
+                    connector,
+                    endpoint_type: endpoint_type.to_string(),
+                    has_fx_properties: has_fx,
+                    apo_installed,
+                    hook_mode,
+                    active_sapo_clsid: active_clsid,
+                });
+            }
+            close_key(h_root);
+        }
+    }
+
+    endpoints
+}
+
+pub fn ensure_vst_permissions() {
+    let mut targets = vec![std::path::PathBuf::from(r"D:\testik\vst_plugins")];
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            let local_vst = parent.join("vst_plugins");
+            if local_vst != targets[0] {
+                targets.push(local_vst);
+            }
+        }
+    }
+
+    for target in targets {
+        if target.exists() {
+            if let Some(path_str) = target.to_str() {
+                let _ = cmd_hidden("icacls")
+                    .args([path_str, "/grant", "*S-1-5-19:(OI)(CI)RX", "*S-1-15-2-1:(OI)(CI)RX", "/T", "/C", "/Q"])
+                    .output();
+            }
         }
     }
 }
