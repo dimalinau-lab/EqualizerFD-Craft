@@ -38,6 +38,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 Name: "autostart"; Description: "Запускать Equalizer FD CRAFT при старте Windows (в системном трее)"; GroupDescription: "Параметры запуска:"
+Name: "vstplugins"; Description: "Встроенный набор студийных VST плагинов (98 плагинов: ReaPlugs, Blue Cat, Kuassa, компрессоры, гейты, эквалайзеры)"; GroupDescription: "Компоненты:"
 
 [Files]
 Source: "EqualizerFD-Craft.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -54,9 +55,13 @@ Source: "web\*"; DestDir: "{app}\web"; Flags: ignoreversion recursesubdirs creat
 ; VB-Audio Virtual Cable bundled installer
 Source: "tools\vbcable\*"; DestDir: "{app}\tools\vbcable"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+; Bundled Studio VST Plugins (98 plugins)
+Source: "vst_plugins\*"; DestDir: "{app}\vst_plugins"; Tasks: vstplugins; Flags: ignoreversion recursesubdirs createallsubdirs
+
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\EqualizerFD-Craft.ico"
 Name: "{group}\Мастер быстрой настройки микрофона"; Filename: "{app}\{#MyAppExeName}"; Parameters: "editor"; IconFilename: "{app}\EqualizerFD-Craft.ico"
+Name: "{group}\Папка студийных VST плагинов"; Filename: "{app}\vst_plugins"; Tasks: vstplugins
 Name: "{group}\Установить VB-Audio Virtual Cable"; Filename: "{app}\tools\vbcable\VBCABLE_Setup_x64.exe"; IconFilename: "{app}\tools\vbcable\pin_in.ico"
 Name: "{group}\Удалить {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\EqualizerFD-Craft.ico"; Tasks: desktopicon

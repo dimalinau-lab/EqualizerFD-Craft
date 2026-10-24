@@ -74,7 +74,20 @@ function createDefaultBlocks() {
 }
 
 // --- VST Plugins Catalog (APO-PLUGINS Suite) ---
-const VST_BASE_DIR = 'd:\\\\testik\\\\vst_plugins\\\\';
+let VST_BASE_DIR = 'vst_plugins\\';
+fetch('/api/info')
+  .then(res => res.json())
+  .then(data => {
+    if (data && data.vst_dir) {
+      VST_BASE_DIR = data.vst_dir;
+      const optBundled = document.getElementById('optBundledVst');
+      if (optBundled) {
+        optBundled.value = data.vst_dir;
+        optBundled.textContent = `Встроенная библиотека VST: ${data.vst_dir}`;
+      }
+    }
+  })
+  .catch(() => {});
 
 const VST_PLUGINS_CATALOG = {
   reagate: {
@@ -2822,6 +2835,9 @@ async function checkUpdates() {
     const res = await fetch(`/api/update/check${query}`);
     const data = await res.json();
 
+    if (updateCurrentVerText && data.current_version) {
+      updateCurrentVerText.textContent = `Текущая версия: v${data.current_version}`;
+    }
     if (updateStatusText) updateStatusText.textContent = data.message || 'Проверка завершена';
     if (updateResultBox) updateResultBox.classList.remove('hidden');
 

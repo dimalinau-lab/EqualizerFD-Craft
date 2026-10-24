@@ -499,7 +499,7 @@
           <label style="display: block; font-weight: 600; margin-bottom: 5px;">Быстрый выбор стандартных каталогов:</label>
           <select id="quickVstFolderSelect" class="win-select" style="width: 100%; height: 28px; padding: 2px 6px;">
             <option value="">-- Выберите стандартную папку VST --</option>
-            <option value="d:\testik\vst_plugins\">Встроенная библиотека VST: d:\testik\vst_plugins\</option>
+            <option id="optBundledVst" value="vst_plugins\">Встроенная библиотека VST (папка vst_plugins)</option>
             <option value="C:\Program Files\VSTPlugins\">C:\Program Files\VSTPlugins\</option>
             <option value="C:\Program Files\Common Files\VST2\">C:\Program Files\Common Files\VST2\</option>
             <option value="C:\Program Files\Steinberg\VstPlugins\">C:\Program Files\Steinberg\VstPlugins\</option>
@@ -527,7 +527,7 @@
       <div class="dialog-body" style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">
           <div>
-            <div style="font-weight: 600; font-size: 13px;" id="updateCurrentVerText">Текущая версия: v1.0.0</div>
+            <div style="font-weight: 600; font-size: 13px;" id="updateCurrentVerText">Текущая версия: v0.1.0-BETA</div>
             <div style="font-size: 11px; color: #64748b;" id="updateStatusText">Готов к проверке релизов GitHub</div>
           </div>
           <button class="win-btn" id="btnCheckNowUpdate" style="height: 28px; padding: 0 14px;">Проверить сейчас</button>
@@ -542,9 +542,9 @@
         </div>
 
         <div>
-          <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 11px;">GitHub Personal Access Token (опционально, для закрытого репозитория):</label>
-          <input type="password" id="updateGithubToken" class="win-select" style="width: 100%; height: 26px; padding: 2px 8px; font-size: 11px;" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx (для доступа к private repo)">
-          <span style="font-size: 10px; color: #94a3b8; display: block; margin-top: 3px;">Репозиторий: https://github.com/dimalinau-lab/EqualizerFD-Craft. Токен сохраняется только локально.</span>
+          <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 11px;">GitHub Personal Access Token (опционально, для повышенных лимитов API):</label>
+          <input type="password" id="updateGithubToken" class="win-select" style="width: 100%; height: 26px; padding: 2px 8px; font-size: 11px;" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx (для открытого репозитория не требуется)">
+          <span style="font-size: 10px; color: #94a3b8; display: block; margin-top: 3px;">Открытый репозиторий: https://github.com/dimalinau-lab/EqualizerFD-Craft. Для публичной проверки токен не требуется.</span>
         </div>
       </div>
       <div class="dialog-footer">

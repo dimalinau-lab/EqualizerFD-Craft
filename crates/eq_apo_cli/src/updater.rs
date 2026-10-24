@@ -7,7 +7,7 @@ use std::process::Command;
 use serde::{Deserialize, Serialize};
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
-pub const CURRENT_VERSION: &str = "1.0.0";
+pub const CURRENT_VERSION: &str = "0.1.0-BETA";
 pub const REPO_OWNER: &str = "dimalinau-lab";
 pub const REPO_NAME: &str = "EqualizerFD-Craft";
 
@@ -60,7 +60,7 @@ pub fn cleanup_previous_update() {
 
 /// Checks GitHub API for latest release
 pub fn check_for_updates(token_opt: Option<&str>) -> UpdateCheckResponse {
-    let api_url = format!("https://api.github.com/repos/{}/{}/releases/latest", REPO_OWNER, REPO_NAME);
+    let api_url = format!("https://api.github.com/repos/{}/{}/releases?per_page=1", REPO_OWNER, REPO_NAME);
     
     let mut cmd = Command::new("curl.exe");
     cmd.args(["-s", "-H", "Accept: application/vnd.github+json", "-H", &format!("User-Agent: EqualizerFD-Craft/{}", CURRENT_VERSION)]);
@@ -95,24 +95,24 @@ pub fn check_for_updates(token_opt: Option<&str>) -> UpdateCheckResponse {
 
     let text = String::from_utf8_lossy(&output.stdout).to_string();
 
-    if text.contains("\"message\":\"Not Found\"") {
-        return UpdateCheckResponse {
-            current_version: CURRENT_VERSION.to_string(),
-            latest_version: CURRENT_VERSION.to_string(),
-            has_update: false,
-            release_name: String::new(),
-            release_notes: "Репозиторий закрытый или релиз еще не опубликован.".to_string(),
-            download_url: String::new(),
-            asset_name: String::new(),
-            asset_size: 0,
-            repo_private: true,
-            message: "Репозиторий пока закрытый (Private). Укажите GitHub Personal Access Token для авторизации.".to_string(),
-        };
-    }
+    let release_opt: Option<GithubRelease> = if let Ok(list) = serde_json::from_str::<Vec<GithubRelease>>(&text) {
+        list.into_iter().next()
+    } else if let Ok(single) = serde_json::from_str::<GithubRelease>(&text) {
+        Some(single)
+    } else {
+        None
+    };
 
-    let release: GithubRelease = match serde_json::from_str(&text) {
-        Ok(r) => r,
-        Err(_) => {
+    let release = match release_opt {
+        Some(r) => r,
+        None => {
+            let (is_private, message) = if text.contains("Bad credentials") {
+                (true, "Неверный GitHub Personal Access Token.".to_string())
+            } else if text.contains("\"message\":\"Not Found\"") {
+                (false, "Релизы на GitHub пока не найдены.".to_string())
+            } else {
+                (false, "Нет доступных релизов на GitHub.".to_string())
+            };
             return UpdateCheckResponse {
                 current_version: CURRENT_VERSION.to_string(),
                 latest_version: CURRENT_VERSION.to_string(),
@@ -122,8 +122,8 @@ pub fn check_for_updates(token_opt: Option<&str>) -> UpdateCheckResponse {
                 download_url: String::new(),
                 asset_name: String::new(),
                 asset_size: 0,
-                repo_private: false,
-                message: "Нет доступных релизов на GitHub.".to_string(),
+                repo_private: is_private,
+                message,
             };
         }
     };

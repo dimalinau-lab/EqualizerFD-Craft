@@ -280,6 +280,19 @@ fn handle_client(mut stream: TcpStream) {
                 let resp = serde_json::to_string(&check_res).unwrap_or_default();
                 respond_ok(&mut stream, "application/json", resp.as_bytes());
             }
+            "/api/info" => {
+                let exe_dir = std::env::current_exe()
+                    .ok()
+                    .and_then(|p| p.parent().map(|p| p.to_string_lossy().to_string()))
+                    .unwrap_or_else(|| ".".to_string());
+                let vst_dir = format!("{}\\vst_plugins\\", exe_dir.trim_end_matches('\\'));
+                let resp = serde_json::json!({
+                    "app_dir": exe_dir,
+                    "vst_dir": vst_dir,
+                    "version": "0.1.0-BETA"
+                }).to_string();
+                respond_ok(&mut stream, "application/json", resp.as_bytes());
+            }
             _ => respond_404(&mut stream),
         }
     } else if method == "POST" {
