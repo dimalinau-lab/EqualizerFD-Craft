@@ -150,6 +150,18 @@ mod winreg_native {
             lpValueName: *const u16,
         ) -> LSTATUS;
 
+        pub fn RegCreateKeyExW(
+            hKey: HKEY,
+            lpSubKey: *const u16,
+            Reserved: u32,
+            lpClass: *mut u16,
+            dwOptions: u32,
+            samDesired: u32,
+            lpSecurityAttributes: *mut c_void,
+            phkResult: *mut HKEY,
+            lpdwDisposition: *mut u32,
+        ) -> LSTATUS;
+
         pub fn RegCloseKey(
             hKey: HKEY,
         ) -> LSTATUS;
@@ -164,6 +176,30 @@ mod winreg_native {
         let mut hkey: HKEY = std::ptr::null_mut();
         let status = unsafe {
             RegOpenKeyExW(HKEY_LOCAL_MACHINE, wide.as_ptr(), 0, access, &mut hkey)
+        };
+        if status == ERROR_SUCCESS {
+            Ok(hkey)
+        } else {
+            Err(status)
+        }
+    }
+
+    pub fn create_key(sub_key: &str, access: u32) -> Result<HKEY, LSTATUS> {
+        let wide = to_wide(sub_key);
+        let mut hkey: HKEY = std::ptr::null_mut();
+        let mut disp = 0u32;
+        let status = unsafe {
+            RegCreateKeyExW(
+                HKEY_LOCAL_MACHINE,
+                wide.as_ptr(),
+                0,
+                std::ptr::null_mut(),
+                0,
+                access,
+                std::ptr::null_mut(),
+                &mut hkey,
+                &mut disp,
+            )
         };
         if status == ERROR_SUCCESS {
             Ok(hkey)
@@ -439,9 +475,10 @@ pub fn ensure_vst_permissions() {
     }
 }
 
-pub fn install_endpoint_hook(guid: &str, endpoint_type: &str, _mode: &str) -> Result<(), String> {
-    let pre_clsid = RESONA_APO_PRE_MIX_CLSID;
-    let post_clsid = RESONA_APO_POST_MIX_CLSID;
+pub fn install_endpoint_hook(guid: &str, endpoint_type: &str, mode: &str) -> Result<(), String> {
+    let pre_clsid = EQUALIZER_APO_PRE_MIX_CLSID;
+    let post_clsid = EQUALIZER_APO_POST_MIX_CLSID;
+    let soundpad_clsid = "{27384E53-9860-0AC3-9519-C60EBCAA2C71}";
 
     #[cfg(windows)]
     {
@@ -454,16 +491,29 @@ pub fn install_endpoint_hook(guid: &str, endpoint_type: &str, _mode: &str) -> Re
         let h_fx = open_key(&fx_sub, KEY_SET_VALUE | KEY_QUERY_VALUE)
             .map_err(|e| format!("Не удалось открыть FxProperties (код {}): проверьте права реестра", e))?;
 
-        // 1. LFX (PreMix)
+        let current_efx = query_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},7").unwrap_or_default();
+        let current_gfx = query_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},2").unwrap_or_default();
+        let has_soundpad = current_efx.eq_ignore_ascii_case(soundpad_clsid)
+            || current_gfx.eq_ignore_ascii_case(soundpad_clsid)
+            || mode.to_ascii_uppercase().contains("SOUNDPAD")
+            || mode.eq_ignore_ascii_case("ALL");
+
+        // 1. LFX (PreMix) -> Equalizer APO
         let _ = set_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},1", pre_clsid);
-        // 2. GFX (PostMix)
-        let _ = set_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},2", post_clsid);
-        // 3. SFX (Windows 10/11 Stream Effects)
+
+        // 2. GFX (PostMix) -> Soundpad if present, otherwise Equalizer APO PostMix
+        let gfx_target = if has_soundpad { soundpad_clsid } else { post_clsid };
+        let _ = set_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},2", gfx_target);
+
+        // 3. SFX (Windows 10/11 Stream Effects) -> Equalizer APO
         let _ = set_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},5", pre_clsid);
-        // 4. MFX (Mode / Communications / Discord)
+
+        // 4. MFX (Mode / Communications / Discord) -> Equalizer APO
         let _ = set_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},6", pre_clsid);
-        // 5. EFX (Endpoint Effects)
-        let _ = set_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},7", post_clsid);
+
+        // 5. EFX (Endpoint Effects) -> Soundpad if present, otherwise Equalizer APO PostMix
+        let efx_target = if has_soundpad { soundpad_clsid } else { post_clsid };
+        let _ = set_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},7", efx_target);
 
         // 6. Enable System Effects flags
         let _ = set_dword(h_fx, "{1da5d803-d01f-450f-9081-68b9264c2f30},2", 0);
@@ -478,6 +528,25 @@ pub fn install_endpoint_hook(guid: &str, endpoint_type: &str, _mode: &str) -> Re
         if let Ok(h_prop) = open_key(&prop_sub, KEY_SET_VALUE | KEY_QUERY_VALUE) {
             let _ = set_dword(h_prop, "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},7", 0);
             close_key(h_prop);
+        }
+
+        // 8. Configure Child APOs and UniteFx for Soundpad coexistence
+        if has_soundpad {
+            let child_sub = format!(r"SOFTWARE\EqualizerAPO\Child APOs\{}", guid);
+            if let Ok(h_child) = create_key(&child_sub, KEY_SET_VALUE) {
+                let _ = set_str(h_child, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},7", soundpad_clsid);
+                let _ = set_str(h_child, "PostMixChild", soundpad_clsid);
+                let _ = set_str(h_child, "AllowSilentBufferModification", "true");
+                close_key(h_child);
+            }
+
+            let unite_sub = format!(r"SOFTWARE\Leppsoft\UniteFx\{}", guid);
+            if let Ok(h_unite) = create_key(&unite_sub, KEY_SET_VALUE) {
+                let _ = set_str(h_unite, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},5", pre_clsid);
+                let _ = set_str(h_unite, "Original-Apo", pre_clsid);
+                let _ = set_dword(h_unite, "Version", 3);
+                close_key(h_unite);
+            }
         }
 
         Ok(())

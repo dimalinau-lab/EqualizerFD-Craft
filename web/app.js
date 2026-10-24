@@ -1790,6 +1790,10 @@ function parseConfigIntoState(text, targetTab = null) {
   let pendingVstMeta = null;
   let pendingRc505Meta = null;
   const tab = targetTab || getActiveTab();
+  if (tab) {
+    tab.selectedDevice = 'all';
+    tab.selectedChannel = 'all';
+  }
 
   for (let rawLine of lines) {
     let line = rawLine.trim();
@@ -2809,14 +2813,10 @@ const updateStatusText = document.getElementById('updateStatusText');
 const updateResultBox = document.getElementById('updateResultBox');
 const updateBadgeStatus = document.getElementById('updateBadgeStatus');
 const updateNotesText = document.getElementById('updateNotesText');
-const updateGithubToken = document.getElementById('updateGithubToken');
-
 let pendingUpdateDownloadUrl = '';
 
 function openUpdateModal() {
   if (!updateModal) return;
-  const savedToken = localStorage.getItem('eq_github_token') || '';
-  if (updateGithubToken) updateGithubToken.value = savedToken;
   updateModal.classList.remove('hidden');
   checkUpdates();
 }
@@ -2827,12 +2827,8 @@ async function checkUpdates() {
   btnCheckNowUpdate.textContent = 'Проверка...';
   if (updateStatusText) updateStatusText.textContent = 'Связь с сервером GitHub Releases...';
 
-  const token = updateGithubToken ? updateGithubToken.value.trim() : '';
-  if (token) localStorage.setItem('eq_github_token', token);
-
   try {
-    const query = token ? `?token=${encodeURIComponent(token)}` : '';
-    const res = await fetch(`/api/update/check${query}`);
+    const res = await fetch('/api/update/check');
     const data = await res.json();
 
     if (updateCurrentVerText && data.current_version) {
