@@ -61,6 +61,7 @@ stderr.txt
 *.7z
 
 # --- Development Scripts, Scratches & Browser Caches ---
+replica/
 dist/
 scratch/
 browser/
