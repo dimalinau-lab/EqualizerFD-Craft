@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "eq_apo_core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -42,7 +42,7 @@ dependencies = [
 
 [[package]]
 name = "resona_apo"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "eq_apo_core",
  "serde_json",

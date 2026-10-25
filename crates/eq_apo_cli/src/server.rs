@@ -301,7 +301,7 @@ fn handle_client(mut stream: TcpStream) {
                 let resp = serde_json::json!({
                     "app_dir": exe_dir,
                     "vst_dir": vst_dir,
-                    "version": "0.1.0-BETA"
+                    "version": "0.1.1-BETA"
                 }).to_string();
                 respond_ok(&mut stream, "application/json", resp.as_bytes());
             }

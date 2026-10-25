@@ -2,7 +2,7 @@
 ; Equalizer FD CRAFT - Professional DSP & Configuration Studio
 
 #define MyAppName "Equalizer FD CRAFT"
-#define MyAppVersion "0.1.0-BETA"
+#define MyAppVersion "0.1.1-BETA"
 #define MyAppPublisher "Equalizer FD CRAFT Team"
 #define MyAppURL "https://github.com/dimalinau-lab/EqualizerFD-Craft"
 #define MyAppExeName "EqualizerFD-Craft.exe"
@@ -21,7 +21,7 @@ DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 LicenseFile=LICENSE
 OutputDir=dist
-OutputBaseFilename=EqualizerFD-Craft-Setup-v0.1.0-BETA
+OutputBaseFilename=EqualizerFD-Craft-Setup-v0.1.1-BETA
 SetupIconFile=EqualizerFD-Craft.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
