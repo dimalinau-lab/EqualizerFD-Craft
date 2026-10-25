@@ -32,6 +32,14 @@ pub fn start_embedded_server(port: u16) -> Result<(), String> {
     println!("  Local Studio:  http://127.0.0.1:{}", port);
     println!("===========================================================");
 
+    // Seed shared memory from config.txt initially
+    for path in &[r"d:\testik\config.txt", r"C:\Program Files\EqualizerAPO\config\config.txt", "config.txt"] {
+        if let Ok(txt) = std::fs::read_to_string(path) {
+            sync_config_to_shared_mem(&txt);
+            break;
+        }
+    }
+
     // Auto-start live WASAPI stream bridge to Virtual Cable
     thread::spawn(|| {
         thread::sleep(Duration::from_millis(500));

@@ -1,6 +1,7 @@
 //! WASAPI Real-Time Low-Latency Audio Streaming Engine
 //! Bypasses Windows sAPO driver restrictions by bridging Mic -> DSP -> Virtual Cable in user-mode.
 
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
@@ -169,71 +170,58 @@ fn run_streaming_pipeline(
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
 
-        let enumerator: IMMDeviceEnumerator = match CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) {
-            Ok(e) => e,
-            Err(err) => {
-                eprintln!("[WASAPI Stream] Failed to create MMDeviceEnumerator: {:?}", err);
-                return;
+        while running.load(Ordering::Relaxed) {
+            if let Err(e) = run_pipeline_session(&capture_kw, &render_kw, &running) {
+                if !running.load(Ordering::Relaxed) {
+                    break;
+                }
+                eprintln!("[WASAPI Stream] Pipeline error / disconnect: {:?}. Auto-reconnecting in 400ms...", e);
+                thread::sleep(Duration::from_millis(400));
             }
-        };
+        }
+        println!("[WASAPI Stream] Pipeline thread terminated.");
+    }
+}
 
-        let cap_device = match find_device(&enumerator, eCapture, &capture_kw) {
+fn run_pipeline_session(
+    capture_kw: &str,
+    render_kw: &str,
+    running: &Arc<AtomicBool>,
+) -> Result<()> {
+    unsafe {
+        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+
+        let cap_device = match find_device(&enumerator, eCapture, capture_kw) {
             Ok(d) => d,
             Err(e) => {
-                eprintln!("[WASAPI Stream] Could not find capture device: {:?}", e);
-                return;
+                eprintln!("[WASAPI Stream] Could not find capture device '{}': {:?}", capture_kw, e);
+                return Err(e);
             }
         };
 
-        let ren_device = match find_device(&enumerator, eRender, &render_kw) {
+        let ren_device = match find_device(&enumerator, eRender, render_kw) {
             Ok(d) => d,
             Err(e) => {
-                eprintln!("[WASAPI Stream] Could not find render device (VB-Cable): {:?}", e);
-                return;
+                eprintln!("[WASAPI Stream] Could not find render device (VB-Cable) '{}': {:?}", render_kw, e);
+                return Err(e);
             }
         };
 
-        let cap_client: IAudioClient = match cap_device.Activate(CLSCTX_ALL, None) {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("[WASAPI Stream] Failed to activate capture client: {:?}", e);
-                return;
-            }
-        };
+        let cap_client: IAudioClient = cap_device.Activate(CLSCTX_ALL, None)?;
+        let ren_client: IAudioClient = ren_device.Activate(CLSCTX_ALL, None)?;
 
-        let ren_client: IAudioClient = match ren_device.Activate(CLSCTX_ALL, None) {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("[WASAPI Stream] Failed to activate render client: {:?}", e);
-                return;
-            }
-        };
-
-        let cap_format_ptr = match cap_client.GetMixFormat() {
-            Ok(f) => f,
-            Err(e) => {
-                eprintln!("[WASAPI Stream] Failed to get capture format: {:?}", e);
-                return;
-            }
-        };
+        let cap_format_ptr = cap_client.GetMixFormat()?;
         let cap_format = *cap_format_ptr;
 
-        let ren_format_ptr = match ren_client.GetMixFormat() {
-            Ok(f) => f,
-            Err(e) => {
-                eprintln!("[WASAPI Stream] Failed to get render format: {:?}", e);
-                CoTaskMemFree(Some(cap_format_ptr as _));
-                return;
-            }
-        };
+        let ren_format_ptr = ren_client.GetMixFormat()?;
         let ren_format = *ren_format_ptr;
 
         let cap_rate = cap_format.nSamplesPerSec;
-        let cap_channels = cap_format.nChannels;
+        let cap_channels = cap_format.nChannels as usize;
         let cap_bits = cap_format.wBitsPerSample;
 
         let ren_rate = ren_format.nSamplesPerSec;
-        let ren_channels = ren_format.nChannels;
+        let ren_channels = ren_format.nChannels as usize;
         let ren_bits = ren_format.wBitsPerSample;
 
         println!(
@@ -245,7 +233,8 @@ fn run_streaming_pipeline(
             ren_rate, ren_channels, ren_bits
         );
 
-        let buffer_duration_hns = 100_000; // 10ms (in 100-nanosecond units)
+        // 20ms buffer duration for comfortable headroom preventing underrun
+        let buffer_duration_hns = 200_000;
 
         if let Err(e) = cap_client.Initialize(
             AUDCLNT_SHAREMODE_SHARED,
@@ -258,7 +247,7 @@ fn run_streaming_pipeline(
             eprintln!("[WASAPI Stream] Capture init failed: {:?}", e);
             CoTaskMemFree(Some(cap_format_ptr as _));
             CoTaskMemFree(Some(ren_format_ptr as _));
-            return;
+            return Err(e);
         }
 
         if let Err(e) = ren_client.Initialize(
@@ -272,22 +261,33 @@ fn run_streaming_pipeline(
             eprintln!("[WASAPI Stream] Render init failed: {:?}", e);
             CoTaskMemFree(Some(cap_format_ptr as _));
             CoTaskMemFree(Some(ren_format_ptr as _));
-            return;
+            return Err(e);
         }
+
+        let ren_buffer_size = match ren_client.GetBufferSize() {
+            Ok(sz) => sz,
+            Err(e) => {
+                CoTaskMemFree(Some(cap_format_ptr as _));
+                CoTaskMemFree(Some(ren_format_ptr as _));
+                return Err(e);
+            }
+        };
 
         let capture_service: IAudioCaptureClient = match cap_client.GetService() {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("[WASAPI Stream] Failed to get capture service: {:?}", e);
-                return;
+                CoTaskMemFree(Some(cap_format_ptr as _));
+                CoTaskMemFree(Some(ren_format_ptr as _));
+                return Err(e);
             }
         };
 
         let render_service: IAudioRenderClient = match ren_client.GetService() {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("[WASAPI Stream] Failed to get render service: {:?}", e);
-                return;
+                CoTaskMemFree(Some(cap_format_ptr as _));
+                CoTaskMemFree(Some(ren_format_ptr as _));
+                return Err(e);
             }
         };
 
@@ -295,77 +295,76 @@ fn run_streaming_pipeline(
         let _ = ren_client.Start();
 
         let mut dsp = ResonaDspEngine::new(
-            cap_format.nSamplesPerSec as f32,
-            cap_format.nChannels as usize,
+            cap_rate as f32,
+            ren_channels,
         );
 
-        // Load config from disk if available
-        if let Ok(cfg_text) = std::fs::read_to_string(r"C:\Program Files\EqualizerAPO\config\config.txt") {
-            dsp.sync_from_config_text(&cfg_text);
-        } else if let Ok(cfg_text) = std::fs::read_to_string(r"d:\testik\config.txt") {
-            dsp.sync_from_config_text(&cfg_text);
+        // Load config from disk initially
+        for path in &[r"d:\testik\config.txt", r"C:\Program Files\EqualizerAPO\config\config.txt"] {
+            if let Ok(cfg_text) = std::fs::read_to_string(path) {
+                dsp.sync_from_config_text(&cfg_text);
+                break;
+            }
         }
 
         let shm_handle = resona_apo::shared_mem::SharedMemoryHandle::create_or_open().ok();
         if let Some(ref shm) = shm_handle {
             if !shm.ptr.is_null() {
-                (*shm.ptr).sample_rate = cap_format.nSamplesPerSec;
-                (*shm.ptr).channels = cap_format.nChannels as u32;
+                (*shm.ptr).sample_rate = cap_rate;
+                (*shm.ptr).channels = ren_channels as u32;
                 dsp.sync_from_shared_mem(&*shm.ptr);
             }
         }
 
         let mut float_buffer: Vec<f32> = Vec::with_capacity(4096);
-        let mut loop_count = 0u64;
+        let mut dsp_stereo_buffer: Vec<f32> = Vec::with_capacity(4096);
+        let mut jitter_buffer: VecDeque<f32> = VecDeque::with_capacity(16384);
 
         println!("[WASAPI Stream] Stream pipeline RUNNING! Real-time DSP active.");
 
-        while running.load(Ordering::Relaxed) {
-            loop_count += 1;
+        let mut error_result: Result<()> = Ok(());
 
+        while running.load(Ordering::Relaxed) {
+            // Fast in-memory sync from shared memory
             if let Some(ref shm) = shm_handle {
                 if !shm.ptr.is_null() {
                     dsp.sync_from_shared_mem(&*shm.ptr);
                 }
             }
-            if loop_count % 100 == 0 {
-                // Sync latest EQ parameters every ~500ms from disk as safety fallback
-                for path in &[r"d:\testik\config.txt", r"C:\Program Files\EqualizerAPO\config\config.txt"] {
-                    if let Ok(cfg_text) = std::fs::read_to_string(path) {
-                        dsp.sync_from_config_text(&cfg_text);
+
+            // 1. Process all available captured packets
+            loop {
+                let packet_size = match capture_service.GetNextPacketSize() {
+                    Ok(sz) => sz,
+                    Err(e) => {
+                        error_result = Err(e);
                         break;
                     }
+                };
+
+                if packet_size == 0 {
+                    break;
                 }
-            }
 
-            let packet_size = capture_service.GetNextPacketSize().unwrap_or(0);
-            if packet_size == 0 {
-                thread::sleep(Duration::from_millis(2));
-                continue;
-            }
+                let mut data_ptr = std::ptr::null_mut();
+                let mut num_frames_read = 0u32;
+                let mut flags = 0u32;
 
-            let mut data_ptr = std::ptr::null_mut();
-            let mut num_frames_read = 0u32;
-            let mut flags = 0u32;
-
-            if capture_service
-                .GetBuffer(
+                if let Err(e) = capture_service.GetBuffer(
                     &mut data_ptr,
                     &mut num_frames_read,
                     &mut flags,
                     None,
                     None,
-                )
-                .is_ok()
-            {
-                if num_frames_read > 0 && !data_ptr.is_null() {
-                    let in_channels = cap_channels as usize;
-                    let out_channels = ren_channels as usize;
-                    let total_samples = (num_frames_read as usize) * in_channels;
+                ) {
+                    error_result = Err(e);
+                    break;
+                }
 
+                if num_frames_read > 0 && !data_ptr.is_null() {
+                    let total_samples = (num_frames_read as usize) * cap_channels;
                     float_buffer.clear();
 
-                    // Convert captured samples to f32
                     if cap_bits == 32 {
                         let slice = std::slice::from_raw_parts(data_ptr as *const f32, total_samples);
                         float_buffer.extend_from_slice(slice);
@@ -379,14 +378,27 @@ fn run_streaming_pipeline(
                         for i in 0..total_samples {
                             let b0 = bytes[i * 3] as i32;
                             let b1 = bytes[i * 3 + 1] as i32;
-                            let b2 = bytes[i * 3 + 2] as i8 as i32; // sign extend
+                            let b2 = bytes[i * 3 + 2] as i8 as i32;
                             let val = (b2 << 16) | (b1 << 8) | b0;
                             float_buffer.push((val as f32) / 8388608.0);
                         }
                     }
 
-                    // Process DSP (Preamp + Filters + GraphicEQ + Limiter)
-                    let (in_pk, out_pk) = dsp.process_interleaved(&mut float_buffer, in_channels);
+                    // Convert to target channels (e.g. mono to stereo)
+                    dsp_stereo_buffer.clear();
+                    if cap_channels == ren_channels {
+                        dsp_stereo_buffer.extend_from_slice(&float_buffer);
+                    } else if cap_channels == 1 && ren_channels == 2 {
+                        for &s in &float_buffer {
+                            dsp_stereo_buffer.push(s);
+                            dsp_stereo_buffer.push(s);
+                        }
+                    } else {
+                        dsp_stereo_buffer.extend_from_slice(&float_buffer[..total_samples.min(num_frames_read as usize * ren_channels)]);
+                    }
+
+                    // Process DSP (Preamp + Filters + GraphicEQ + Boss RC-505 + VST Plugins)
+                    let (in_pk, out_pk) = dsp.process_interleaved(&mut dsp_stereo_buffer, ren_channels);
 
                     if let Some(ref shm) = shm_handle {
                         if !shm.ptr.is_null() {
@@ -396,55 +408,80 @@ fn run_streaming_pipeline(
                         }
                     }
 
-                    // Write to Render Client (VB-Cable Input)
-                    if let Ok(render_buf_ptr) = render_service.GetBuffer(num_frames_read) {
-                        if ren_bits == 32 {
-                            let out_slice = std::slice::from_raw_parts_mut(
-                                render_buf_ptr as *mut f32,
-                                (num_frames_read as usize) * out_channels,
-                            );
-
-                            if in_channels == out_channels {
-                                out_slice.copy_from_slice(&float_buffer[..out_slice.len()]);
-                            } else if in_channels == 1 && out_channels == 2 {
-                                // Duplicate mono mic to stereo cable
-                                for f in 0..num_frames_read as usize {
-                                    let s = float_buffer[f];
-                                    out_slice[f * 2] = s;
-                                    out_slice[f * 2 + 1] = s;
-                                }
-                            }
-                        } else if ren_bits == 16 {
-                            let out_slice = std::slice::from_raw_parts_mut(
-                                render_buf_ptr as *mut i16,
-                                (num_frames_read as usize) * out_channels,
-                            );
-
-                            if in_channels == out_channels {
-                                for (i, &s) in float_buffer.iter().enumerate().take(out_slice.len()) {
-                                    out_slice[i] = (s * 32767.0).clamp(-32768.0, 32767.0) as i16;
-                                }
-                            } else if in_channels == 1 && out_channels == 2 {
-                                for f in 0..num_frames_read as usize {
-                                    let val = (float_buffer[f] * 32767.0).clamp(-32768.0, 32767.0) as i16;
-                                    out_slice[f * 2] = val;
-                                    out_slice[f * 2 + 1] = val;
-                                }
-                            }
-                        }
-
-                        let _ = render_service.ReleaseBuffer(num_frames_read, 0);
-                    }
+                    // Push processed frames to jitter ring buffer
+                    jitter_buffer.extend(dsp_stereo_buffer.iter().copied());
                 }
 
                 let _ = capture_service.ReleaseBuffer(num_frames_read);
             }
+
+            if error_result.is_err() {
+                break;
+            }
+
+            // 2. Feed render client from jitter buffer without overflow/underflow
+            let padding = match ren_client.GetCurrentPadding() {
+                Ok(p) => p,
+                Err(e) => {
+                    error_result = Err(e);
+                    break;
+                }
+            };
+
+            let available_space = (ren_buffer_size.saturating_sub(padding)) as usize;
+            let available_frames = jitter_buffer.len() / ren_channels;
+            let frames_to_write = available_space.min(available_frames);
+
+            if frames_to_write > 0 {
+                let render_buf_ptr = match render_service.GetBuffer(frames_to_write as u32) {
+                    Ok(ptr) => ptr,
+                    Err(e) => {
+                        error_result = Err(e);
+                        break;
+                    }
+                };
+
+                let total_write_samples = frames_to_write * ren_channels;
+                if ren_bits == 32 {
+                    let out_slice = std::slice::from_raw_parts_mut(
+                        render_buf_ptr as *mut f32,
+                        total_write_samples,
+                    );
+                    for item in out_slice.iter_mut() {
+                        *item = jitter_buffer.pop_front().unwrap_or(0.0);
+                    }
+                } else if ren_bits == 16 {
+                    let out_slice = std::slice::from_raw_parts_mut(
+                        render_buf_ptr as *mut i16,
+                        total_write_samples,
+                    );
+                    for item in out_slice.iter_mut() {
+                        let s = jitter_buffer.pop_front().unwrap_or(0.0);
+                        *item = (s * 32767.0).clamp(-32768.0, 32767.0) as i16;
+                    }
+                }
+
+                if let Err(e) = render_service.ReleaseBuffer(frames_to_write as u32, 0) {
+                    error_result = Err(e);
+                    break;
+                }
+            }
+
+            // Prevent buffer drift from accumulating latency (> 60ms)
+            let max_jitter_samples = 3000 * ren_channels;
+            if jitter_buffer.len() > max_jitter_samples {
+                let excess = jitter_buffer.len() - (1500 * ren_channels);
+                jitter_buffer.drain(0..excess);
+            }
+
+            thread::sleep(Duration::from_millis(2));
         }
 
         let _ = cap_client.Stop();
         let _ = ren_client.Stop();
         CoTaskMemFree(Some(cap_format_ptr as _));
         CoTaskMemFree(Some(ren_format_ptr as _));
-        println!("[WASAPI Stream] Stopped cleanly.");
+
+        error_result
     }
 }

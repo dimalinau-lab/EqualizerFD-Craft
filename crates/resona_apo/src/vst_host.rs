@@ -170,9 +170,9 @@ impl VstPluginInstance {
 
     pub fn set_parameter(&mut self, index: i32, value: f32) {
         if !self.effect.is_null() {
-            let clamped = value.clamp(0.0, 1.0);
+            let val = value.max(0.0);
             unsafe {
-                ((*self.effect).set_parameter)(self.effect, index, clamped);
+                ((*self.effect).set_parameter)(self.effect, index, val);
             }
         }
     }
@@ -194,61 +194,61 @@ impl VstPluginInstance {
 
         match vst_id.to_lowercase().as_str() {
             "reacomp" => {
-                // [0] Thresh (-60..0 dB)
+                // [0] Thresh (-60..0 dB) -> linear amplitude ratio
                 if let Some(t) = map.get("thresh").and_then(|v| v.as_f64()) {
-                    let norm = ((t + 60.0) / 60.0) as f32;
+                    let norm = 10.0f32.powf((t as f32) / 20.0);
                     self.set_parameter(0, norm);
                 }
-                // [1] Ratio (1..20:1)
+                // [1] Ratio (1..20:1) -> (ratio - 1.0) / 100.0
                 if let Some(r) = map.get("ratio").and_then(|v| v.as_f64()) {
-                    let norm = ((r - 1.0) / 19.0) as f32;
+                    let norm = ((r - 1.0) / 100.0) as f32;
                     self.set_parameter(1, norm);
                 }
-                // [2] Attack (0..50 ms)
+                // [2] Attack (0..500 ms) -> ms / 500.0
                 if let Some(a) = map.get("attack").and_then(|v| v.as_f64()) {
-                    let norm = (a / 50.0) as f32;
+                    let norm = (a / 500.0) as f32;
                     self.set_parameter(2, norm);
                 }
-                // [3] Release (0..500 ms)
+                // [3] Release (0..5000 ms) -> ms / 5000.0
                 if let Some(rel) = map.get("release").and_then(|v| v.as_f64()) {
-                    let norm = (rel / 500.0) as f32;
+                    let norm = (rel / 5000.0) as f32;
                     self.set_parameter(3, norm);
                 }
-                // [14] Knee (0..12 dB)
+                // [14] Knee (0..24 dB) -> knee / 24.0
                 if let Some(k) = map.get("knee").and_then(|v| v.as_f64()) {
-                    let norm = (k / 12.0) as f32;
+                    let norm = (k / 24.0) as f32;
                     self.set_parameter(14, norm);
                 }
-                // [11] Wet / Makeup (0..24 dB)
+                // [11] Wet / Makeup (0..24 dB) -> linear amplitude ratio
                 if let Some(m) = map.get("makeup").and_then(|v| v.as_f64()) {
-                    let norm = ((m + 60.0) / 84.0) as f32;
+                    let norm = 10.0f32.powf((m as f32) / 20.0);
                     self.set_parameter(11, norm);
                 }
             }
             "reagate" => {
-                // [0] Thresh (-60..0 dB)
+                // [0] Thresh (-60..0 dB) -> linear amplitude ratio
                 if let Some(t) = map.get("thresh").and_then(|v| v.as_f64()) {
-                    let norm = ((t + 60.0) / 60.0) as f32;
+                    let norm = 10.0f32.powf((t as f32) / 20.0);
                     self.set_parameter(0, norm);
                 }
-                // [1] Attack (0..50 ms)
+                // [1] Attack (0..500 ms) -> ms / 500.0
                 if let Some(a) = map.get("attack").and_then(|v| v.as_f64()) {
-                    let norm = (a / 50.0) as f32;
+                    let norm = (a / 500.0) as f32;
                     self.set_parameter(1, norm);
                 }
-                // [2] Release (10..600 ms)
+                // [2] Release (0..5000 ms) -> ms / 5000.0
                 if let Some(rel) = map.get("release").and_then(|v| v.as_f64()) {
-                    let norm = (rel / 600.0) as f32;
+                    let norm = (rel / 5000.0) as f32;
                     self.set_parameter(2, norm);
                 }
-                // [3] Pre-open (0..20 ms)
+                // [3] Pre-open (0..250 ms) -> ms / 250.0
                 if let Some(po) = map.get("preopen").and_then(|v| v.as_f64()) {
-                    let norm = (po / 20.0) as f32;
+                    let norm = (po / 250.0) as f32;
                     self.set_parameter(3, norm);
                 }
-                // [4] Hold (0..300 ms)
+                // [4] Hold (0..1000 ms) -> ms / 1000.0
                 if let Some(h) = map.get("hold").and_then(|v| v.as_f64()) {
-                    let norm = (h / 300.0) as f32;
+                    let norm = (h / 1000.0) as f32;
                     self.set_parameter(4, norm);
                 }
             }
@@ -257,9 +257,9 @@ impl VstPluginInstance {
                 if let Some(mix) = map.get("mix").and_then(|v| v.as_f64()) {
                     self.set_parameter(0, (mix / 100.0) as f32);
                 }
-                // [3] Length
+                // [3] Length (0..5000 ms)
                 if let Some(t) = map.get("time").and_then(|v| v.as_f64()) {
-                    self.set_parameter(3, (t / 1000.0) as f32);
+                    self.set_parameter(3, (t / 5000.0) as f32);
                 }
                 // [5] Feedback
                 if let Some(fb) = map.get("feedback").and_then(|v| v.as_f64()) {
@@ -271,32 +271,32 @@ impl VstPluginInstance {
                 }
             }
             "reafir" => {
-                // Param 1 = Mode: 0=EQ, 1=Gate, 2=Subtract (Noise Reduction)
                 self.set_parameter(1, 2.0 / 4.0); // Subtract mode
                 if let Some(red) = map.get("reduction").and_then(|v| v.as_f64()) {
-                    let norm = (red / 40.0) as f32;
+                    let norm = 10.0f32.powf((red as f32) / 20.0);
                     self.set_parameter(4, norm);
                 }
                 if let Some(fl) = map.get("floor").and_then(|v| v.as_f64()) {
-                    let norm = ((fl + 80.0) / 60.0) as f32;
+                    let norm = 10.0f32.powf((fl as f32) / 20.0);
                     self.set_parameter(2, norm);
                 }
             }
             "reaxcomp" => {
-                // Band 1: Param 2 (Thresh), Param 3 (Ratio), Param 8 (Makeup)
                 if let Some(t) = map.get("lowthresh").and_then(|v| v.as_f64()) {
-                    let norm = ((t + 60.0) / 60.0) as f32;
-                    self.set_parameter(2, norm);
+                    self.set_parameter(2, 10.0f32.powf((t as f32) / 20.0));
                 }
-                // Band 2: Param 14 (Thresh), Param 15 (Ratio)
+                if let Some(r) = map.get("lowratio").and_then(|v| v.as_f64()) {
+                    self.set_parameter(3, ((r - 1.0) / 100.0) as f32);
+                }
                 if let Some(t) = map.get("midthresh").and_then(|v| v.as_f64()) {
-                    let norm = ((t + 60.0) / 60.0) as f32;
-                    self.set_parameter(14, norm);
+                    self.set_parameter(14, 10.0f32.powf((t as f32) / 20.0));
+                }
+                if let Some(r) = map.get("midratio").and_then(|v| v.as_f64()) {
+                    self.set_parameter(15, ((r - 1.0) / 100.0) as f32);
                 }
                 if let Some(m) = map.get("overallmakeup").and_then(|v| v.as_f64()) {
-                    let norm = (m / 18.0) as f32;
                     self.set_parameter(8, 1.0);
-                    self.set_parameter(1, norm);
+                    self.set_parameter(1, 10.0f32.powf((m as f32) / 20.0));
                 }
             }
             _ => {
