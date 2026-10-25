@@ -288,6 +288,11 @@ fn handle_client(mut stream: TcpStream) {
                 let resp = serde_json::to_string(&check_res).unwrap_or_default();
                 respond_ok(&mut stream, "application/json", resp.as_bytes());
             }
+            "/api/update/progress" => {
+                let prog = crate::updater::get_update_progress();
+                let resp = serde_json::to_string(&prog).unwrap_or_default();
+                respond_ok(&mut stream, "application/json", resp.as_bytes());
+            }
             "/api/info" => {
                 let exe_dir = std::env::current_exe()
                     .ok()
@@ -517,10 +522,14 @@ fn handle_client(mut stream: TcpStream) {
             }
             "/api/update/install" => {
                 let mut download_url = String::new();
+                let mut expected_size = 0u64;
                 let mut token = None;
                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body_str) {
                     if let Some(u) = val.get("url").and_then(|v| v.as_str()) {
                         download_url = u.to_string();
+                    }
+                    if let Some(s) = val.get("size").and_then(|v| v.as_u64()) {
+                        expected_size = s;
                     }
                     if let Some(t) = val.get("token").and_then(|v| v.as_str()) {
                         if !t.trim().is_empty() {
@@ -536,9 +545,15 @@ fn handle_client(mut stream: TcpStream) {
                     }).to_string();
                     respond_ok(&mut stream, "application/json", resp.as_bytes());
                 } else {
-                    respond_ok(&mut stream, "application/json", b"{\"status\":\"downloading\",\"message\":\"\xD0\x97\xD0\xB0\xD0\xB3\xD1\x80\xD1\x83\xD0\xB7\xD0\xBA\xD0\xB0 \xD0\xB8 \xD0\xBE\xD0\xB1\xD0\xBD\xD0\xBE\xD0\xB2\xD0\xBB\xD0\xB5\xD0\xBD\xD0\xB8\xD0\xB5...\"}");
+                    respond_ok(&mut stream, "application/json", b"{\"status\":\"started\",\"message\":\"\xD0\x97\xD0\xB0\xD0\xBF\xD1\x83\xD1\x81\xD0\xBA \xD1\x81\xD0\xBA\xD0\xB0\xD1\x87\xD0\xB8\xD0\xB2\xD0\xB0\xD0\xBD\xD0\xB8\xD1\x8F \xD0\xBE\xD0\xB1\xD0\xBD\xD0\xBE\xD0\xB2\xD0\xBB\xD0\xB5\xD0\xBD\xD0\xB8\xD1\x8F...\"}");
                     thread::spawn(move || {
-                        if let Err(e) = crate::updater::download_and_install_update(&download_url, token.as_deref()) {
+                        // Stop audio stream gracefully prior to restart
+                        if let Ok(mut lock) = STREAM_CONTROLLER.lock() {
+                            if let Some(ref mut ctrl) = *lock {
+                                ctrl.stop();
+                            }
+                        }
+                        if let Err(e) = crate::updater::download_and_install_update(&download_url, expected_size, token.as_deref()) {
                             eprintln!("[Equalizer FD CRAFT Updater] Error: {}", e);
                         }
                     });

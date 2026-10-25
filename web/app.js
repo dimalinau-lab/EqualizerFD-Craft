@@ -2804,6 +2804,7 @@ if (closeCustomVstBtn) {
 }
 
 // --- GitHub Auto-Updater Modal (Skill github-desktop-autoupdate) ---
+// --- GitHub Auto-Updater Modal (Skill github-desktop-autoupdate) ---
 const updateModal = document.getElementById('updateModal');
 const closeUpdateBtn = document.getElementById('closeUpdateBtn');
 const btnCloseUpdateModal = document.getElementById('btnCloseUpdateModal');
@@ -2813,7 +2814,26 @@ const updateStatusText = document.getElementById('updateStatusText');
 const updateResultBox = document.getElementById('updateResultBox');
 const updateBadgeStatus = document.getElementById('updateBadgeStatus');
 const updateNotesText = document.getElementById('updateNotesText');
+
+const updateProgressBox = document.getElementById('updateProgressBox');
+const updateProgressLabel = document.getElementById('updateProgressLabel');
+const updateProgressPercent = document.getElementById('updateProgressPercent');
+const updateProgressBar = document.getElementById('updateProgressBar');
+const updateProgressBytes = document.getElementById('updateProgressBytes');
+const updateProgressSpeed = document.getElementById('updateProgressSpeed');
+
 let pendingUpdateDownloadUrl = '';
+let pendingUpdateAssetSize = 0;
+let updatePollTimer = null;
+let lastBytesDownloaded = 0;
+let lastSpeedTime = Date.now();
+
+function formatBytes(bytes) {
+  if (!bytes || bytes <= 0) return '0 B';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
 
 function openUpdateModal() {
   if (!updateModal) return;
@@ -2839,6 +2859,7 @@ async function checkUpdates() {
 
     if (data.has_update && data.download_url) {
       pendingUpdateDownloadUrl = data.download_url;
+      pendingUpdateAssetSize = data.asset_size || 0;
       if (updateBadgeStatus) {
         updateBadgeStatus.style.background = '#dcfce7';
         updateBadgeStatus.style.color = '#15803d';
@@ -2848,10 +2869,11 @@ async function checkUpdates() {
       if (btnInstallUpdate) {
         btnInstallUpdate.classList.remove('hidden');
         btnInstallUpdate.disabled = false;
-        btnInstallUpdate.textContent = 'Скачать и перезапустить';
+        btnInstallUpdate.textContent = 'Скачать и обновить';
       }
     } else {
       pendingUpdateDownloadUrl = '';
+      pendingUpdateAssetSize = 0;
       if (updateBadgeStatus) {
         updateBadgeStatus.style.background = '#f1f5f9';
         updateBadgeStatus.style.color = '#334155';
@@ -2872,6 +2894,98 @@ async function checkUpdates() {
   }
 }
 
+async function pollUpdateProgress() {
+  try {
+    const res = await fetch('/api/update/progress', { cache: 'no-store' });
+    if (!res.ok) {
+      waitForServerRestart();
+      return;
+    }
+    const data = await res.json();
+
+    const now = Date.now();
+    const dt = (now - lastSpeedTime) / 1000;
+    const db = data.downloaded_bytes - lastBytesDownloaded;
+    if (dt >= 0.4 && db > 0) {
+      const speed = db / dt;
+      if (updateProgressSpeed) updateProgressSpeed.textContent = formatBytes(speed) + '/s';
+      lastBytesDownloaded = data.downloaded_bytes;
+      lastSpeedTime = now;
+    }
+
+    const pct = Math.round(data.percent || 0);
+    if (updateProgressBar) updateProgressBar.style.width = `${pct}%`;
+    if (updateProgressPercent) updateProgressPercent.textContent = `${pct}%`;
+    if (updateProgressBytes) {
+      updateProgressBytes.textContent = `${formatBytes(data.downloaded_bytes)} / ${formatBytes(data.total_bytes)}`;
+    }
+
+    if (data.status === 'downloading') {
+      if (updateProgressLabel) updateProgressLabel.textContent = 'Скачивание EqualizerFD-Craft.exe...';
+      updatePollTimer = setTimeout(pollUpdateProgress, 120);
+    } else if (data.status === 'applying') {
+      if (updateProgressBar) {
+        updateProgressBar.style.width = '100%';
+        updateProgressBar.style.background = '#059669';
+      }
+      if (updateProgressPercent) updateProgressPercent.textContent = '100%';
+      if (updateProgressLabel) updateProgressLabel.textContent = 'Установка обновления и замена файлов...';
+      if (updateProgressSpeed) updateProgressSpeed.textContent = 'Применение...';
+      updatePollTimer = setTimeout(pollUpdateProgress, 120);
+    } else if (data.status === 'restarting' || data.status === 'completed') {
+      if (updateProgressBar) {
+        updateProgressBar.style.width = '100%';
+        updateProgressBar.style.background = '#10b981';
+      }
+      if (updateProgressPercent) updateProgressPercent.textContent = '100%';
+      if (updateProgressLabel) updateProgressLabel.textContent = 'Обновление завершено! Перезапуск студии...';
+      if (updateProgressSpeed) updateProgressSpeed.textContent = 'Переподключение...';
+      showToast('Обновление завершено! Перезапуск Equalizer FD CRAFT...');
+      waitForServerRestart();
+    } else if (data.status === 'error') {
+      if (updateProgressBar) updateProgressBar.style.background = '#dc2626';
+      if (updateProgressLabel) updateProgressLabel.textContent = 'Ошибка: ' + (data.error_message || 'Не удалось обновить');
+      if (btnInstallUpdate) {
+        btnInstallUpdate.disabled = false;
+        btnInstallUpdate.textContent = 'Повторить';
+      }
+    } else {
+      updatePollTimer = setTimeout(pollUpdateProgress, 150);
+    }
+  } catch (err) {
+    console.log('[Updater] Connection interrupted (server restarting):', err);
+    waitForServerRestart();
+  }
+}
+
+function waitForServerRestart() {
+  if (updatePollTimer) clearTimeout(updatePollTimer);
+  let attempts = 0;
+  const maxAttempts = 40; // up to 20 seconds
+  const checkInterval = setInterval(async () => {
+    attempts++;
+    try {
+      const res = await fetch('/api/info', { cache: 'no-store' });
+      if (res.ok) {
+        clearInterval(checkInterval);
+        if (updateProgressLabel) updateProgressLabel.textContent = 'Студия перезапущена! Страница обновляется...';
+        setTimeout(() => {
+          window.location.reload();
+        }, 400);
+      }
+    } catch (_) {
+      if (attempts >= maxAttempts) {
+        clearInterval(checkInterval);
+        if (updateProgressLabel) updateProgressLabel.textContent = 'Перезапустите приложение вручную.';
+        if (btnInstallUpdate) {
+          btnInstallUpdate.disabled = false;
+          btnInstallUpdate.textContent = 'Скачать и обновить';
+        }
+      }
+    }
+  }, 500);
+}
+
 if (btnCheckNowUpdate) {
   btnCheckNowUpdate.addEventListener('click', checkUpdates);
 }
@@ -2879,25 +2993,34 @@ if (btnInstallUpdate) {
   btnInstallUpdate.addEventListener('click', async () => {
     if (!pendingUpdateDownloadUrl) return;
     btnInstallUpdate.disabled = true;
-    btnInstallUpdate.textContent = 'Загрузка обновления...';
+    btnInstallUpdate.textContent = 'Обновление...';
     if (updateStatusText) updateStatusText.textContent = 'Загрузка и замена файла EqualizerFD-Craft.exe...';
 
-    const token = updateGithubToken ? updateGithubToken.value.trim() : '';
+    if (updateProgressBox) updateProgressBox.classList.remove('hidden');
+    if (updateProgressBar) {
+      updateProgressBar.style.width = '0%';
+      updateProgressBar.style.background = '#2563eb';
+    }
+    if (updateProgressPercent) updateProgressPercent.textContent = '0%';
+    if (updateProgressLabel) updateProgressLabel.textContent = 'Подключение к серверу загрузки...';
+    if (updateProgressBytes) updateProgressBytes.textContent = `0 B / ${formatBytes(pendingUpdateAssetSize)}`;
+    if (updateProgressSpeed) updateProgressSpeed.textContent = 'Подготовка...';
+
+    lastBytesDownloaded = 0;
+    lastSpeedTime = Date.now();
+
     try {
       const res = await fetch('/api/update/install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: pendingUpdateDownloadUrl, token: token })
+        body: JSON.stringify({ url: pendingUpdateDownloadUrl, size: pendingUpdateAssetSize })
       });
       const data = await res.json();
-      showToast('Обновление скачивается. Программа перезапустится через несколько секунд...');
-      setTimeout(() => {
-        window.location.reload();
-      }, 3000);
+      pollUpdateProgress();
     } catch (err) {
-      showToast('Ошибка установки: ' + err.message, true);
+      showToast('Ошибка запуска обновления: ' + err.message, true);
       btnInstallUpdate.disabled = false;
-      btnInstallUpdate.textContent = 'Скачать и перезапустить';
+      btnInstallUpdate.textContent = 'Скачать и обновить';
     }
   });
 }

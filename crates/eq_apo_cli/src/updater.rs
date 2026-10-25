@@ -43,6 +43,47 @@ pub struct UpdateCheckResponse {
     pub message: String,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UpdateProgress {
+    pub status: String, // "idle", "downloading", "applying", "restarting", "completed", "error"
+    pub total_bytes: u64,
+    pub downloaded_bytes: u64,
+    pub percent: f32,
+    pub message: String,
+    pub error_message: Option<String>,
+}
+
+static UPDATE_PROGRESS: std::sync::Mutex<UpdateProgress> = std::sync::Mutex::new(UpdateProgress {
+    status: String::new(),
+    total_bytes: 0,
+    downloaded_bytes: 0,
+    percent: 0.0,
+    message: String::new(),
+    error_message: None,
+});
+
+pub fn get_update_progress() -> UpdateProgress {
+    let lock = UPDATE_PROGRESS.lock().unwrap();
+    if lock.status.is_empty() {
+        UpdateProgress {
+            status: "idle".to_string(),
+            total_bytes: 0,
+            downloaded_bytes: 0,
+            percent: 0.0,
+            message: "Ожидание".to_string(),
+            error_message: None,
+        }
+    } else {
+        lock.clone()
+    }
+}
+
+pub fn set_update_progress(p: UpdateProgress) {
+    if let Ok(mut lock) = UPDATE_PROGRESS.lock() {
+        *lock = p;
+    }
+}
+
 /// Housekeeping: cleans up any lingering .exe.old binaries from previous updates on startup
 pub fn cleanup_previous_update() {
     if let Ok(exe_path) = std::env::current_exe() {
@@ -131,8 +172,14 @@ pub fn check_for_updates(token_opt: Option<&str>) -> UpdateCheckResponse {
     let clean_tag = release.tag_name.trim_start_matches('v').trim();
     let is_newer = is_newer_version(CURRENT_VERSION, clean_tag);
 
-    // Look for .exe asset
-    let exe_asset = release.assets.iter().find(|a| a.name.to_lowercase().ends_with(".exe"));
+    // Look for .exe asset, prioritizing EqualizerFD-Craft.exe over Setup/Installer
+    let exe_asset = release.assets.iter()
+        .find(|a| a.name.eq_ignore_ascii_case("EqualizerFD-Craft.exe"))
+        .or_else(|| release.assets.iter().find(|a| {
+            let lower = a.name.to_lowercase();
+            lower.ends_with(".exe") && !lower.contains("setup") && !lower.contains("installer")
+        }))
+        .or_else(|| release.assets.iter().find(|a| a.name.to_lowercase().ends_with(".exe")));
     let download_url = exe_asset.map(|a| a.browser_download_url.clone()).unwrap_or_default();
     let asset_name = exe_asset.map(|a| a.name.clone()).unwrap_or_default();
     let asset_size = exe_asset.map(|a| a.size).unwrap_or(0);
@@ -155,15 +202,39 @@ pub fn check_for_updates(token_opt: Option<&str>) -> UpdateCheckResponse {
     }
 }
 
-/// Performs atomic in-place binary swap and restarts application
-pub fn download_and_install_update(download_url: &str, token_opt: Option<&str>) -> Result<(), String> {
-    let current_exe = std::env::current_exe().map_err(|e| format!("Не удалось определить текущий .exe: {}", e))?;
+/// Performs atomic in-place binary swap and restarts application with progress reporting
+pub fn download_and_install_update(
+    download_url: &str,
+    expected_size: u64,
+    token_opt: Option<&str>,
+) -> Result<(), String> {
+    let current_exe = std::env::current_exe().map_err(|e| {
+        let err = format!("Не удалось определить текущий .exe: {}", e);
+        set_update_progress(UpdateProgress {
+            status: "error".to_string(),
+            total_bytes: expected_size,
+            downloaded_bytes: 0,
+            percent: 0.0,
+            message: "Ошибка обновления".to_string(),
+            error_message: Some(err.clone()),
+        });
+        err
+    })?;
     let temp_exe = current_exe.with_extension("exe.download");
     let old_exe = current_exe.with_extension("exe.old");
 
     if temp_exe.exists() {
         let _ = fs::remove_file(&temp_exe);
     }
+
+    set_update_progress(UpdateProgress {
+        status: "downloading".to_string(),
+        total_bytes: expected_size,
+        downloaded_bytes: 0,
+        percent: 0.0,
+        message: "Подключение к серверу загрузки...".to_string(),
+        error_message: None,
+    });
 
     let mut cmd = Command::new("curl.exe");
     cmd.args(["-L", "-s", "-o"]);
@@ -174,7 +245,6 @@ pub fn download_and_install_update(download_url: &str, token_opt: Option<&str>) 
         let clean = token.trim();
         if !clean.is_empty() {
             cmd.args(["-H", &format!("Authorization: Bearer {}", clean)]);
-            // For GitHub private asset downloads
             cmd.args(["-H", "Accept: application/octet-stream"]);
         }
     }
@@ -182,16 +252,106 @@ pub fn download_and_install_update(download_url: &str, token_opt: Option<&str>) 
     cmd.arg(download_url);
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let status = cmd.status().map_err(|e| format!("Ошибка загрузки обновления curl: {}", e))?;
-    if !status.success() {
-        return Err("Ошибка при скачивании файла обновления".to_string());
+    let mut child = cmd.spawn().map_err(|e| {
+        let err = format!("Ошибка запуска curl: {}", e);
+        set_update_progress(UpdateProgress {
+            status: "error".to_string(),
+            total_bytes: expected_size,
+            downloaded_bytes: 0,
+            percent: 0.0,
+            message: "Ошибка запуска загрузчика".to_string(),
+            error_message: Some(err.clone()),
+        });
+        err
+    })?;
+
+    // Monitor file size in real-time while curl downloads
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if !status.success() {
+                    let err = "Ошибка загрузки файла обновления через curl".to_string();
+                    set_update_progress(UpdateProgress {
+                        status: "error".to_string(),
+                        total_bytes: expected_size,
+                        downloaded_bytes: 0,
+                        percent: 0.0,
+                        message: "Ошибка загрузки".to_string(),
+                        error_message: Some(err.clone()),
+                    });
+                    return Err(err);
+                }
+                break;
+            }
+            Ok(None) => {
+                if let Ok(meta) = fs::metadata(&temp_exe) {
+                    let dl = meta.len();
+                    let percent = if expected_size > 0 {
+                        ((dl as f64 / expected_size as f64) * 100.0).clamp(0.0, 99.0) as f32
+                    } else {
+                        0.0
+                    };
+                    set_update_progress(UpdateProgress {
+                        status: "downloading".to_string(),
+                        total_bytes: expected_size,
+                        downloaded_bytes: dl,
+                        percent,
+                        message: format!("Скачивание: {:.0}%", percent),
+                        error_message: None,
+                    });
+                }
+                std::thread::sleep(std::time::Duration::from_millis(80));
+            }
+            Err(e) => {
+                let err = format!("Ошибка отслеживания процесса: {}", e);
+                set_update_progress(UpdateProgress {
+                    status: "error".to_string(),
+                    total_bytes: expected_size,
+                    downloaded_bytes: 0,
+                    percent: 0.0,
+                    message: "Ошибка".to_string(),
+                    error_message: Some(err.clone()),
+                });
+                return Err(err);
+            }
+        }
     }
 
-    let metadata = fs::metadata(&temp_exe).map_err(|e| format!("Загруженный файл не найден: {}", e))?;
+    let metadata = fs::metadata(&temp_exe).map_err(|e| {
+        let err = format!("Загруженный файл не найден: {}", e);
+        set_update_progress(UpdateProgress {
+            status: "error".to_string(),
+            total_bytes: expected_size,
+            downloaded_bytes: 0,
+            percent: 0.0,
+            message: "Ошибка проверки файла".to_string(),
+            error_message: Some(err.clone()),
+        });
+        err
+    })?;
+
     if metadata.len() < 100_000 {
         let _ = fs::remove_file(&temp_exe);
-        return Err(format!("Загруженный файл поврежден или слишком мал (размер: {} байт)", metadata.len()));
+        let err = format!("Загруженный файл поврежден или слишком мал ({} байт)", metadata.len());
+        set_update_progress(UpdateProgress {
+            status: "error".to_string(),
+            total_bytes: expected_size,
+            downloaded_bytes: metadata.len(),
+            percent: 0.0,
+            message: "Поврежденный файл".to_string(),
+            error_message: Some(err.clone()),
+        });
+        return Err(err);
     }
+
+    set_update_progress(UpdateProgress {
+        status: "applying".to_string(),
+        total_bytes: metadata.len(),
+        downloaded_bytes: metadata.len(),
+        percent: 100.0,
+        message: "Применение обновления...".to_string(),
+        error_message: None,
+    });
 
     // Atomic in-place swap on Windows:
     // 1. Delete previous .old if exists
@@ -199,23 +359,62 @@ pub fn download_and_install_update(download_url: &str, token_opt: Option<&str>) 
         let _ = fs::remove_file(&old_exe);
     }
 
-    // 2. Rename running .exe -> .exe.old (Allowed by Windows kernel!)
-    fs::rename(&current_exe, &old_exe).map_err(|e| format!("Не удалось переименовать текущий файл: {}", e))?;
+    // 2. Rename running .exe -> .exe.old (Allowed by Windows kernel)
+    fs::rename(&current_exe, &old_exe).map_err(|e| {
+        let err = format!("Не удалось переименовать текущий файл: {}", e);
+        set_update_progress(UpdateProgress {
+            status: "error".to_string(),
+            total_bytes: metadata.len(),
+            downloaded_bytes: metadata.len(),
+            percent: 100.0,
+            message: "Ошибка замены файла".to_string(),
+            error_message: Some(err.clone()),
+        });
+        err
+    })?;
 
     // 3. Rename .download -> .exe
     if let Err(e) = fs::rename(&temp_exe, &current_exe) {
-        // Rollback rename if moving downloaded fails
         let _ = fs::rename(&old_exe, &current_exe);
-        return Err(format!("Не удалось установить новый исполняемый файл: {}", e));
+        let err = format!("Не удалось установить новый исполняемый файл: {}", e);
+        set_update_progress(UpdateProgress {
+            status: "error".to_string(),
+            total_bytes: metadata.len(),
+            downloaded_bytes: metadata.len(),
+            percent: 100.0,
+            message: "Ошибка распаковки".to_string(),
+            error_message: Some(err.clone()),
+        });
+        return Err(err);
     }
+
+    set_update_progress(UpdateProgress {
+        status: "restarting".to_string(),
+        total_bytes: metadata.len(),
+        downloaded_bytes: metadata.len(),
+        percent: 100.0,
+        message: "Обновление установлено! Перезапуск студии...".to_string(),
+        error_message: None,
+    });
 
     // 4. Spawn new updated executable detached and exit current process
     Command::new(&current_exe)
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
-        .map_err(|e| format!("Не удалось перезапустить обновленную программу: {}", e))?;
+        .map_err(|e| {
+            let err = format!("Не удалось перезапустить обновленную программу: {}", e);
+            set_update_progress(UpdateProgress {
+                status: "error".to_string(),
+                total_bytes: metadata.len(),
+                downloaded_bytes: metadata.len(),
+                percent: 100.0,
+                message: "Ошибка перезапуска".to_string(),
+                error_message: Some(err.clone()),
+            });
+            err
+        })?;
 
-    std::thread::sleep(std::time::Duration::from_millis(150));
+    std::thread::sleep(std::time::Duration::from_millis(600));
     std::process::exit(0);
 }
 
