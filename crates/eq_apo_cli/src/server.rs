@@ -168,6 +168,27 @@ fn handle_client(mut stream: TcpStream) {
                     respond_404(&mut stream);
                 }
             }
+            "/icon-192.png" => {
+                if let Ok(bytes) = std::fs::read("web/icon-192.png") {
+                    respond_ok(&mut stream, "image/png", &bytes);
+                } else {
+                    respond_404(&mut stream);
+                }
+            }
+            "/apple-touch-icon.png" => {
+                if let Ok(bytes) = std::fs::read("web/apple-touch-icon.png") {
+                    respond_ok(&mut stream, "image/png", &bytes);
+                } else {
+                    respond_404(&mut stream);
+                }
+            }
+            "/manifest.json" => {
+                if let Ok(bytes) = std::fs::read("web/manifest.json") {
+                    respond_ok(&mut stream, "application/manifest+json; charset=utf-8", &bytes);
+                } else {
+                    respond_404(&mut stream);
+                }
+            }
             "/api/devices" => {
                 let cached = {
                     if let Ok(lock) = CACHED_DEVICES.lock() {
