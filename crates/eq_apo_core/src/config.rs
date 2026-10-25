@@ -35,6 +35,10 @@ impl ChannelId {
     }
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ConfigDirective {
     Preamp {
@@ -67,6 +71,12 @@ pub enum ConfigDirective {
     VSTPlugin {
         library: String,
         channels: Vec<ChannelId>,
+        #[serde(default)]
+        vst_id: Option<String>,
+        #[serde(default)]
+        params_json: Option<String>,
+        #[serde(default = "default_true")]
+        is_enabled: bool,
     },
     BossRc505 {
         effect_name: String,
@@ -122,16 +132,36 @@ impl ConfigFile {
         let expanded = Self::expand_includes(content, 0);
         let mut directives = Vec::new();
         let mut current_channels = vec![ChannelId::All];
+        let mut pending_vst_meta: Option<(String, String)> = None;
 
         for (_line_num, raw_line) in expanded.lines().enumerate() {
-            let line = raw_line.trim();
+            let mut line = raw_line.trim();
             if line.is_empty() {
                 continue;
             }
 
+            let mut is_explicit_disabled = false;
+            if line.to_uppercase().starts_with("# [DISABLED]") {
+                is_explicit_disabled = true;
+                line = line[12..].trim();
+            }
+
             // Comments
             if line.starts_with('#') || line.starts_with(';') {
-                directives.push(ConfigDirective::Comment(line.to_string()));
+                let comment_body = line.trim_start_matches(|c| c == '#' || c == ';').trim();
+                // Check if comment contains VST metadata: [VSTPlugin: <id>] Params: <json>
+                if let Some(rest) = comment_body.strip_prefix("[VSTPlugin:") {
+                    if let Some((id_part, params_part)) = rest.split_once(']') {
+                        let vst_id = id_part.trim().to_string();
+                        let params_json = if let Some(p) = params_part.split_once("Params:") {
+                            p.1.trim().to_string()
+                        } else {
+                            String::new()
+                        };
+                        pending_vst_meta = Some((vst_id, params_json));
+                    }
+                }
+                directives.push(ConfigDirective::Comment(raw_line.to_string()));
                 continue;
             }
 
@@ -164,7 +194,12 @@ impl ConfigFile {
                     .strip_prefix("FILTER")
                     .and_then(|s| s.trim().parse::<usize>().ok());
 
-                if let Some(directive) = parse_filter_line(body, idx, default_sample_rate, current_channels.clone()) {
+                if let Some(mut directive) = parse_filter_line(body, idx, default_sample_rate, current_channels.clone()) {
+                    if is_explicit_disabled {
+                        if let ConfigDirective::Filter { ref mut is_enabled, .. } = directive {
+                            *is_enabled = false;
+                        }
+                    }
                     directives.push(directive);
                 }
             } else if cmd_name == "DELAY" {
@@ -199,9 +234,13 @@ impl ConfigFile {
                 } else {
                     trimmed.trim_matches('"').to_string()
                 };
+                let (vst_id, params_json) = pending_vst_meta.take().unzip();
                 directives.push(ConfigDirective::VSTPlugin {
                     library: clean_lib,
                     channels: current_channels.clone(),
+                    vst_id,
+                    params_json,
+                    is_enabled: !is_explicit_disabled,
                 });
             } else if cmd_name == "BOSSRC505" || cmd_name == "RC505" {
                 directives.push(ConfigDirective::BossRc505 {

@@ -129,10 +129,13 @@ struct BiquadFilterSlot {
     enabled: bool,
 }
 
+use crate::vst_host::VstPluginInstance;
+
 pub struct ResonaDspEngine {
     channels: Vec<ChannelDsp>,
     sample_rate: f32,
     last_synced_version: u32,
+    pub vst_plugins: Vec<VstPluginInstance>,
 }
 
 impl ResonaDspEngine {
@@ -156,6 +159,7 @@ impl ResonaDspEngine {
             channels: ch_vec,
             sample_rate,
             last_synced_version: 0,
+            vst_plugins: Vec::new(),
         }
     }
 
@@ -214,6 +218,7 @@ impl ResonaDspEngine {
             let mut geq_bands = [0.0f32; 15];
 
             let mut boss_effects = Vec::new();
+            let mut vst_configs = Vec::new();
 
             for directive in &config.directives {
                 match directive {
@@ -249,6 +254,9 @@ impl ResonaDspEngine {
                             boss_effects.push((kind, state));
                         }
                     }
+                    eq_apo_core::ConfigDirective::VSTPlugin { library, vst_id, params_json, is_enabled, .. } => {
+                        vst_configs.push((library.clone(), vst_id.clone(), params_json.clone(), *is_enabled));
+                    }
                     _ => {}
                 }
             }
@@ -271,6 +279,47 @@ impl ResonaDspEngine {
 
                 ch.rc505_effects = boss_effects.clone();
             }
+
+            // Sync and retain loaded VST plugin instances
+            let mut updated_vst = Vec::with_capacity(vst_configs.len());
+            for (lib_path, vst_id_opt, params_json_opt, enabled) in vst_configs {
+                let resolved_path = resolve_vst_path(&lib_path);
+                let id_str = vst_id_opt.unwrap_or_else(|| {
+                    std::path::Path::new(&resolved_path)
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("plugin")
+                        .to_string()
+                });
+
+                let existing_idx = self.vst_plugins.iter().position(|p| {
+                    p.library_path.eq_ignore_ascii_case(&resolved_path)
+                });
+
+                let mut instance = if let Some(idx) = existing_idx {
+                    self.vst_plugins.swap_remove(idx)
+                } else {
+                    match VstPluginInstance::load(&resolved_path, self.sample_rate, 4096) {
+                        Ok(inst) => {
+                            println!("[ResonaDSP] Loaded VST plugin: '{}' ({})", resolved_path, id_str);
+                            inst
+                        }
+                        Err(e) => {
+                            eprintln!("[ResonaDSP] Failed to load VST '{}': {}", resolved_path, e);
+                            continue;
+                        }
+                    }
+                };
+
+                instance.enabled = enabled;
+                if let Some(ref pj) = params_json_opt {
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(pj) {
+                        instance.apply_json_params(&id_str, &val);
+                    }
+                }
+                updated_vst.push(instance);
+            }
+            self.vst_plugins = updated_vst;
         }
     }
 
@@ -291,6 +340,7 @@ impl ResonaDspEngine {
 
         let total_frames = samples.len() / ch_cnt;
 
+        // Stage 1: Preamp, Biquad Filters, Graphic EQ, Boss RC-505
         for frame in 0..total_frames {
             for c in 0..ch_cnt {
                 let idx = frame * ch_cnt + c;
@@ -322,9 +372,20 @@ impl ResonaDspEngine {
                 // 5. Soft Limiter (prevent harsh digital wraps)
                 s = s.clamp(-1.0, 1.0);
 
-                out_peak_sq = out_peak_sq.max(s * s);
                 samples[idx] = s;
             }
+        }
+
+        // Stage 2: VST 2.4 Plugins Chain (ReaGate, ReaComp, ReaDelay, etc.)
+        for vst in &mut self.vst_plugins {
+            if vst.enabled {
+                vst.process_interleaved(samples, ch_cnt, total_frames);
+            }
+        }
+
+        // Measure final output peak across all processed samples
+        for &s in samples.iter() {
+            out_peak_sq = out_peak_sq.max(s * s);
         }
 
         let in_peak_db = if in_peak_sq > 1e-9 { 10.0 * in_peak_sq.log10() } else { -96.0 };
@@ -332,4 +393,24 @@ impl ResonaDspEngine {
 
         (in_peak_db, out_peak_db)
     }
+}
+
+fn resolve_vst_path(lib: &str) -> String {
+    let clean = lib.trim().trim_matches('"').replace(r"\\", r"\");
+    let p = std::path::Path::new(&clean);
+    if p.exists() {
+        return clean;
+    }
+    let file_name = p.file_name().and_then(|s| s.to_str()).unwrap_or(&clean);
+    let candidates = [
+        format!(r"D:\testik\vst_plugins\{}", file_name),
+        format!(r"C:\Program Files\EqualizerAPO\vstplugins\{}", file_name),
+        format!(r"vst_plugins\{}", file_name),
+    ];
+    for c in &candidates {
+        if std::path::Path::new(c).exists() {
+            return c.clone();
+        }
+    }
+    clean
 }

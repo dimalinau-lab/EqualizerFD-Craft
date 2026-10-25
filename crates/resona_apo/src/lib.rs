@@ -7,6 +7,7 @@ pub mod dsp;
 pub mod logger;
 pub mod shared_mem;
 pub mod types;
+pub mod vst_host;
 
 pub use com::{DllCanUnloadNow, DllGetClassObject, DllRegisterServer, DllUnregisterServer};
 pub use shared_mem::{ResonaSharedMemory, SharedFilter, SharedMemoryHandle};

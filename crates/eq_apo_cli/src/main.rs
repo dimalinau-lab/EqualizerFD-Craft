@@ -173,13 +173,25 @@ fn main() {
 }
 
 use windows::core::w;
-use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError};
+use windows::Win32::Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE};
 use windows::Win32::System::Threading::CreateMutexW;
+
+static mut INSTANCE_MUTEX: HANDLE = HANDLE(std::ptr::null_mut());
 
 pub fn is_another_instance_running() -> bool {
     unsafe {
-        let _ = CreateMutexW(None, false, w!("Global\\EqualizerFDCraftInstance"));
-        GetLastError() == ERROR_ALREADY_EXISTS
+        match CreateMutexW(None, false, w!("Local\\EqualizerFDCraftInstance")) {
+            Ok(handle) => {
+                if GetLastError() == ERROR_ALREADY_EXISTS {
+                    let _ = CloseHandle(handle);
+                    true
+                } else {
+                    INSTANCE_MUTEX = handle;
+                    false
+                }
+            }
+            Err(_) => false,
+        }
     }
 }
 
