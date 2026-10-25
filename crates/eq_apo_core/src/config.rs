@@ -81,6 +81,8 @@ pub enum ConfigDirective {
     BossRc505 {
         effect_name: String,
         channels: Vec<ChannelId>,
+        #[serde(default = "default_true")]
+        is_enabled: bool,
     },
     Comment(String),
 }
@@ -141,9 +143,13 @@ impl ConfigFile {
             }
 
             let mut is_explicit_disabled = false;
-            if line.to_uppercase().starts_with("# [DISABLED]") {
+            let upper = line.to_uppercase();
+            if upper.starts_with("# [DISABLED]") {
                 is_explicit_disabled = true;
                 line = line[12..].trim();
+            } else if upper.starts_with("#[DISABLED]") {
+                is_explicit_disabled = true;
+                line = line[11..].trim();
             }
 
             // Comments
@@ -183,7 +189,7 @@ impl ConfigFile {
                     current_channels = vec![ChannelId::All];
                 }
             } else if cmd_name == "PREAMP" {
-                let gain = parse_db(body).unwrap_or(0.0);
+                let gain = if is_explicit_disabled { 0.0 } else { parse_db(body).unwrap_or(0.0) };
                 directives.push(ConfigDirective::Preamp {
                     gain_db: gain,
                     channels: current_channels.clone(),
@@ -203,7 +209,7 @@ impl ConfigFile {
                     directives.push(directive);
                 }
             } else if cmd_name == "DELAY" {
-                let ms = parse_ms(body).unwrap_or(0.0);
+                let ms = if is_explicit_disabled { 0.0 } else { parse_ms(body).unwrap_or(0.0) };
                 directives.push(ConfigDirective::Delay {
                     delay_ms: ms,
                     channels: current_channels.clone(),
@@ -220,7 +226,7 @@ impl ConfigFile {
                     device_match: body.trim().to_string(),
                 });
             } else if cmd_name == "GRAPHICEQ" {
-                let points = parse_graphic_eq(body);
+                let points = if is_explicit_disabled { Vec::new() } else { parse_graphic_eq(body) };
                 directives.push(ConfigDirective::GraphicEQ {
                     points,
                     channels: current_channels.clone(),
@@ -246,6 +252,7 @@ impl ConfigFile {
                 directives.push(ConfigDirective::BossRc505 {
                     effect_name: body.trim().to_string(),
                     channels: current_channels.clone(),
+                    is_enabled: !is_explicit_disabled,
                 });
             }
         }

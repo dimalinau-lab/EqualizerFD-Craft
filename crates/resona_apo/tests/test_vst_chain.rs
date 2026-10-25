@@ -2,18 +2,15 @@ use resona_apo::dsp::ResonaDspEngine;
 
 #[test]
 fn test_live_vst_chain() {
-    let cfg = std::fs::read_to_string(r"d:\testik\config.txt").expect("read config.txt");
-    println!("Config text:\n{}", cfg);
+    let cfg = r#"
+# [VSTPlugin: reagate] Params: {"thresh":-38,"attack":2,"hold":60,"release":150,"preopen":2}
+VSTPlugin: Library "D:\testik\vst_plugins\reagate-standalone.dll"
+"#;
 
     let mut engine = ResonaDspEngine::new(48000.0, 2);
-    engine.sync_from_config_text(&cfg);
+    engine.sync_from_config_text(cfg);
 
-    println!("Loaded VST count: {}", engine.vst_plugins.len());
-    for (i, p) in engine.vst_plugins.iter().enumerate() {
-        println!("  VST #{}: path='{}', id='{}', enabled={}", i, p.library_path, p.vst_id, p.enabled);
-    }
-
-    assert!(!engine.vst_plugins.is_empty(), "VST plugins should not be empty!");
+    assert_eq!(engine.vst_plugins.len(), 1, "Should have 1 active VST plugin");
 
     // Generate test audio (quiet noise and louder voice)
     let frames = 512;
@@ -28,6 +25,7 @@ fn test_live_vst_chain() {
     let (in_pk, out_pk) = engine.process_interleaved(&mut buffer, 2);
     println!("Quiet block: in_pk = {:.2} dB, out_pk = {:.2} dB", in_pk, out_pk);
 
-    // With ReaGate threshold at -38 dB, this -50 dB noise should be gated to -96 dB!
-    println!("Max sample after gate: {:.8}", buffer.iter().map(|s| s.abs()).fold(0.0f32, f32::max));
+    // With ReaGate threshold at -38 dB, this -50 dB noise should be gated to silence!
+    let max_amp = buffer.iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+    assert!(max_amp < 1e-6, "ReaGate should have gated quiet noise to complete silence (got max_amp = {})", max_amp);
 }

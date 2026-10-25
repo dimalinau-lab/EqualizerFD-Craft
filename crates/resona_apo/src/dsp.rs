@@ -249,9 +249,11 @@ impl ResonaDspEngine {
                             geq_bands[i] = geq.evaluate_gain_at(f as f64) as f32;
                         }
                     }
-                    eq_apo_core::ConfigDirective::BossRc505 { effect_name, .. } => {
-                        if let Some((kind, state)) = crate::boss_rc505::parse_boss_directive(effect_name, self.sample_rate) {
-                            boss_effects.push((kind, state));
+                    eq_apo_core::ConfigDirective::BossRc505 { effect_name, is_enabled, .. } => {
+                        if *is_enabled {
+                            if let Some((kind, state)) = crate::boss_rc505::parse_boss_directive(effect_name, self.sample_rate) {
+                                boss_effects.push((kind, state));
+                            }
                         }
                     }
                     eq_apo_core::ConfigDirective::VSTPlugin { library, vst_id, params_json, is_enabled, .. } => {
