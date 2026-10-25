@@ -162,6 +162,23 @@ fn find_device(
     }
 }
 
+#[link(name = "winmm")]
+extern "system" {
+    fn timeBeginPeriod(uPeriod: u32) -> u32;
+    fn timeEndPeriod(uPeriod: u32) -> u32;
+}
+
+#[link(name = "avrt")]
+extern "system" {
+    fn AvSetMmThreadCharacteristicsW(
+        TaskName: windows::core::PCWSTR,
+        TaskIndex: *mut u32,
+    ) -> HANDLE;
+    fn AvRevertMmThreadCharacteristics(AvrtHandle: HANDLE) -> BOOL;
+}
+
+const AUDCLNT_STREAMFLAGS_EVENTCALLBACK: u32 = 0x00040000;
+
 fn run_streaming_pipeline(
     capture_kw: String,
     render_kw: String,
@@ -169,6 +186,9 @@ fn run_streaming_pipeline(
 ) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        timeBeginPeriod(1);
+        let mut task_idx = 0u32;
+        let avrt_handle = AvSetMmThreadCharacteristicsW(windows::core::w!("Pro Audio"), &mut task_idx);
 
         while running.load(Ordering::Relaxed) {
             if let Err(e) = run_pipeline_session(&capture_kw, &render_kw, &running) {
@@ -179,6 +199,11 @@ fn run_streaming_pipeline(
                 thread::sleep(Duration::from_millis(400));
             }
         }
+
+        if !avrt_handle.is_invalid() {
+            let _ = AvRevertMmThreadCharacteristics(avrt_handle);
+        }
+        timeEndPeriod(1);
         println!("[WASAPI Stream] Pipeline thread terminated.");
     }
 }
@@ -233,32 +258,57 @@ fn run_pipeline_session(
             ren_rate, ren_channels, ren_bits
         );
 
-        // 20ms buffer duration for comfortable headroom preventing underrun
-        let buffer_duration_hns = 200_000;
+        // 40ms buffer duration for capture, 100ms for virtual cable render buffer
+        let cap_buffer_duration_hns = 400_000;
+        let ren_buffer_duration_hns = 1_000_000;
 
-        if let Err(e) = cap_client.Initialize(
-            AUDCLNT_SHAREMODE_SHARED,
-            0,
-            buffer_duration_hns,
-            0,
-            cap_format_ptr,
-            None,
-        ) {
-            eprintln!("[WASAPI Stream] Capture init failed: {:?}", e);
-            CoTaskMemFree(Some(cap_format_ptr as _));
-            CoTaskMemFree(Some(ren_format_ptr as _));
-            return Err(e);
-        }
+        let capture_event = windows::Win32::System::Threading::CreateEventW(None, false, false, None).ok();
+        let event_driven = if let Some(evt) = capture_event {
+            let init_res = cap_client.Initialize(
+                AUDCLNT_SHAREMODE_SHARED,
+                AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+                cap_buffer_duration_hns,
+                0,
+                cap_format_ptr,
+                None,
+            );
+            if init_res.is_ok() && cap_client.SetEventHandle(evt).is_ok() {
+                true
+            } else {
+                let _ = cap_client.Initialize(
+                    AUDCLNT_SHAREMODE_SHARED,
+                    0,
+                    cap_buffer_duration_hns,
+                    0,
+                    cap_format_ptr,
+                    None,
+                );
+                false
+            }
+        } else {
+            let _ = cap_client.Initialize(
+                AUDCLNT_SHAREMODE_SHARED,
+                0,
+                cap_buffer_duration_hns,
+                0,
+                cap_format_ptr,
+                None,
+            );
+            false
+        };
 
         if let Err(e) = ren_client.Initialize(
             AUDCLNT_SHAREMODE_SHARED,
             0,
-            buffer_duration_hns,
+            ren_buffer_duration_hns,
             0,
             ren_format_ptr,
             None,
         ) {
             eprintln!("[WASAPI Stream] Render init failed: {:?}", e);
+            if let Some(evt) = capture_event {
+                let _ = CloseHandle(evt);
+            }
             CoTaskMemFree(Some(cap_format_ptr as _));
             CoTaskMemFree(Some(ren_format_ptr as _));
             return Err(e);
@@ -267,6 +317,9 @@ fn run_pipeline_session(
         let ren_buffer_size = match ren_client.GetBufferSize() {
             Ok(sz) => sz,
             Err(e) => {
+                if let Some(evt) = capture_event {
+                    let _ = CloseHandle(evt);
+                }
                 CoTaskMemFree(Some(cap_format_ptr as _));
                 CoTaskMemFree(Some(ren_format_ptr as _));
                 return Err(e);
@@ -276,6 +329,9 @@ fn run_pipeline_session(
         let capture_service: IAudioCaptureClient = match cap_client.GetService() {
             Ok(s) => s,
             Err(e) => {
+                if let Some(evt) = capture_event {
+                    let _ = CloseHandle(evt);
+                }
                 CoTaskMemFree(Some(cap_format_ptr as _));
                 CoTaskMemFree(Some(ren_format_ptr as _));
                 return Err(e);
@@ -285,11 +341,22 @@ fn run_pipeline_session(
         let render_service: IAudioRenderClient = match ren_client.GetService() {
             Ok(s) => s,
             Err(e) => {
+                if let Some(evt) = capture_event {
+                    let _ = CloseHandle(evt);
+                }
                 CoTaskMemFree(Some(cap_format_ptr as _));
                 CoTaskMemFree(Some(ren_format_ptr as _));
                 return Err(e);
             }
         };
+
+        // Pre-roll initial silence into render client so VB-Cable never starts in starvation
+        let init_frames = (ren_buffer_size / 2).min(2400);
+        if let Ok(ptr) = render_service.GetBuffer(init_frames) {
+            let byte_count = (init_frames as usize) * ren_channels * (ren_bits as usize / 8);
+            std::ptr::write_bytes(ptr, 0, byte_count);
+            let _ = render_service.ReleaseBuffer(init_frames, 0);
+        }
 
         let _ = cap_client.Start();
         let _ = ren_client.Start();
@@ -320,7 +387,7 @@ fn run_pipeline_session(
         let mut dsp_stereo_buffer: Vec<f32> = Vec::with_capacity(4096);
         let mut jitter_buffer: VecDeque<f32> = VecDeque::with_capacity(16384);
 
-        println!("[WASAPI Stream] Stream pipeline RUNNING! Real-time DSP active.");
+        println!("[WASAPI Stream] Stream pipeline RUNNING! Real-time DSP active (event-driven: {}).", event_driven);
 
         let mut error_result: Result<()> = Ok(());
 
@@ -332,12 +399,23 @@ fn run_pipeline_session(
                 }
             }
 
+            // Wait for next capture packet or timeout
+            if event_driven {
+                if let Some(evt) = capture_event {
+                    let _ = windows::Win32::System::Threading::WaitForSingleObject(evt, 12);
+                }
+            } else {
+                thread::sleep(Duration::from_millis(2));
+            }
+
             // 1. Process all available captured packets
             loop {
                 let packet_size = match capture_service.GetNextPacketSize() {
                     Ok(sz) => sz,
                     Err(e) => {
-                        error_result = Err(e);
+                        if e.code() == AUDCLNT_E_DEVICE_INVALIDATED || e.code() == AUDCLNT_E_RESOURCES_INVALIDATED {
+                            error_result = Err(e);
+                        }
                         break;
                     }
                 };
@@ -357,7 +435,9 @@ fn run_pipeline_session(
                     None,
                     None,
                 ) {
-                    error_result = Err(e);
+                    if e.code() == AUDCLNT_E_DEVICE_INVALIDATED || e.code() == AUDCLNT_E_RESOURCES_INVALIDATED {
+                        error_result = Err(e);
+                    }
                     break;
                 }
 
@@ -423,8 +503,11 @@ fn run_pipeline_session(
             let padding = match ren_client.GetCurrentPadding() {
                 Ok(p) => p,
                 Err(e) => {
-                    error_result = Err(e);
-                    break;
+                    if e.code() == AUDCLNT_E_DEVICE_INVALIDATED || e.code() == AUDCLNT_E_RESOURCES_INVALIDATED {
+                        error_result = Err(e);
+                        break;
+                    }
+                    continue;
                 }
             };
 
@@ -433,52 +516,63 @@ fn run_pipeline_session(
             let frames_to_write = available_space.min(available_frames);
 
             if frames_to_write > 0 {
-                let render_buf_ptr = match render_service.GetBuffer(frames_to_write as u32) {
-                    Ok(ptr) => ptr,
+                match render_service.GetBuffer(frames_to_write as u32) {
+                    Ok(render_buf_ptr) => {
+                        let total_write_samples = frames_to_write * ren_channels;
+                        if ren_bits == 32 {
+                            let out_slice = std::slice::from_raw_parts_mut(
+                                render_buf_ptr as *mut f32,
+                                total_write_samples,
+                            );
+                            for item in out_slice.iter_mut() {
+                                *item = jitter_buffer.pop_front().unwrap_or(0.0);
+                            }
+                        } else if ren_bits == 16 {
+                            let out_slice = std::slice::from_raw_parts_mut(
+                                render_buf_ptr as *mut i16,
+                                total_write_samples,
+                            );
+                            for item in out_slice.iter_mut() {
+                                let s = jitter_buffer.pop_front().unwrap_or(0.0);
+                                *item = (s * 32767.0).clamp(-32768.0, 32767.0) as i16;
+                            }
+                        }
+
+                        let _ = render_service.ReleaseBuffer(frames_to_write as u32, 0);
+                    }
                     Err(e) => {
-                        error_result = Err(e);
-                        break;
-                    }
-                };
-
-                let total_write_samples = frames_to_write * ren_channels;
-                if ren_bits == 32 {
-                    let out_slice = std::slice::from_raw_parts_mut(
-                        render_buf_ptr as *mut f32,
-                        total_write_samples,
-                    );
-                    for item in out_slice.iter_mut() {
-                        *item = jitter_buffer.pop_front().unwrap_or(0.0);
-                    }
-                } else if ren_bits == 16 {
-                    let out_slice = std::slice::from_raw_parts_mut(
-                        render_buf_ptr as *mut i16,
-                        total_write_samples,
-                    );
-                    for item in out_slice.iter_mut() {
-                        let s = jitter_buffer.pop_front().unwrap_or(0.0);
-                        *item = (s * 32767.0).clamp(-32768.0, 32767.0) as i16;
+                        if e.code() == AUDCLNT_E_DEVICE_INVALIDATED || e.code() == AUDCLNT_E_RESOURCES_INVALIDATED {
+                            error_result = Err(e);
+                            break;
+                        }
                     }
                 }
-
-                if let Err(e) = render_service.ReleaseBuffer(frames_to_write as u32, 0) {
-                    error_result = Err(e);
-                    break;
+            } else if padding < 480 {
+                // Buffer starvation prevention: inject comfort silence so VB-Cable never starves or resets
+                let silence_frames = (480 - padding).min(available_space as u32);
+                if silence_frames > 0 {
+                    if let Ok(ptr) = render_service.GetBuffer(silence_frames) {
+                        let byte_count = (silence_frames as usize) * ren_channels * (ren_bits as usize / 8);
+                        std::ptr::write_bytes(ptr, 0, byte_count);
+                        let _ = render_service.ReleaseBuffer(silence_frames, 0);
+                    }
                 }
             }
 
-            // Prevent buffer drift from accumulating latency (> 60ms)
-            let max_jitter_samples = 3000 * ren_channels;
-            if jitter_buffer.len() > max_jitter_samples {
-                let excess = jitter_buffer.len() - (1500 * ren_channels);
-                jitter_buffer.drain(0..excess);
+            // Smooth drift compensation: keep jitter buffer bounded between 15ms and 45ms
+            let current_frames = jitter_buffer.len() / ren_channels;
+            if current_frames > 2200 {
+                for _ in 0..ren_channels {
+                    jitter_buffer.pop_front();
+                }
             }
-
-            thread::sleep(Duration::from_millis(2));
         }
 
         let _ = cap_client.Stop();
         let _ = ren_client.Stop();
+        if let Some(evt) = capture_event {
+            let _ = CloseHandle(evt);
+        }
         CoTaskMemFree(Some(cap_format_ptr as _));
         CoTaskMemFree(Some(ren_format_ptr as _));
 
