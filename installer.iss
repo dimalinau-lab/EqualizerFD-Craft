@@ -2,7 +2,7 @@
 ; Equalizer FD CRAFT - Professional DSP & Configuration Studio
 
 #define MyAppName "Equalizer FD CRAFT"
-#define MyAppVersion "0.1.1-BETA"
+#define MyAppVersion "0.1.2-BETA"
 #define MyAppPublisher "Equalizer FD CRAFT Team"
 #define MyAppURL "https://github.com/dimalinau-lab/EqualizerFD-Craft"
 #define MyAppExeName "EqualizerFD-Craft.exe"
@@ -21,7 +21,7 @@ DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 LicenseFile=LICENSE
 OutputDir=dist
-OutputBaseFilename=EqualizerFD-Craft-Setup-v0.1.1-BETA
+OutputBaseFilename=EqualizerFD-Craft-Setup-v0.1.2-BETA
 SetupIconFile=EqualizerFD-Craft.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
@@ -42,9 +42,9 @@ Name: "vstplugins"; Description: "Встроенный набор студийн
 
 [Files]
 Source: "EqualizerFD-Craft.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "EqualizerTray.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "ResonaAPO.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "EqualizerFD-Craft.ico"; DestDir: "{app}"; Flags: ignoreversion
-Source: "tray.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "config.example.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion

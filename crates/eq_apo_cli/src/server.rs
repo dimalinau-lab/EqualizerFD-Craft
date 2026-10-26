@@ -9,6 +9,14 @@ use std::thread;
 const INDEX_HTML: &str = include_str!("../../../web/index.html");
 const STYLE_CSS: &str = include_str!("../../../web/style.css");
 const APP_JS: &str = include_str!("../../../web/app.js");
+const I18N_JS: &str = include_str!("../../../web/i18n.js");
+const LOCALE_RU: &str = include_str!("../../../web/locales/ru.json");
+const LOCALE_EN: &str = include_str!("../../../web/locales/en.json");
+const MANIFEST_JSON: &str = include_str!("../../../web/manifest.json");
+const FAVICON_ICO: &[u8] = include_bytes!("../../../web/favicon.ico");
+const ICON_PNG: &[u8] = include_bytes!("../../../web/icon.png");
+const ICON_192_PNG: &[u8] = include_bytes!("../../../web/icon-192.png");
+const APPLE_TOUCH_ICON_PNG: &[u8] = include_bytes!("../../../web/apple-touch-icon.png");
 
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -23,9 +31,48 @@ pub fn invalidate_device_cache() {
     }
 }
 
+pub fn is_stream_active() -> bool {
+    if let Ok(lock) = STREAM_CONTROLLER.lock() {
+        if let Some(ref ctrl) = *lock {
+            return ctrl.is_active();
+        }
+    }
+    false
+}
+
+pub fn toggle_stream() -> bool {
+    if let Ok(mut lock) = STREAM_CONTROLLER.lock() {
+        if lock.is_none() {
+            *lock = Some(eq_apo_device::stream::StreamController::new());
+        }
+        if let Some(ref mut ctrl) = *lock {
+            if ctrl.is_active() {
+                ctrl.stop();
+                return false;
+            } else {
+                let _ = ctrl.start("Microphone".to_string(), "cable".to_string());
+                return true;
+            }
+        }
+    }
+    false
+}
+
 pub fn start_embedded_server(port: u16) -> Result<(), String> {
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", port))
-        .map_err(|e| format!("Failed to bind to port {}: {}", port, e))?;
+    let mut listener = None;
+    for attempt in 1..=20 {
+        match TcpListener::bind(format!("127.0.0.1:{}", port)) {
+            Ok(l) => {
+                listener = Some(l);
+                break;
+            }
+            Err(e) => {
+                eprintln!("[ResonaDSP Server] Port {} not ready (attempt {}/20: {:?}), retrying in 500ms...", port, attempt, e);
+                std::thread::sleep(Duration::from_millis(500));
+            }
+        }
+    }
+    let listener = listener.ok_or_else(|| format!("Failed to bind to port {} after 20 attempts", port))?;
 
     println!("===========================================================");
     println!("  Equalizer FD CRAFT Configuration Studio is LIVE!");
@@ -130,7 +177,8 @@ fn handle_client(mut stream: TcpStream) {
     }
 
     let method = parts[0];
-    let path = parts[1];
+    let raw_path = parts[1];
+    let path = raw_path.split('?').next().unwrap_or(raw_path);
     let body_str = if header_end <= req_bytes.len() {
         String::from_utf8_lossy(&req_bytes[header_end..]).to_string()
     } else {
@@ -154,40 +202,89 @@ fn handle_client(mut stream: TcpStream) {
                     .unwrap_or_else(|_| APP_JS.to_string());
                 respond_ok(&mut stream, "application/javascript; charset=utf-8", content.as_bytes())
             }
+            "/i18n.js" => {
+                let content = std::fs::read_to_string("web/i18n.js")
+                    .unwrap_or_else(|_| I18N_JS.to_string());
+                respond_ok(&mut stream, "application/javascript; charset=utf-8", content.as_bytes())
+            }
+            "/locales/ru.json" => {
+                let content = std::fs::read_to_string("web/locales/ru.json")
+                    .unwrap_or_else(|_| LOCALE_RU.to_string());
+                respond_ok(&mut stream, "application/json; charset=utf-8", content.as_bytes())
+            }
+            "/locales/en.json" => {
+                let content = std::fs::read_to_string("web/locales/en.json")
+                    .unwrap_or_else(|_| LOCALE_EN.to_string());
+                respond_ok(&mut stream, "application/json; charset=utf-8", content.as_bytes())
+            }
             "/favicon.ico" => {
-                if let Ok(bytes) = std::fs::read("web/favicon.ico") {
-                    respond_ok(&mut stream, "image/x-icon", &bytes);
-                } else {
-                    respond_404(&mut stream);
-                }
+                let bytes = std::fs::read("web/favicon.ico").unwrap_or_else(|_| FAVICON_ICO.to_vec());
+                respond_ok(&mut stream, "image/x-icon", &bytes);
             }
             "/icon.png" => {
-                if let Ok(bytes) = std::fs::read("web/icon.png") {
-                    respond_ok(&mut stream, "image/png", &bytes);
-                } else {
-                    respond_404(&mut stream);
-                }
+                let bytes = std::fs::read("web/icon.png").unwrap_or_else(|_| ICON_PNG.to_vec());
+                respond_ok(&mut stream, "image/png", &bytes);
             }
             "/icon-192.png" => {
-                if let Ok(bytes) = std::fs::read("web/icon-192.png") {
-                    respond_ok(&mut stream, "image/png", &bytes);
-                } else {
-                    respond_404(&mut stream);
-                }
+                let bytes = std::fs::read("web/icon-192.png").unwrap_or_else(|_| ICON_192_PNG.to_vec());
+                respond_ok(&mut stream, "image/png", &bytes);
             }
             "/apple-touch-icon.png" => {
-                if let Ok(bytes) = std::fs::read("web/apple-touch-icon.png") {
-                    respond_ok(&mut stream, "image/png", &bytes);
-                } else {
-                    respond_404(&mut stream);
-                }
+                let bytes = std::fs::read("web/apple-touch-icon.png").unwrap_or_else(|_| APPLE_TOUCH_ICON_PNG.to_vec());
+                respond_ok(&mut stream, "image/png", &bytes);
             }
             "/manifest.json" => {
-                if let Ok(bytes) = std::fs::read("web/manifest.json") {
-                    respond_ok(&mut stream, "application/manifest+json; charset=utf-8", &bytes);
-                } else {
-                    respond_404(&mut stream);
+                let content = std::fs::read_to_string("web/manifest.json")
+                    .unwrap_or_else(|_| MANIFEST_JSON.to_string());
+                respond_ok(&mut stream, "application/manifest+json; charset=utf-8", content.as_bytes());
+            }
+            "/api/app/quit" => {
+                respond_ok(&mut stream, "application/json", b"{\"status\":\"quitting\"}");
+                std::thread::spawn(|| {
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    crate::window_manager::kill_app_browser_processes();
+                    std::process::exit(0);
+                });
+            }
+            "/api/window/hide" => {
+                crate::window_manager::hide_window();
+                respond_ok(&mut stream, "application/json", b"{\"status\":\"hidden_to_tray\"}");
+            }
+            "/api/window/show" => {
+                crate::window_manager::focus_existing_window();
+                respond_ok(&mut stream, "application/json", b"{\"status\":\"shown\"}");
+            }
+            "/api/window/minimize" => {
+                crate::window_manager::minimize_window();
+                respond_ok(&mut stream, "application/json", b"{\"status\":\"minimized\"}");
+            }
+            "/api/window/maximize" => {
+                crate::window_manager::toggle_maximize_window();
+                respond_ok(&mut stream, "application/json", b"{\"status\":\"maximized_toggled\"}");
+            }
+            "/api/window/move" => {
+                if let Some(query) = raw_path.split('?').nth(1) {
+                    let mut dx = 0;
+                    let mut dy = 0;
+                    for pair in query.split('&') {
+                        let mut parts = pair.split('=');
+                        if let (Some(k), Some(v)) = (parts.next(), parts.next()) {
+                            if k == "dx" { dx = v.parse::<i32>().unwrap_or(0); }
+                            if k == "dy" { dy = v.parse::<i32>().unwrap_or(0); }
+                        }
+                    }
+                    if dx != 0 || dy != 0 {
+                        crate::window_manager::move_window_by(dx, dy);
+                    }
                 }
+                respond_ok(&mut stream, "application/json", b"{\"status\":\"moved\"}");
+            }
+            "/api/window/close" => {
+                respond_ok(&mut stream, "application/json", b"{\"status\":\"closing\"}");
+                std::thread::spawn(|| {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    crate::window_manager::close_window();
+                });
             }
             "/api/devices" => {
                 let cached = {
@@ -327,7 +424,7 @@ fn handle_client(mut stream: TcpStream) {
                 let resp = serde_json::json!({
                     "app_dir": exe_dir,
                     "vst_dir": vst_dir,
-                    "version": "0.1.1-BETA"
+                    "version": "0.1.2-BETA"
                 }).to_string();
                 respond_ok(&mut stream, "application/json", resp.as_bytes());
             }
@@ -347,6 +444,29 @@ fn handle_client(mut stream: TcpStream) {
                     std::process::exit(0);
                 });
                 respond_ok(&mut stream, "application/json", b"{\"status\":\"exiting\"}");
+            }
+            "/api/window/hide" => {
+                crate::window_manager::hide_window();
+                respond_ok(&mut stream, "application/json", b"{\"status\":\"hidden_to_tray\"}");
+            }
+            "/api/window/show" => {
+                crate::window_manager::focus_existing_window();
+                respond_ok(&mut stream, "application/json", b"{\"status\":\"shown\"}");
+            }
+            "/api/window/minimize" => {
+                crate::window_manager::minimize_window();
+                respond_ok(&mut stream, "application/json", b"{\"status\":\"minimized\"}");
+            }
+            "/api/window/maximize" => {
+                crate::window_manager::toggle_maximize_window();
+                respond_ok(&mut stream, "application/json", b"{\"status\":\"maximized_toggled\"}");
+            }
+            "/api/window/close" => {
+                respond_ok(&mut stream, "application/json", b"{\"status\":\"closing\"}");
+                std::thread::spawn(|| {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    crate::window_manager::close_window();
+                });
             }
             "/api/autostart" => {
                 let mut enable = false;
@@ -663,7 +783,7 @@ fn sync_config_to_shared_mem(config_str: &str) {
 
 fn respond_ok(stream: &mut TcpStream, content_type: &str, body: &[u8]) {
     let response = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nCache-Control: no-cache, no-store, must-revalidate\r\nPragma: no-cache\r\nExpires: 0\r\nConnection: close\r\n\r\n",
         content_type,
         body.len()
     );

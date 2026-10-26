@@ -1,0 +1,1119 @@
+{
+  "app": {
+    "title": "Configuration Editor - Equalizer FD CRAFT",
+    "statusReady": "Ready",
+    "saved": "Configuration successfully saved",
+    "applied": "Changes applied in real time"
+  },
+  "menu": {
+    "file": "File",
+    "new": "New...",
+    "open": "Open...",
+    "save": "Save",
+    "saveAs": "Save As...",
+    "importRew": "Import REW (Room EQ Wizard)...",
+    "exportConfig": "Export to config.txt...",
+    "exit": "Exit Application",
+    "edit": "Edit",
+    "undo": "Undo",
+    "redo": "Redo",
+    "cut": "Cut",
+    "copy": "Copy",
+    "paste": "Paste",
+    "view": "View",
+    "toggleAnalysis": "Frequency Response Analysis",
+    "resetZoom": "Reset Zoom",
+    "rawText": "View config.txt Source",
+    "settings": "Settings",
+    "wizard": "Microphone Setup Wizard...",
+    "vbCable": "Install VB-Audio Virtual Cable...",
+    "deviceConfigurator": "Device Configurator (DeviceSelector)...",
+    "registryBackup": "Create Registry Backup (.reg)...",
+    "autostart": "Launch on Windows Startup",
+    "minimizeToTray": "Minimize to tray on close",
+    "elevate": "Restart as Administrator (UAC)...",
+    "checkUpdate": "Check for Updates (GitHub)...",
+    "language": "Language",
+    "langRu": "Русский",
+    "langEn": "English",
+    "help": "Help",
+    "helpUpdate": "Check for Updates...",
+    "about": "About..."
+  },
+  "toolbar": {
+    "newTitle": "Create new configuration (Ctrl+N)",
+    "openTitle": "Open configuration file .txt (Ctrl+O)",
+    "saveTitle": "Save to Equalizer FD CRAFT (Ctrl+S)",
+    "undoTitle": "Undo last action (Ctrl+Z)",
+    "redoTitle": "Redo undone action (Ctrl+Y)",
+    "instantMode": "Instant Apply",
+    "instantModeTitle": "Instantly apply and sync changes to audio driver in real-time",
+    "streamTitle": "WASAPI Audio Bridge:",
+    "streamTitleTooltip": "Low-latency (~2 ms) real-time audio stream from microphone into VB-Audio Virtual Cable",
+    "streamLive": "[LIVE]",
+    "streamPaused": "[PAUSED]",
+    "deviceLabel": "Device:",
+    "deviceTitle": "Target audio device (Device)",
+    "deviceAll": "All Endpoints - Global",
+    "channelLabel": "Channel:",
+    "channelTitle": "Target audio channels",
+    "channelAll": "all (all channels)",
+    "channelStereo": "L, R (stereo)",
+    "channelLeft": "L (left)",
+    "channelRight": "R (right)",
+    "channelCenter": "C (center)",
+    "channelSub": "SUB (subwoofer)",
+    "noClipping": "No clipping (Peak: {peak} dB)",
+    "clipping": "Warning! Clipping ({peak} dB)",
+    "clipStatusTooltip": "Real-time audio headroom and clipping peak monitor",
+    "liveSignal": "Signal: {peak} dB (Gain: +{gain} dB)",
+    "clipOverload": "Warning! Clipping ({val} dB)",
+    "clipOk": "No clipping (Peak: {val} dB)",
+    "micPrefix": "Microphone",
+    "speakerPrefix": "Speakers",
+    "captureGroup": "Microphones (Capture)",
+    "renderGroup": "Playback (Render / Speakers / Headphones)"
+  },
+  "add": {
+    "buttonTitle": "Add filter or control block",
+    "catControl": "Control",
+    "include": "Include (Load external config file)",
+    "device": "Device (Target device selection)",
+    "channel": "Channel (Target channel selection)",
+    "catBasic": "Basic Filters",
+    "preamp": "Preamp (Preamplification gain)",
+    "copy": "Copy (Channel matrix copy)",
+    "catParametric": "Parametric Filters (Biquad EQ)",
+    "peaking": "Peaking (Bell / Peaking EQ)",
+    "peakingTitle": "Peaking: pinpoint speech frequency tuning (boxiness 350-500 Hz, clarity 2-3.5 kHz)",
+    "lowshelf": "Low-shelf (Bass shelf)",
+    "lowshelfTitle": "Low-shelf: boost or cut all low frequencies (vocal warmth and body)",
+    "highshelf": "High-shelf (Treble shelf)",
+    "highshelfTitle": "High-shelf: boost high frequencies (air, crispness and consonant clarity)",
+    "lowpass": "Low-pass (High-cut filter)",
+    "lowpassTitle": "Low-pass: eliminates coil whine, high-frequency hiss above cut frequency (12-16 kHz)",
+    "highpass": "High-pass (Low-cut filter)",
+    "highpassTitle": "High-pass: eliminates desk thumps, mic boom rumble, breathing pops (70-85 Hz)",
+    "notch": "Notch (Narrow band-stop)",
+    "notchTitle": "Notch: surgical narrow notch cut (fan whistle, 50/60 Hz AC ground hum)",
+    "catGraphic": "Graphic Equalizers",
+    "geq15": "Graphic EQ (15-band ISO)",
+    "geq31": "Graphic EQ (31-band ISO)",
+    "catVst": "VST Plugins (APO-PLUGINS)",
+    "vstCatalog": "All 98 VST Plugins Catalog...",
+    "vstCatalogTitle": "Browse complete illustrated catalog of 98 bundled VST plugins",
+    "vstReagate": "ReaGate (Noise Gate / Expander)",
+    "vstReagateTitle": "ReaGate: studio noise gate, eliminates keyboard clicks, breathing and room noise",
+    "vstReacomp": "ReaComp (Vocal Compressor)",
+    "vstReacompTitle": "ReaComp: ultra-smooth compressor for punchy, consistent vocal dynamics",
+    "vstReafir": "ReaFIR (FFT Noise Subtraction)",
+    "vstReafirTitle": "ReaFIR: adaptive FFT spectral noise subtractor with zero metallic artifacts",
+    "vstReadelay": "ReaDelay (Stereo Delay / Echo)",
+    "vstReadelayTitle": "ReaDelay: multi-tap stereo delay with variable feedback and damping",
+    "vstReaxcomp": "ReaXcomp (Multiband Compressor)",
+    "vstReaxcompTitle": "ReaXcomp: 4-band crossover compressor for broadcast radio presence",
+    "vstBasiq": "basiQ (Kuassa 3-band Baxandall EQ)",
+    "vstBasiqTitle": "basiQ: analog-modeled Baxandall EQ for warm bass and transparent highs",
+    "vstCustom": "Custom VST Plugin (.dll)...",
+    "vstCustomTitle": "Load any external 64-bit .dll VST 2.4 plugin",
+    "catRc505": "Boss RC-505 Mk2 FX",
+    "rc505Slicer": "Beat Repeat / Slicer (Stutter Gate)",
+    "rc505Vinyl": "Vinyl Flick (Turntable Tape Stop)",
+    "rc505Vocoder": "Vocoder / Robot Pitch (Voice Pitch Shifter)",
+    "rc505Ringmod": "Ring Modulator (Metallic Modulation)",
+    "rc505Isolator": "Isolator / DJ Filter (Resonant DJ Cut)",
+    "rc505Lofi": "Lo-Fi Radio (Walkie-talkie / Bitcrush)",
+    "rc505Chorus": "Chorus & Flanger (Spatial Dimension)",
+    "rc505Distortion": "Distortion & Overdrive (Harmonic Tube Drive)",
+    "rc505Scatter": "Granular Scatter (Glitch Buffer)",
+    "rc505Reverb": "Space Reverb (Studio Boss Loop Reverb)",
+    "catAdvanced": "Advanced",
+    "delay": "Delay (Channel delay in ms)"
+  },
+  "blocks": {
+    "gain": "Gain:",
+    "frequency": "Frequency:",
+    "qFactor": "Q-Factor:",
+    "bandwidth": "Bandwidth (Octaves):",
+    "active": "Active",
+    "bypassed": "Bypassed",
+    "delete": "Delete block",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "duplicate": "Duplicate",
+    "includeFile": "Configuration file:",
+    "delayMs": "Delay (ms):",
+    "copyChannels": "Copy channels:",
+    "geqZero": "Reset to 0 dB",
+    "geqFlat": "Flatten",
+    "preamp": {
+      "label": "Preamp Gain:",
+      "title": "Preamplification (Preamp)"
+    },
+    "delay": {
+      "label": "Delay:",
+      "title": "Channel Delay (Delay)"
+    },
+    "include": {
+      "fileLabel": "Configuration file:",
+      "placeholder": "e.g.: example.txt or mic_preset.txt",
+      "btnBrowse": "Browse...",
+      "btnOpen": "Open",
+      "title": "Include Configuration File"
+    },
+    "parametric": {
+      "thPower": "On",
+      "thType": "Filter Type",
+      "thFc": "Frequency",
+      "thGain": "Gain",
+      "thQ": "Q-Factor",
+      "thDelete": "Delete",
+      "btnAddBand": "+ Add Filter Band",
+      "titleFc": "Center processing frequency in Hertz",
+      "titleGain": "Boost (+) or attenuation (-) in decibels",
+      "titleQ": "Q-Factor / filter bandwidth",
+      "titleDelete": "Delete this filter band",
+      "powerOn": "Filter active",
+      "powerOff": "Filter bypassed",
+      "types": {
+        "PK": "Parametric (Bell / Peaking)",
+        "LS": "Low-Shelf",
+        "HS": "High-Shelf",
+        "LP": "Low-Pass (High cut)",
+        "HP": "High-Pass (Low cut)",
+        "NO": "Notch (Narrow cut)"
+      },
+      "hints": {
+        "PK": "Parametric (Bell): surgical speech frequency shaping (de-mud 350-500 Hz, clarity 2-3.5 kHz).",
+        "LS": "Low-shelf: boost or cut all frequencies below cutoff (voice warmth and body).",
+        "HS": "High-shelf: boost or cut high frequencies (air, brightness, consonant articulation).",
+        "LP": "Low-pass: cuts high-frequency noise, coil whine, and hiss above threshold (12-16 kHz).",
+        "HP": "High-pass: eliminates sub-bass rumble, table bumps, stand vibrations, and breathing (70-85 Hz).",
+        "NO": "Notch filter: surgical ultra-narrow band cut (50/60 Hz powerline hum, cooler whine)."
+      },
+      "title": "Parametric Filters (Biquad EQ)"
+    },
+    "device": {
+      "mic": "Microphone",
+      "speakers": "Speakers",
+      "all": "All Endpoints - Global"
+    },
+    "vst": {
+      "dllLabel": "DLL Library:",
+      "purposeLabel": "Purpose:",
+      "howLabel": "How it works:",
+      "presetsLabel": "Quick Presets:",
+      "customTitle": "Custom VST Plugin",
+      "customCategory": "VST Plugin",
+      "customDesc": "Third-party VST 2.4 DLL plugin for real-time audio processing in Equalizer FD CRAFT chain.",
+      "customHow": "Directly loaded into the audiodg.exe driver and processes audio with zero added latency."
+    },
+    "rc505": {
+      "purposeLabel": "Purpose:",
+      "howLabel": "How it works:",
+      "presetsLabel": "Roland BOSS Studio Presets:"
+    },
+    "tooltips": {
+      "powerOn": "Enabled (click to bypass)",
+      "powerOff": "Bypassed (click to enable)",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "delete": "Delete block"
+    },
+    "emptyTitle": "Configuration is currently empty",
+    "emptyDesc": "Click the green \"+\" button below or choose a ready preset (for stream, podcast, or Discord) via \"File\" → \"New...\"",
+    "emptyBtn": "+ Add Default Equalizer"
+  },
+  "analysis": {
+    "title": "Frequency Response Analysis",
+    "toggleTooltip": "Collapse/Expand panel",
+    "floatBtnUndock": "Undock",
+    "floatBtnDock": "Dock",
+    "floatTooltip": "Dock / Undock panel",
+    "showPhase": "Show phase",
+    "resetZoom": "Reset zoom",
+    "freqLabel": "Frequency",
+    "gainLabel": "Magnitude",
+    "calcTime": "Calc: {ms} ms",
+    "peakAt": "Peak: {gain} dB at {freq} Hz",
+    "tooltip": "Freq: {freq} Hz, Gain: {gain} dB, Phase: {phase}°",
+    "unitHz": "Hz",
+    "unitDb": "dB"
+  },
+  "wizard": {
+    "title": "Microphone Quick Setup Wizard",
+    "welcome": "Welcome to Equalizer FD CRAFT! Let's set up your microphone in 2 easy steps.",
+    "step1": "1. Microphone",
+    "step2": "2. Virtual Cable",
+    "step3": "3. Voice Preset",
+    "step4": "4. Verify & Finish",
+    "micDesc": "Step 1 of 2: Select your microphone (Input):",
+    "micSub": "Select the microphone capturing your voice (any USB mic, Realtek, headset).",
+    "renderDesc": "Step 2 of 2: Select audio transmission device (Output):",
+    "renderSub": "Recommended: select CABLE Input (VB-Audio Virtual Cable). Audio is processed in real time and sent to Discord/OBS without restarting or modifying registry.",
+    "presetDesc": "Choose a tailored processing profile for your voice:",
+    "presetPodcast": "Studio Podcast (Warm bass, rich body, crisp consonants)",
+    "presetStreamer": "Streamer / Gaming (Aggressive noise gate, bright presence)",
+    "presetClear": "Maximum Speech Clarity (Low-cut rumble removal, sharp articulation)",
+    "presetBoss": "Boss RC-505 Live Beatbox (Special creative FX processor)",
+    "hint": "Tip: you can change input or output devices at any time in the toolbar.",
+    "btnNext": "Next",
+    "btnBack": "Back",
+    "btnApply": "Connect & Start Working",
+    "btnClose": "Skip",
+    "chooseMic": "-- Select Microphone --",
+    "chooseRender": "-- Select Headphones or Speakers --"
+  },
+  "vstModal": {
+    "catalogTitle": "98 VST Plugins Catalog (APO-PLUGINS)",
+    "searchPlaceholder": "Search plugin by name, category or tag...",
+    "catAll": "All Categories (98 Plugins)",
+    "catDynamics": "Compressors & Gates (16)",
+    "catEq": "Equalizers & Tone (14)",
+    "catReverb": "Reverb & Delay (18)",
+    "catModulation": "Chorus & Modulation (12)",
+    "catCreative": "Saturation, Guitars & Drive (15)",
+    "catStereo": "Stereo & Mastering (12)",
+    "catVocal": "Vocals, Pitch & Utilities (11)",
+    "localDllNotice": "All DLL files are stored locally in the vst_plugins folder",
+    "btnAdd": "Add to Chain",
+    "customTitle": "Load Custom VST Plugin",
+    "pathLabel": "Path to 64-bit .dll VST plugin:",
+    "btnBrowse": "Browse...",
+    "quickFolder": "Quick Select Standard Directories:",
+    "optSelectFolder": "-- Select standard VST folder --",
+    "optBundled": "Bundled VST Library: D:\\testik\\vst_plugins\\",
+    "archNotice": "Architecture requirement: Equalizer FD CRAFT runs as a 64-bit Windows process. Ensure your chosen VST plugin is 64-bit (x64). 32-bit plugins will not load without a third-party bridge (jBridge).",
+    "btnAddPlugin": "Add Plugin",
+    "btnCancel": "Cancel",
+    "purpose": "Purpose:",
+    "principle": "How it works:",
+    "emptySearch": "No plugins found matching your criteria. Try adjusting your search query or category filter."
+  },
+  "update": {
+    "dialogTitle": "Equalizer FD CRAFT Update",
+    "currentVer": "Current version: v{ver}",
+    "readyToCheck": "Ready to check GitHub releases",
+    "btnCheckNow": "Check Now",
+    "checking": "Checking...",
+    "connecting": "Connecting to GitHub Releases...",
+    "available": "Update available: v{ver} ({asset})",
+    "upToDate": "You have the latest version of Equalizer FD CRAFT (v{ver})",
+    "releaseNotes": "Release Notes:",
+    "notesEmpty": "No release notes available.",
+    "btnDownload": "Download & Update",
+    "progressLabel": "Downloading EqualizerFD-Craft.exe...",
+    "applying": "Installing update and replacing binary...",
+    "applyingSpeed": "Applying...",
+    "restarting": "Update complete! Restarting studio...",
+    "restartingSpeed": "Reconnecting...",
+    "restartedLabel": "Studio restarted! Reloading page...",
+    "manualRestart": "Please restart the application manually.",
+    "reconnecting": "Reconnecting to updated version...",
+    "error": "Update error: {msg}",
+    "btnRetry": "Retry",
+    "btnClose": "Close",
+    "repoNote": "Project repository: github.com/dimalinau-lab/EqualizerFD-Craft (public access, checks automated).",
+    "currentVerPrefix": "Current Version: v0.1.2-BETA",
+    "waiting": "Waiting..."
+  },
+  "about": {
+    "title": "About Equalizer FD CRAFT",
+    "version": "Version {ver} (x64) • Studio Audio Engine",
+    "desc": "Professional configuration editor and ultra-high performance digital signal processing (DSP) engine for Windows.",
+    "feat1": "Direct WASAPI Real-Time audio bridge (Microphone to VB-Audio Virtual Cable)",
+    "feat2": "Built-in Roland BOSS RC-505 Mk2 DSP engine (Beat Repeat, Vinyl, Vocoder, Isolator, Reverb, Scatter)",
+    "feat3": "Native hosting for 98 bundled APO-PLUGINS and third-party 64-bit VST 2.4 DLLs",
+    "feat4": "Parametric Biquad IIR filters and 15-band ISO Graphic Equalizer",
+    "feat5": "Atomic auto-updater via GitHub Releases with in-place binary swapping",
+    "feat6": "Multi-tab preset workspace, adaptive windowed UI, headless background operation",
+    "repo": "Equalizer FD CRAFT Engine. Repository: github.com/dimalinau-lab/EqualizerFD-Craft",
+    "btnOk": "OK"
+  },
+  "vbcable": {
+    "title": "VB-Audio Virtual Cable Installation & Setup",
+    "whyTitle": "Why is a virtual cable needed?",
+    "whyText": "Equalizer FD CRAFT processes your microphone in real-time and routes clean, studio-grade audio into a virtual cable (CABLE Input). In Discord, Telegram, OBS, CS2, or Skype, you select CABLE Output as your input device — and everyone hears studio-quality audio.",
+    "statusLabel": "Current System Status:",
+    "btnInstall": "Install VB-Audio Virtual Cable (Run as Administrator)",
+    "btnControlPanel": "Open VB-Cable Control Panel (VBCABLE_ControlPanel)",
+    "orderTitle": "Installation Instructions:",
+    "step1": "Click the blue button above and accept the UAC Administrator prompt.",
+    "step2": "In the official installer window that opens, click Install Driver.",
+    "step3": "Restart your computer or restart the audio service in program settings.",
+    "step4": "In Discord / Telegram / OBS, select CABLE Output (VB-Audio Virtual Cable) as your recording device.",
+    "btnClose": "Close",
+    "checking": "Checking..."
+  },
+  "dialogs": {
+    "newConfig": {
+      "title": "Create New Configuration",
+      "filenameLabel": "Configuration / Tab file name:",
+      "filenameDesc": "A new independent tab will be added without overwriting the current one.",
+      "presetLabel": "Initial Template / Preset:",
+      "presetEmpty": "Clean EQ (Preamp 0 dB only)",
+      "presetVoice": "Stream & Discord (High-Pass 80Hz + Peaking 1.2kHz + High-Shelf)",
+      "presetPodcast": "Warm Voice / Podcast (Warmth 120Hz + Peaking 2.8kHz)",
+      "presetNoiseCut": "Room Noise Cut (High-pass 75Hz + Notch 50Hz)",
+      "presetGeq15": "Graphic Equalizer (15 ISO Bands)",
+      "deviceLabel": "Target Audio Device:",
+      "deviceAll": "All Endpoints - Global",
+      "info": "Note: The new configuration will open in a separate tab. You can switch between them at any time.",
+      "btnCreate": "Create Tab",
+      "btnCancel": "Cancel"
+    },
+    "saveAs": {
+      "title": "Save Configuration As...",
+      "filenameLabel": "Export filename:",
+      "desc": "Configuration file will be saved on your computer with the current equalizer settings.",
+      "btnExport": "Export and Download",
+      "btnCancel": "Cancel"
+    },
+    "rawConfig": {
+      "title": "Raw config.txt Code - Editor",
+      "btnApply": "Apply Code Changes",
+      "btnCancel": "Cancel"
+    },
+    "configurator": {
+      "title": "Equalizer FD CRAFT Audio Configurator (APO Interception Management)",
+      "desc": "Manage system audio interception for microphones and speakers:",
+      "tabRender": "Playback Devices (Speakers/Headphones)",
+      "tabCapture": "Recording Devices (Microphones)",
+      "thDevice": "Device",
+      "thConnector": "Connector / Type",
+      "thStatus": "APO Status",
+      "thBackup": "Backup Copy",
+      "troubleCheck": "Troubleshooting Options (APO Interception Modes)",
+      "modeAll": "Hybrid ALL Mode (LFX/GFX + SFX/MFX/EFX) — Full capture for Discord, Telegram & all apps",
+      "modeSfx": "Install as SFX/MFX — Windows 10/11 Voice Mode",
+      "modeLfx": "Install as LFX/GFX — For Legacy USB Audio Devices",
+      "useOriginal": "Use original APO (Preserve vendor audio enhancements)",
+      "audioServiceOk": "[OK] Windows Audio Service is active",
+      "btnSave": "Apply Interception",
+      "btnCancel": "Close"
+    }
+  },
+  "toasts": {
+    "saved": "Configuration saved",
+    "exported": "Exported to {path}",
+    "streamActive": "WASAPI audio bridge started (fifine SC3 -> VB-Cable)",
+    "streamStopped": "WASAPI audio bridge stopped",
+    "copied": "Copied to clipboard",
+    "autostartOn": "Startup launch enabled",
+    "autostartOff": "Startup launch disabled",
+    "langChanged": "Language changed to English",
+    "updateRestarting": "Update complete! Restarting Equalizer FD CRAFT...",
+    "error": "Error: {msg}"
+  },
+  "rc505Plugins": {
+    "slicer": {
+      "title": "Beat Repeat & Slicer",
+      "category": "Roland Boss Rhythmic Slicer",
+      "desc": "Rhythmically slices voice into beat subdivisions (1/8, 1/16, 1/32) for live beatbox and trap effects.",
+      "how": "Tempo-synced LFO gates and stutters incoming audio micro-slices.",
+      "params": {
+        "pattern": "Rhythmic Pattern",
+        "timing": "Beat Division",
+        "depth": "Slicing Depth"
+      },
+      "presets": {
+        "0": "Trap Stutter (1/16)",
+        "1": "LFO Gate (1/8)",
+        "2": "Glitch Beat (1/32)"
+      }
+    },
+    "vinyl": {
+      "title": "Vinyl Flick & Warble",
+      "category": "Vinyl Record Turntable Simulator",
+      "desc": "Vintage vinyl crackle, surface noise, turntable motor flutter, and warm band-pass tape tone.",
+      "how": "Simulates turntable motor speed variations (flutter) and overlays authentic vinyl groove noise.",
+      "params": {
+        "scratch_speed": "Turntable Speed",
+        "noise_level": "Needle Noise Level",
+        "dust_density": "Dust & Crackle"
+      },
+      "presets": {
+        "0": "Lo-Fi Old School",
+        "1": "Dusty Record",
+        "2": "Stop Effect"
+      }
+    },
+    "vocoder": {
+      "title": "Robot Vocoder & Formant",
+      "category": "Vocal Vocoder & Robot Synth",
+      "desc": "Synthesizes robotic voice modulation with adjustable formant shifting and harmonic brightness.",
+      "how": "Extracts vocal formant envelopes through bandpass filters and modulates harmonic synthesizer carriers.",
+      "params": {
+        "carrier_freq": "Carrier Frequency (Hz)",
+        "formant_shift": "Formant Shift",
+        "harmonics": "Harmonic Density"
+      },
+      "presets": {
+        "0": "Daft Robot",
+        "1": "Deep Alien",
+        "2": "Cyber Voice"
+      }
+    },
+    "ringmod": {
+      "title": "Ring Modulator",
+      "category": "Roland BOSS Ring Modulator",
+      "desc": "Sci-fi metallic ring modulator, bell tones, harmonic sidebands, and cybernetic voice processing.",
+      "how": "Multiplies incoming voice audio with an internal carrier oscillator to produce sum/difference frequencies.",
+      "params": {
+        "frequency": "Modulation Frequency (Hz)",
+        "modulation_depth": "Modulation Depth",
+        "mix": "Dry / Wet Mix"
+      },
+      "presets": {
+        "0": "Cyber Metallic",
+        "1": "Dalek Robot",
+        "2": "Subtle Shimmer"
+      }
+    },
+    "isolator": {
+      "title": "Isolator & DJ Filter",
+      "category": "Roland 3-Band DJ Isolator",
+      "desc": "Instantly kills low, mid or high frequency bands with steep crossovers for dramatic DJ transitions.",
+      "how": "4th-order Linkwitz-Riley crossover filters (24 dB/oct) with individual band kill switches.",
+      "params": {
+        "low_kill": "Low Band Kill",
+        "mid_kill": "Mid Band Kill",
+        "high_kill": "High Band Kill"
+      },
+      "presets": {
+        "0": "Bass Drop Kill",
+        "1": "Telephone Bandpass",
+        "2": "Vocal Isolation"
+      }
+    },
+    "lofi": {
+      "title": "Lo-Fi Radio & Bitcrush",
+      "category": "Vintage Walkie-Talkie & Bitcrusher",
+      "desc": "Telephone speaker tone, police walkie-talkie band-pass, and vintage digital bit-reduction.",
+      "how": "Downsamples audio to lower sampling rate and truncates resolution to 8-bit with telephone bandpass.",
+      "params": {
+        "bit_depth": "Bit Depth (Bits)",
+        "sample_rate": "Sampling Rate (Hz)",
+        "filter_cutoff": "Tone Cutoff"
+      },
+      "presets": {
+        "0": "8-Bit Retro Game",
+        "1": "Vintage Walkman",
+        "2": "Radio Megaphone"
+      }
+    },
+    "chorus": {
+      "title": "Space Chorus & Flanger",
+      "category": "Stereo Chorus & Modulation",
+      "desc": "Rich spatial stereo chorus and jet flanger inspired by classic Boss CE-1 and Roland Dimension.",
+      "how": "Modulates dual-channel bucket-brigade micro-delays with anti-phase low-frequency oscillators.",
+      "params": {
+        "rate": "LFO Rate",
+        "depth": "Modulation Depth",
+        "voice_count": "Voice Multiplier"
+      },
+      "presets": {
+        "0": "Roland Juno Rich",
+        "1": "Dreamy Space",
+        "2": "Thick Vocal Stack"
+      }
+    },
+    "distortion": {
+      "title": "Hard Distortion & Overdrive",
+      "category": "Tube Overdrive & Heavy Distortion",
+      "desc": "Aggressive vocal saturation, megaphone drive, and warm analog soft-clipping distortion.",
+      "how": "Non-linear analog tube modeling with asymmetric soft-clipping and resonant tone shaping.",
+      "params": {
+        "drive": "Overdrive Gain",
+        "tone": "Tone Color",
+        "blend": "Dry / Wet Blend"
+      },
+      "presets": {
+        "0": "Aggressive Scream",
+        "1": "Warm Tape Drive",
+        "2": "Fuzz Overload"
+      }
+    },
+    "scatter": {
+      "title": "Granular Beat Scatter",
+      "category": "Roland Granular Beat Randomizer",
+      "desc": "Slices audio into micro-grains and reorders them in real-time for live glitch and stutter effects.",
+      "how": "Circular granular recording buffer with randomized slice ordering, reverse grains, and phase jitter.",
+      "params": {
+        "scatter_type": "Granular Scatter Mode",
+        "grain_size": "Grain Window Size",
+        "jitter": "Random Jitter Spread"
+      },
+      "presets": {
+        "0": "Granular Shimmer",
+        "1": "Micro Beat Repeat",
+        "2": "Cloud Texture"
+      }
+    },
+    "reverb": {
+      "title": "Space Reverb (Boss RC-505)",
+      "category": "Studio Ambient Space Reverb",
+      "desc": "Lush expansive Roland hall and plate reverb from tight acoustic rooms to infinite ambient tails.",
+      "how": "Feedback delay network (FDN) with frequency-dependent damping and diffusion matrix.",
+      "params": {
+        "room_size": "Room Dimensions",
+        "decay_time": "Decay Time",
+        "damping": "High Frequency Damping"
+      },
+      "presets": {
+        "0": "Infinite Space",
+        "1": "Warm Studio Room",
+        "2": "Bright Plate"
+      }
+    }
+  },
+  "vstPlugins": {
+    "reagate": {
+      "title": "ReaGate (Cockos Noise Gate)",
+      "category": "Dynamics & Speech Cleanup",
+      "desc": "Professional frequency-aware noise gate. Completely cuts background noise, keyboard clicks, mouse taps, and breathing during speech pauses.",
+      "how": "Audio passes only when speech level exceeds Threshold. Smooth attack and hold prevent clipping of word endings.",
+      "params": {
+        "thresh": "Trigger Threshold",
+        "attack": "Attack Speed",
+        "hold": "Hold Time",
+        "release": "Release Smoothness",
+        "preopen": "Pre-open Lookahead"
+      },
+      "presets": {
+        "0": "Voice / Stream",
+        "1": "Noisy Room / Keyboard",
+        "2": "Soft Podcast Gate"
+      }
+    },
+    "reacomp": {
+      "title": "ReaComp (Cockos Vocal Compressor)",
+      "category": "Dynamics & Vocal Density",
+      "desc": "Ultra low-latency studio compressor. Balances speech volume: makes quiet whispers intelligible and softly tames loud shouts and laughter without distortion.",
+      "how": "Compresses dynamic range with Ratio when exceeding Threshold. Makeup Gain compensates for overall volume loss.",
+      "params": {
+        "thresh": "Compression Threshold",
+        "ratio": "Compression Ratio",
+        "attack": "Attack Response",
+        "release": "Release Time",
+        "knee": "Knee Smoothness",
+        "makeup": "Makeup Gain"
+      },
+      "presets": {
+        "0": "Broadcast Radio",
+        "1": "Smooth Vocal",
+        "2": "Aggressive Limiter"
+      }
+    },
+    "reaxcomp": {
+      "title": "ReaXcomp (Cockos Multiband Compressor)",
+      "category": "Multiband Dynamics",
+      "desc": "4-band crossover compressor. Makes speech punchy and full-bodied as heard on professional broadcast radio stations.",
+      "how": "Splits audio into 4 frequency bands and compresses each band independently.",
+      "params": {
+        "bands": "Active Crossover Bands",
+        "gain": "Master Output Gain"
+      },
+      "presets": {
+        "0": "Broadcast Radio Master",
+        "1": "Warm Lows & Crisp Highs"
+      }
+    },
+    "reafir": {
+      "title": "ReaFIR (Cockos FFT Spectral Subtraction)",
+      "category": "Spectral Noise Subtraction",
+      "desc": "FFT Spectral Subtraction noise gate. Eliminates constant monotone noise: GPU cooler hum, cheap sound card hiss, and air conditioner rumble without metallic artifacts.",
+      "how": "Splits signal into thousands of frequency bins. Bins below the spectral threshold are muted, keeping voice natural and pure.",
+      "params": {
+        "reduction": "Noise Reduction",
+        "fftsize": "FFT Analysis Window",
+        "floor": "Noise Floor"
+      },
+      "presets": {
+        "0": "PC Fans Noise",
+        "1": "Deep Hiss Cleaning",
+        "2": "Light Studio Correction"
+      }
+    },
+    "readelay": {
+      "title": "ReaDelay (Cockos Multi-tap Delay)",
+      "category": "Space & Delay",
+      "desc": "Multi-tap digital delay with tap panning and filtering. Creates a sense of room ambiance or rich echo without muddying speech clarity.",
+      "how": "Delay line with Feedback and LPF/HPF tone filtering in the repeat loop.",
+      "params": {
+        "time": "Delay Time",
+        "feedback": "Feedback",
+        "lowpass": "High Cut (LPF)",
+        "highpass": "Low Cut (HPF)"
+      },
+      "presets": {
+        "0": "Quick Vocal Slapback",
+        "1": "Spatial Stereo Echo",
+        "2": "Wide Double-Track"
+      }
+    },
+    "basiq": {
+      "title": "Kuassa basiQ (Vintage Baxandall EQ)",
+      "category": "Vintage 3-Band EQ",
+      "desc": "Analog 3-band vintage Baxandall equalizer with broad musical curves for warm lows and clear highs.",
+      "how": "Active shelving and peaking curves with musical phase response.",
+      "params": {
+        "bass": "Low Band (Bass)",
+        "mid": "Mid Band",
+        "treble": "High Band (Treble)"
+      },
+      "presets": {
+        "0": "Warm Podcast Tone",
+        "1": "Vocal Clarity Boost"
+      }
+    },
+    "camelcrusher": {
+      "title": "CamelCrusher",
+      "category": "Distortion & Compressor",
+      "desc": "Iconic British \"fat\" compressor and dual-mode analog saturator (Tube/Mech). Adds authority and thickness.",
+      "how": "Combines nonlinear analog tube saturation curves with an aggressive Phat compressor."
+    },
+    "mjucjr": {
+      "title": "Klanghelm MJUC jr.",
+      "category": "Tube Compressor",
+      "desc": "Warm Variable-Mu tube compressor. Ideal for broadcast speech, podcasts, and vocals.",
+      "how": "Smooth soft-knee compression with vintage transformer saturation."
+    },
+    "dc1a3": {
+      "title": "Klanghelm DC1A3",
+      "category": "Character Compressor",
+      "desc": "Effortless two-knob character compressor with rich analog flavor.",
+      "how": "Intelligent program-dependent attack and release tracking input dynamics."
+    },
+    "ggate": {
+      "title": "GVST GGate",
+      "category": "Noise Gate",
+      "desc": "Lightweight zero-latency noise gate for clean microphone background.",
+      "how": "Classic linear threshold with adjustable attack and decay times."
+    },
+    "tdrnova": {
+      "title": "TDR Nova",
+      "category": "Dynamic Equalizer",
+      "desc": "Parallel dynamic equalizer. Tames boxiness and harsh resonances only when they emerge.",
+      "how": "Each band operates either as parametric EQ or frequency-selective dynamic compressor."
+    },
+    "reaeq": {
+      "title": "ReaEQ",
+      "category": "Surgical Parametric EQ",
+      "desc": "Studio multiband parametric equalizer supporting unlimited filter types.",
+      "how": "64-bit double precision direct biquad IIR filter calculation."
+    },
+    "pteqx": {
+      "title": "Ignite Amps PTEq-X",
+      "category": "Tube Pultec EQ",
+      "desc": "Emulation of legendary Pultec EQP-1A, MEQ-5, and HLF-3C tube equalizers.",
+      "how": "Component modeling of 12AX7/ECC83 triodes and passive inductors."
+    },
+    "span": {
+      "title": "Voxengo SPAN",
+      "category": "FFT Spectrum Analyzer",
+      "desc": "Industry standard high-resolution real-time audio FFT spectrum analyzer.",
+      "how": "Fast Fourier Transform with correlation, RMS, and peak metering."
+    },
+    "vintageverb": {
+      "title": "Valhalla VintageVerb",
+      "category": "Studio Reverb",
+      "desc": "Legendary algorithmic reverb: from intimate studio room to lush infinite space.",
+      "how": "Diffuse feedback delay network with color modes (1970s, 1980s, NOW)."
+    },
+    "talchorus": {
+      "title": "TAL-Chorus-LX",
+      "category": "Analog Juno-60 Chorus",
+      "desc": "Exact emulation of the legendary Roland Juno-60 stereo chorus unit.",
+      "how": "Dual BBD (Bucket Brigade Device) delay lines with antiphase LFOs."
+    },
+    "ivgi2": {
+      "title": "Klanghelm IVGI2",
+      "category": "Tube Saturation",
+      "desc": "Warm analog saturator. Makes speech upfront, dense, and rich.",
+      "how": "Symmetrical and asymmetrical harmonic saturation with frequency dynamics."
+    },
+    "clipshifter": {
+      "title": "LVC-Audio ClipShifter",
+      "category": "Dynamic Clipper",
+      "desc": "Wave-shaping dynamic clipper and limiter to tame harsh plosives and sudden peaks.",
+      "how": "Clips peak bursts with soft harmonic saturation."
+    },
+    "clipmaxx": {
+      "title": "Clipmaxx",
+      "category": "Soft Clipper",
+      "desc": "Mastering-grade soft clipper to round off peaks without digital harshness.",
+      "how": "Soft polynomial waveform clipping transfer curve."
+    },
+    "deftcomp": {
+      "title": "Voxengo Deft Compressor",
+      "category": "Bus Compressor",
+      "desc": "Transparent bus compressor with adaptive release timing.",
+      "how": "Adjusts compression based on RMS and peak detector blend."
+    },
+    "free87comp": {
+      "title": "eaReckon FREE87 FR-COMP",
+      "category": "Analog Compressor",
+      "desc": "Classic 80s console style analog VCA compressor.",
+      "how": "VCA emulation with minimal phase shift."
+    },
+    "transgainer": {
+      "title": "Voxengo TransGainer",
+      "category": "Transient Shaper",
+      "desc": "Audio transient designer to accentuate or soften clicks and body.",
+      "how": "Detects waveform attack edges to boost punch or sustain."
+    },
+    "outlaw": {
+      "title": "W.A. Production Outlaw",
+      "category": "Auto-Gain / Vocal Rider",
+      "desc": "Automatic speech leveler (Vocal Rider). Keeps speech at steady volume without altering dynamics.",
+      "how": "Continuously rides gain up and down to maintain target loudness."
+    },
+    "vitaminc": {
+      "title": "Analog Obsession Vitamin C",
+      "category": "Opto Limiter",
+      "desc": "Optical leveler and compressor inspired by the classic Teletronix LA-2A.",
+      "how": "Slow photo-cell response curve for natural musical leveling."
+    },
+    "shumovick": {
+      "title": "Voxengo CRTIV Shumovick",
+      "category": "Dynamic Noise Gate",
+      "desc": "Intelligent speech gate suppressing room noise and rustle.",
+      "how": "Silences quiet pauses while preserving natural voice release tails."
+    },
+    "ebuslim": {
+      "title": "Voxengo EBusLim",
+      "category": "Bus Limiter",
+      "desc": "Brickwall bus limiter protecting outputs from clipping and overloading.",
+      "how": "Lookahead peak ceiling enforcement with inter-sample protection."
+    },
+    "elephant": {
+      "title": "Voxengo Elephant",
+      "category": "Mastering Limiter",
+      "desc": "Top-tier transparent mastering limiter with supreme sonic fidelity.",
+      "how": "Multirate oversampling and precision peak control without timbre loss."
+    },
+    "tbequalizer": {
+      "title": "ToneBoosters TB_Equalizer v3",
+      "category": "Dynamic EQ",
+      "desc": "Versatile equalizer with analog saturation modeling per band.",
+      "how": "High-precision filter curve interpolation with minimal latency."
+    },
+    "primeeq": {
+      "title": "Voxengo PrimeEQ",
+      "category": "Parametric EQ",
+      "desc": "Clean and reliable parametric equalizer for everyday tonal sculpting.",
+      "how": "Traditional linear filters with low CPU utilization."
+    },
+    "harmonieq": {
+      "title": "Voxengo HarmoniEQ",
+      "category": "Harmonic Equalizer",
+      "desc": "Equalizer that generates musical harmonics in boosted frequencies.",
+      "how": "Synthesizes even and odd overtones to inject presence and life into speech."
+    },
+    "anspec": {
+      "title": "Voxengo AnSpec",
+      "category": "Analog Spectrum Analyzer",
+      "desc": "Real-time 1/3-octave analog visual frequency spectrum analyzer.",
+      "how": "Visualizes frequency bands on a standardized logarithmic scale."
+    },
+    "spanplus": {
+      "title": "Voxengo SPAN Plus",
+      "category": "Spectrum Analyzer Pro",
+      "desc": "Extended edition of SPAN with spectrum export and static peak tracks.",
+      "how": "Multichannel spectrum overlay and comparative visual analysis."
+    },
+    "bcfreq": {
+      "title": "Blue Cat FreqAnalyst 2",
+      "category": "Spectrum Analyzer",
+      "desc": "Smooth frequency analyzer with spectrogram and high frame rate display.",
+      "how": "Continuous curve interpolation with smart spectral smoothing."
+    },
+    "bcfreqm": {
+      "title": "Blue Cat FreqAnalyst Mono",
+      "category": "Mono Spectrum Analyzer",
+      "desc": "Monophonic version of FreqAnalyst optimized for CPU efficiency.",
+      "how": "Analyzes single channel with zero stereo overhead."
+    },
+    "dynfreqlim": {
+      "title": "Dynamic Frequency Limiter",
+      "category": "De-Esser / High Limiter",
+      "desc": "Tames sharp sibilants (S, SH, CH) without muffling the rest of the voice.",
+      "how": "Selectively compresses only the 5-9 kHz sibilance band during peaks."
+    },
+    "filterjam": {
+      "title": "AudioThing Filterjam",
+      "category": "Resonant Filter",
+      "desc": "Multiband resonant filter for experimental sci-fi and robotic textures.",
+      "how": "Ring addition of multiple tuned resonant filter peaks."
+    },
+    "freqecho": {
+      "title": "Valhalla FreqEcho",
+      "category": "Frequency Shifter Delay",
+      "desc": "Bode frequency shifter delay for psychedelic echos and vocal movement.",
+      "how": "Shifts delay echo repetitions up or down in Hertz per feedback cycle."
+    },
+    "talreverb4": {
+      "title": "TAL-Reverb-4",
+      "category": "Vintage Plate Reverb",
+      "desc": "Lush 80s vintage plate reverb with silky high-frequency diffusion for vocals.",
+      "how": "Diffuse modulation structure avoiding metallic coloration."
+    },
+    "taldub2": {
+      "title": "TAL-Dub-2",
+      "category": "Tape Echo Delay",
+      "desc": "Vintage tape delay emulation with tube drive and saturation feedback.",
+      "how": "Magnetic tape hysteresis simulation with distortion on high feedback."
+    },
+    "dflroom": {
+      "title": "Dragonfly Room Reverb",
+      "category": "Room Reverb",
+      "desc": "Natural room acoustics and realistic studio room spatialization.",
+      "how": "Freeverb3 algorithm with extended early reflection diffusion."
+    },
+    "dflhall": {
+      "title": "Dragonfly Hall Reverb",
+      "category": "Concert Hall Reverb",
+      "desc": "Expansive acoustics of concert halls and cathedral spaces.",
+      "how": "Deep recirculating network with high-frequency absorption."
+    },
+    "dflplate": {
+      "title": "Dragonfly Plate Reverb",
+      "category": "Plate Reverb",
+      "desc": "Bright, dense metallic sheet reverb perfect for modern vocals.",
+      "how": "High initial reflection density with fast stereo decorrelation."
+    },
+    "dflearly": {
+      "title": "Dragonfly Early Reflections",
+      "category": "Early Reflections",
+      "desc": "Creates genuine acoustic room size without long muddy reverb tail.",
+      "how": "Simulates initial acoustic reflections from virtual walls and ceiling."
+    },
+    "oldskoolverb": {
+      "title": "Voxengo OldSkoolVerb Plus",
+      "category": "Classic Reverb",
+      "desc": "Traditional algorithmic reverb with clear mono compatibility.",
+      "how": "Classic Schroeder-Moorer delay topology."
+    },
+    "crtivreverb": {
+      "title": "Voxengo CRTIV Reverb 2",
+      "category": "Creative Reverb",
+      "desc": "Spatial reverb featuring wide stereo presentation and smooth decay.",
+      "how": "Stereophonic space diffusion network."
+    },
+    "muverb": {
+      "title": "MuTools MuVerb",
+      "category": "Compact Reverb",
+      "desc": "Lightweight warm reverb with negligible CPU usage.",
+      "how": "Optimized delay matrix algorithm."
+    },
+    "deverberate": {
+      "title": "Acon Digital DeVerberate 3",
+      "category": "De-Reverberation",
+      "desc": "Removes room echo and hollow resonance from microphone recordings.",
+      "how": "Spectral statistical separation of direct voice from diffuse reverberation."
+    },
+    "talbitcrush": {
+      "title": "TAL-Bitcrusher",
+      "category": "Vintage Bitcrusher",
+      "desc": "Emulation of classic 80s 8-bit / 12-bit samplers and vintage digital grit.",
+      "how": "Sample rate reduction (downsampling) and bit-depth decimation (4-16 bit)."
+    },
+    "azurite": {
+      "title": "Azurite Multi-Chorus",
+      "category": "Multi-Voice Chorus",
+      "desc": "Lush multi-voice chorus to thicken and widen solo vocals.",
+      "how": "Up to 8 modulated delay lines with randomized phase offsets."
+    },
+    "bcchorus": {
+      "title": "Blue Cat Chorus 4 Stereo",
+      "category": "Stereo Chorus",
+      "desc": "Versatile stereo chorus from subtle widening to deep pitch vibrato.",
+      "how": "Smooth delay modulation with continuous stereo width control."
+    },
+    "bcchorusm": {
+      "title": "Blue Cat Chorus 4 Mono",
+      "category": "Mono Chorus",
+      "desc": "Classic monophonic chorus for subtle thickness.",
+      "how": "Single modulated delay line."
+    },
+    "multiply": {
+      "title": "Acon Digital Multiply",
+      "category": "Vocal Chorus",
+      "desc": "Micro-modulated chorus designed to double and thicken vocals.",
+      "how": "Phase randomization with equalization on the wet signal."
+    },
+    "dimexp": {
+      "title": "Xfer Dimension Expander",
+      "category": "Spatial Expander",
+      "desc": "Iconic stereo widening effect by Steve Duda (Xfer Records).",
+      "how": "Four cross-reflected delay paths with inverted phase pairs."
+    },
+    "temper": {
+      "title": "Temper Phase Distortion",
+      "category": "Phase Distortion",
+      "desc": "Futuristic wave-folding phase distortion for distinctive timbre.",
+      "how": "Dynamic phase-shift modulation coupled with warm soft overdrive."
+    },
+    "varisaturator": {
+      "title": "Voxengo VariSaturator",
+      "category": "Multiband Saturator",
+      "desc": "Two-band saturation for adding warmth and presence to voice or instruments.",
+      "how": "Separate tube saturation across low and high frequency bands."
+    },
+    "tapecrtiv": {
+      "title": "Voxengo CRTIV Tape Bus",
+      "category": "Analog Tape Saturation",
+      "desc": "Warm vintage tape saturation with natural soft analog compression.",
+      "how": "Magnetic tape hysteresis emulation and mild high-frequency smoothing."
+    },
+    "emissary": {
+      "title": "Ignite Amps Emissary",
+      "category": "Tube Guitar Preamp",
+      "desc": "Dual-channel guitar tube amplifier (Clean & Lead).",
+      "how": "Component modeling of 12AX7 and 6L6/EL34 vacuum tubes."
+    },
+    "nadir": {
+      "title": "Ignite Amps NadIR",
+      "category": "Impulse Response Loader (IR)",
+      "desc": "Zero-latency cabinet and microphone impulse response convolution.",
+      "how": "Direct FFT convolution with SIMD hardware optimization."
+    },
+    "ts999": {
+      "title": "Ignite Amps TS-999",
+      "category": "Tube Screamer Overdrive",
+      "desc": "Emulation of the legendary Ibanez Tube Screamer TS-9 pedal.",
+      "how": "Low-cut and mid-boost tone shaping before diode clipping."
+    },
+    "profet": {
+      "title": "Ignite Amps ProFET",
+      "category": "JFET Preamp",
+      "desc": "Aggressive overdrive powered by JFET field-effect transistors.",
+      "how": "Cascaded JFET stage modeling."
+    },
+    "bcfreeamp": {
+      "title": "Blue Cat Free Amp",
+      "category": "Blue Cat Guitar Amp",
+      "desc": "3 guitar amplifier models: Classic Clean, Classic Blue, Modern.",
+      "how": "Nonlinear analog tube modeling."
+    },
+    "rockrack": {
+      "title": "bx_rockrack V3 Player",
+      "category": "Brainworx Rockrack",
+      "desc": "Premium studio-grade guitar amp modeler by Brainworx.",
+      "how": "Component-level circuit modeling of Marshall and ENGL tube amps."
+    },
+    "facebender": {
+      "title": "Face Bender",
+      "category": "Vintage Germanium Fuzz",
+      "desc": "Classic vintage fuzz pedal powered by germanium transistors.",
+      "how": "Hard clipping delivering rich odd harmonics."
+    },
+    "powershaper": {
+      "title": "Voxengo Powershaper",
+      "category": "Waveshaper Distortion",
+      "desc": "Controllable waveshape distortion and harmonic coloration.",
+      "how": "Multi-point lookup table amplitude transformation."
+    },
+    "lovend": {
+      "title": "Analog Obsession LOVEND",
+      "category": "Low-Frequency Saturator",
+      "desc": "Adds sub-harmonics and punchy low-end body to bass and kick.",
+      "how": "Second harmonic generation in the sub-bass register."
+    },
+    "wider": {
+      "title": "Polyverse Wider",
+      "category": "Stereo Width Expander",
+      "desc": "100% mono-compatible stereo expander by Polyverse and Infected Mushroom.",
+      "how": "Expands pseudo-stereo field without phase cancellation in mono."
+    },
+    "deewider": {
+      "title": "DOTEC-AUDIO DeeWider",
+      "category": "Stereo Field Expander",
+      "desc": "Instant stereo wideness expansion using a single knob.",
+      "how": "Subtle frequency-dependent phase shifting at the edges."
+    },
+    "a1stereo": {
+      "title": "A1StereoControl",
+      "category": "Stereo Controller",
+      "desc": "Stereo width expansion with Safe Bass mono protection.",
+      "how": "Keeps low frequencies strictly centered while widening mids and highs."
+    },
+    "msed": {
+      "title": "Voxengo MSED",
+      "category": "Mid-Side Encoder / Matrix",
+      "desc": "Independent control over Mid (center) and Side (stereo) channel balance.",
+      "how": "Matrix conversion of L/R to M/S and back."
+    },
+    "stereotouch": {
+      "title": "Voxengo Stereo Touch",
+      "category": "Mono to Stereo Widener",
+      "desc": "Transforms mono microphone signals into natural, spacious stereo.",
+      "how": "Filtered polyphonic delays with subtle antiphase decorrelation."
+    },
+    "upstereo": {
+      "title": "QuikQuak UpStereo",
+      "category": "Stereo Enhancer",
+      "desc": "Stereo expander with high-frequency exciter and loudness saturation.",
+      "how": "Harmonic stereo enhancement and psychoacoustic spreading."
+    },
+    "midsider": {
+      "title": "TheMidSider",
+      "category": "MS Spatial Controller",
+      "desc": "Simple Mid/Side balance control for adjusting stereo soundstage width.",
+      "how": "Direct control of Side channel gain."
+    },
+    "ovc128": {
+      "title": "Voxengo OVC-128",
+      "category": "128x Oversampled Clipper",
+      "desc": "Ultra-clean mastering-grade clipper with 128x oversampling.",
+      "how": "Complete elimination of aliasing artifacts during hard clipping."
+    },
+    "peakbuster": {
+      "title": "Voxengo Peakbuster",
+      "category": "Transient Punch Booster",
+      "desc": "Restores punch and dynamics to over-compressed audio tracks.",
+      "how": "Dynamic transient emphasis based on envelope attack energy."
+    },
+    "graillon": {
+      "title": "Auburn Sounds Graillon 2",
+      "category": "Autotune & Pitch Corrector",
+      "desc": "Real-time autotune and vocal pitch correction with T-Pain robotic effects.",
+      "how": "Instant phase vocoder snapped to chromatic or chosen musical scales."
+    },
+    "vocaldoubler": {
+      "title": "iZotope Vocal Doubler",
+      "category": "Vocal Doubler (ADT)",
+      "desc": "Simulates a second vocal take to add thickness and stereo spread.",
+      "how": "Randomized micro-delays and pitch modulation between left and right channels."
+    },
+    "bcgain": {
+      "title": "Blue Cat Gain 3 Stereo",
+      "category": "Gain & Trimmer",
+      "desc": "Clean volume trim and stereo channel balance.",
+      "how": "Direct 64-bit precision gain scaling from -60 to +60 dB."
+    },
+    "blgain24": {
+      "title": "Blue Lab Gain 24",
+      "category": "24dB Preamp",
+      "desc": "Precision preamplifier with 0.1 dB step control.",
+      "how": "Linear amplitude multiplication."
+    },
+    "blgain60": {
+      "title": "Blue Lab Gain 60",
+      "category": "60dB Preamp",
+      "desc": "High-sensitivity gain boost for quiet dynamic microphones.",
+      "how": "High-headroom amplification with overflow clipping protection."
+    },
+    "reacontrolmidi": {
+      "title": "ReaControlMIDI",
+      "category": "MIDI Controller",
+      "desc": "Control VST plugins and automation via MIDI CC commands.",
+      "how": "Translates MIDI Control Change messages to VST parameters."
+    }
+  },
+  "tabs": {
+    "closeTabTitle": "Close tab",
+    "newTabTitle": "Create new preset tab (Ctrl+N)"
+  }
+}

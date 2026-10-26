@@ -860,11 +860,12 @@ function renderAnalysis() {
             totalDb += evaluateBiquadDb(flt.type, flt.fc, flt.gain, flt.q, f);
           }
         });
-      } else if (b.kind === 'graphiceq15') {
+      } else if (b.kind === 'graphiceq15' || b.kind === 'graphiceq31') {
+        const bandwidth = b.kind === 'graphiceq31' ? 0.4 : 0.8;
         b.bands.forEach(band => {
           const octDist = Math.abs(Math.log2(f / band.f));
-          if (octDist < 1.0) {
-            totalDb += band.gain * (1.0 - octDist);
+          if (octDist < bandwidth) {
+            totalDb += band.gain * (1.0 - (octDist / bandwidth));
           }
         });
       }
@@ -906,15 +907,164 @@ function renderAnalysis() {
 
   // Update Status Badges (Zero Emojis)
   const elapsed = (performance.now() - t0).toFixed(1);
-  analysisTimeText.textContent = `Расчет: ${elapsed} мс`;
-  peakGainText.textContent = `Пик: ${peakDb > 0 ? '+' : ''}${peakDb.toFixed(2)} dB на ${Math.round(peakFreq)} Hz`;
+  analysisTimeText.textContent = window.t
+    ? window.t('analysis.calcTime', { ms: elapsed }, `Расчет: ${elapsed} мс`)
+    : `Расчет: ${elapsed} мс`;
+
+  peakGainText.textContent = window.t
+    ? window.t('analysis.peakAt', { gain: (peakDb > 0 ? '+' : '') + peakDb.toFixed(2), freq: Math.round(peakFreq) }, `Пик: ${peakDb > 0 ? '+' : ''}${peakDb.toFixed(2)} dB на ${Math.round(peakFreq)} Hz`)
+    : `Пик: ${peakDb > 0 ? '+' : ''}${peakDb.toFixed(2)} dB на ${Math.round(peakFreq)} Hz`;
 
   if (peakDb > 0.0) {
     clipStatusBox.className = 'status-indicator-clean clip';
-    clipStatusText.textContent = `Клиппинг: +${peakDb.toFixed(2)} dB (Пик > 0 dB)`;
+    clipStatusText.textContent = window.t
+      ? window.t('toolbar.clipOverload', { val: peakDb.toFixed(2) }, `Клиппинг: +${peakDb.toFixed(2)} dB`)
+      : `Клиппинг: +${peakDb.toFixed(2)} dB`;
   } else {
     clipStatusBox.className = 'status-indicator-clean ok';
-    clipStatusText.textContent = `Нет клиппинга (Пик: ${peakDb.toFixed(1)} dB)`;
+    clipStatusText.textContent = window.t
+      ? window.t('toolbar.clipOk', { val: peakDb.toFixed(1) }, `Нет клиппинга (Пик: ${peakDb.toFixed(1)} dB)`)
+      : `Нет клиппинга (Пик: ${peakDb.toFixed(1)} dB)`;
+  }
+}
+
+
+// --- Localization Helpers for Filters & Plugins ---
+function getFilterHint(type) {
+  if (window.t) {
+    const hint = window.t('blocks.parametric.hints.' + type);
+    if (hint && typeof hint === 'string' && hint !== 'blocks.parametric.hints.' + type) return hint;
+  }
+  return FILTER_HINTS[type] || '';
+}
+
+function getFilterTypeName(type) {
+  if (window.t) {
+    const name = window.t('blocks.parametric.types.' + type);
+    if (name && typeof name === 'string' && name !== 'blocks.parametric.types.' + type) return name;
+  }
+  switch (type) {
+    case 'PK': return 'Параметрический (Колокол / Peaking)';
+    case 'LS': return 'НЧ полка (Low-shelf)';
+    case 'HS': return 'ВЧ полка (High-shelf)';
+    case 'LP': return 'Срез ВЧ (Low-pass / ФНЧ)';
+    case 'HP': return 'Срез НЧ (High-pass / ФВЧ)';
+    case 'NO': return 'Вырез помехи/гула (Notch)';
+    default: return type;
+  }
+}
+
+function getVstLocalizedMeta(vstId, libraryPath) {
+  const dict = window.t ? window.t('vstPlugins.' + vstId) : null;
+  const isDictValid = dict && typeof dict === 'object' && dict.title;
+
+  let baseMeta = VST_PLUGINS_CATALOG[vstId];
+  if (!baseMeta && Array.isArray(ALL_VST_98_CATALOG)) {
+    const found = ALL_VST_98_CATALOG.find(p => p.id === vstId || (libraryPath && libraryPath.toLowerCase().includes(p.dll.toLowerCase())));
+    if (found) {
+      baseMeta = {
+        id: found.id,
+        title: found.title,
+        category: found.catName,
+        desc: found.desc,
+        howItWorks: found.how,
+        params: [],
+        presets: []
+      };
+    }
+  }
+
+  const customTitle = window.t ? window.t('blocks.vst.customTitle', null, 'Пользовательский VST плагин') : 'Пользовательский VST плагин';
+  const customCat = window.t ? window.t('blocks.vst.customCategory', null, 'VST Плагин') : 'VST Плагин';
+  const customDesc = window.t ? window.t('blocks.vst.customDesc', null, 'Сторонний плагин в формате VST 2.4 DLL для обработки звука в тракте Equalizer FD CRAFT.') : 'Сторонний плагин в формате VST 2.4 DLL для обработки звука в тракте Equalizer FD CRAFT.';
+  const customHow = window.t ? window.t('blocks.vst.customHow', null, 'Загружается напрямую в аудиодрайвер audiodg.exe и обрабатывает аудиопоток с нулевой задержкой.') : 'Загружается напрямую в аудиодрайвер audiodg.exe и обрабатывает аудиопоток с нулевой задержкой.';
+
+  if (isDictValid) {
+    return {
+      title: dict.title || (baseMeta ? baseMeta.title : customTitle),
+      category: dict.category || (baseMeta ? baseMeta.category : customCat),
+      desc: dict.desc || (baseMeta ? baseMeta.desc : customDesc),
+      howItWorks: dict.how || (baseMeta ? (baseMeta.howItWorks || baseMeta.how) : customHow),
+      params: (baseMeta && baseMeta.params) ? baseMeta.params.map(p => ({
+        ...p,
+        label: (dict.params && dict.params[p.key]) || p.label
+      })) : [],
+      presets: (baseMeta && baseMeta.presets) ? baseMeta.presets.map((pr, idx) => ({
+        ...pr,
+        name: (dict.presets && dict.presets[String(idx)]) || pr.name
+      })) : []
+    };
+  }
+
+  if (baseMeta) {
+    return {
+      ...baseMeta,
+      howItWorks: baseMeta.howItWorks || baseMeta.how || customHow
+    };
+  }
+
+  return {
+    title: customTitle,
+    category: customCat,
+    desc: customDesc,
+    howItWorks: customHow,
+    params: [],
+    presets: []
+  };
+}
+
+function getRc505LocalizedMeta(effectId) {
+  const dict = window.t ? window.t('rc505Plugins.' + effectId) : null;
+  const isDictValid = dict && typeof dict === 'object' && dict.title;
+  const baseMeta = RC505_CATALOG[effectId];
+
+  if (isDictValid) {
+    return {
+      title: dict.title || (baseMeta ? baseMeta.title : effectId),
+      category: dict.category || (baseMeta ? baseMeta.category : 'BOSS RC-505 Mk2 DSP'),
+      desc: dict.desc || (baseMeta ? baseMeta.desc : ''),
+      howItWorks: dict.how || (baseMeta ? baseMeta.howItWorks : ''),
+      params: (baseMeta && baseMeta.params) ? baseMeta.params.map(p => ({
+        ...p,
+        label: (dict.params && dict.params[p.key]) || p.label
+      })) : [],
+      presets: (baseMeta && baseMeta.presets) ? baseMeta.presets.map((pr, idx) => ({
+        ...pr,
+        name: (dict.presets && dict.presets[String(idx)]) || pr.name
+      })) : []
+    };
+  }
+
+  if (baseMeta) {
+    return baseMeta;
+  }
+
+  return {
+    title: 'BOSS RC-505 Mk2 Effect',
+    category: 'BOSS RC-505 Mk2',
+    desc: 'Roland BOSS RC-505 Mk2 DSP effect.',
+    howItWorks: 'Real-time hardware DSP emulation.',
+    params: [],
+    presets: []
+  };
+}
+
+// Localized Block Title Resolver
+function getBlockLocalizedTitle(block) {
+  if (!window.t) return block.title;
+  switch (block.kind) {
+    case 'preamp': return window.t('blocks.preamp.title', null, window.t('add.preamp', null, block.title));
+    case 'parametric': return window.t('blocks.parametric.title', null, window.t('add.catParametric', null, block.title));
+    case 'graphiceq15': return window.t('add.geq15', null, block.title);
+    case 'graphiceq31': return window.t('add.geq31', null, block.title);
+    case 'device': return window.t('add.device', null, block.title);
+    case 'channel': return window.t('add.channel', null, block.title);
+    case 'include': return window.t('blocks.include.title', null, window.t('add.include', null, block.title));
+    case 'vst': return getVstLocalizedMeta(block.vstId, block.library).title;
+    case 'rc505': return getRc505LocalizedMeta(block.effectId).title;
+    case 'delay': return window.t('add.delay', null, block.title);
+    case 'copy': return window.t('add.copy', null, block.title);
+    default: return block.title;
   }
 }
 
@@ -927,16 +1077,19 @@ function renderBlocks(targetScrollBlockId = null) {
   const tab = getActiveTab();
   if (!tab) return;
 
+  const isEn = window.I18N && window.I18N.lang === 'en';
+
   // Windowed mode guarantee: if blocks are empty, render friendly guided placeholder
   if (!tab.blocks || tab.blocks.length === 0) {
     const emptyBox = document.createElement('div');
     emptyBox.className = 'blocks-empty-state';
+    const emptyTitle = window.t ? window.t('blocks.emptyTitle', null, isEn ? 'Configuration is currently empty' : 'Конфигурация пока пуста') : 'Конфигурация пока пуста';
+    const emptyDesc = window.t ? window.t('blocks.emptyDesc', null, isEn ? 'Click the green "+" button below or choose a ready preset (for stream, podcast, or Discord) via "File" &rarr; "New..."' : 'Нажмите зеленую кнопку «+» внизу или выберите готовый пресет (для стрима, подкаста или Discord) через меню «Файл» &rarr; «Создать...»') : 'Нажмите зеленую кнопку «+» внизу или выберите готовый пресет через меню «Файл»';
+    const emptyBtn = window.t ? window.t('blocks.emptyBtn', null, isEn ? '+ Add Default Equalizer' : '+ Добавить базовый эквалайзер') : '+ Добавить базовый эквалайзер';
     emptyBox.innerHTML = `
-      <div class="empty-state-title">Конфигурация пока пуста</div>
-      <div class="empty-state-desc">
-        Нажмите зеленую кнопку «+» внизу или выберите готовый пресет (для стрима, подкаста или Discord) через меню «Файл» &rarr; «Создать...»
-      </div>
-      <button class="win-btn primary" id="btnQuickAddDefaultEq" style="margin-top: 6px; padding: 4px 14px;">+ Добавить базовый эквалайзер</button>
+      <div class="empty-state-title">${emptyTitle}</div>
+      <div class="empty-state-desc">${emptyDesc}</div>
+      <button class="win-btn primary" id="btnQuickAddDefaultEq" style="margin-top: 6px; padding: 4px 14px;">${emptyBtn}</button>
     `;
     blocksContainer.appendChild(emptyBox);
     emptyBox.querySelector('#btnQuickAddDefaultEq')?.addEventListener('click', () => {
@@ -956,17 +1109,25 @@ function renderBlocks(targetScrollBlockId = null) {
     const header = document.createElement('div');
     header.className = 'filter-block-header';
 
+    const blockTitle = getBlockLocalizedTitle(block);
+    const powerTitle = block.enabled
+      ? (isEn ? 'Enabled (click to bypass)' : 'Включено (нажмите для выключения)')
+      : (isEn ? 'Bypassed (click to enable)' : 'Выключено (нажмите для включения)');
+    const moveUpTitle = isEn ? 'Move up' : 'Переместить выше';
+    const moveDownTitle = isEn ? 'Move down' : 'Переместить ниже';
+    const deleteTitle = isEn ? 'Delete filter block' : 'Удалить блок фильтра';
+
     header.innerHTML = `
       <div class="block-left">
-        <button class="power-btn ${block.enabled ? '' : 'off'}" data-block-id="${block.id}" title="${block.enabled ? 'Включено (нажмите для выключения)' : 'Выключено (нажмите для включения)'}">
+        <button class="power-btn ${block.enabled ? '' : 'off'}" data-block-id="${block.id}" title="${powerTitle}">
           ${renderPowerIcon(11)}
         </button>
-        <span class="block-title-text">${index + 1}: ${block.title}</span>
+        <span class="block-title-text">${index + 1}: ${blockTitle}</span>
       </div>
       <div class="block-right">
-        <button class="btn-icon-sm move-up" data-idx="${index}" title="Переместить выше">&#x25B2;</button>
-        <button class="btn-icon-sm move-down" data-idx="${index}" title="Переместить ниже">&#x25BC;</button>
-        <button class="btn-icon-sm delete" data-block-id="${block.id}" title="Удалить блок фильтра">&times;</button>
+        <button class="btn-icon-sm move-up" data-idx="${index}" title="${moveUpTitle}">&#x25B2;</button>
+        <button class="btn-icon-sm move-down" data-idx="${index}" title="${moveDownTitle}">&#x25BC;</button>
+        <button class="btn-icon-sm delete" data-block-id="${block.id}" title="${deleteTitle}">&times;</button>
       </div>
     `;
     card.appendChild(header);
@@ -976,65 +1137,96 @@ function renderBlocks(targetScrollBlockId = null) {
     content.className = 'filter-block-content';
 
     if (block.kind === 'preamp') {
+      const preampLbl = window.t ? window.t('blocks.preamp.label', null, 'Предусиление:') : 'Предусиление:';
       content.innerHTML = `
         <div class="preamp-row">
-          <span class="preamp-label">Предусиление:</span>
+          <span class="preamp-label">${preampLbl}</span>
           <input type="range" class="win-slider preamp-slider" min="-30" max="20" step="0.25" value="${block.gain}" data-block-id="${block.id}">
           <input type="text" class="win-input-num preamp-input" value="${block.gain >= 0 ? '+' : ''}${block.gain.toFixed(2)} dB" data-block-id="${block.id}">
         </div>
       `;
+    } else if (block.kind === 'delay') {
+      const delayLbl = window.t ? window.t('blocks.delay.label', null, 'Задержка:') : 'Задержка:';
+      const delayVal = typeof block.delay === 'number' ? block.delay : 10.0;
+      content.innerHTML = `
+        <div class="preamp-row">
+          <span class="preamp-label">${delayLbl}</span>
+          <input type="range" class="win-slider delay-slider" min="0" max="500" step="0.5" value="${delayVal}" data-block-id="${block.id}">
+          <input type="text" class="win-input-num delay-input" value="${delayVal.toFixed(2)} ms" data-block-id="${block.id}">
+        </div>
+      `;
     } else if (block.kind === 'include') {
+      const fileLbl = window.t ? window.t('blocks.include.fileLabel', null, 'Файл конфигурации:') : 'Файл конфигурации:';
+      const filePlaceholder = window.t ? window.t('blocks.include.placeholder', null, 'например: example.txt или mic_preset.txt') : 'например: example.txt или mic_preset.txt';
+      const btnBrowseTxt = window.t ? window.t('blocks.include.btnBrowse', null, 'Выбрать...') : 'Выбрать...';
+      const btnOpenTxt = window.t ? window.t('blocks.include.btnOpen', null, 'Открыть') : 'Открыть';
       content.innerHTML = `
         <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 11px; font-weight: 600; color: #475569;">Файл конфигурации:</span>
-          <input type="text" class="win-select include-path-input" style="flex: 1; font-family: Consolas, monospace; font-size: 11px;" value="${block.path || ''}" data-block-id="${block.id}" placeholder="например: example.txt или mic_preset.txt">
-          <button class="win-btn btn-include-browse" data-block-id="${block.id}">Выбрать...</button>
-          <button class="win-btn btn-include-open" data-block-id="${block.id}">Открыть</button>
+          <span style="font-size: 11px; font-weight: 600; color: #475569;">${fileLbl}</span>
+          <input type="text" class="win-select include-path-input" style="flex: 1; font-family: Consolas, monospace; font-size: 11px;" value="${block.path || ''}" data-block-id="${block.id}" placeholder="${filePlaceholder}">
+          <button class="win-btn btn-include-browse" data-block-id="${block.id}">${btnBrowseTxt}</button>
+          <button class="win-btn btn-include-open" data-block-id="${block.id}">${btnOpenTxt}</button>
         </div>
       `;
     } else if (block.kind === 'parametric') {
+      const thPower = window.t ? window.t('blocks.parametric.thPower', null, 'Вкл') : 'Вкл';
+      const thType = window.t ? window.t('blocks.parametric.thType', null, 'Тип фильтра') : 'Тип фильтра';
+      const thFc = window.t ? window.t('blocks.parametric.thFc', null, 'Частота') : 'Частота';
+      const thGain = window.t ? window.t('blocks.parametric.thGain', null, 'Усиление') : 'Усиление';
+      const thQ = window.t ? window.t('blocks.parametric.thQ', null, 'Добротность (Q)') : 'Добротность (Q)';
+      const thDelete = window.t ? window.t('blocks.parametric.thDelete', null, 'Удалить') : 'Удалить';
+      const btnAddBand = window.t ? window.t('blocks.parametric.btnAddBand', null, '+ Добавить полосу фильтра') : '+ Добавить полосу фильтра';
+      const unitHz = window.t ? window.t('analysis.unitHz', null, 'Гц') : 'Гц';
+      const unitDb = window.t ? window.t('analysis.unitDb', null, 'дБ') : 'дБ';
+
       let tableHtml = `
         <table class="param-table">
           <thead>
             <tr>
-              <th width="36" style="text-align: center;">Вкл</th>
-              <th>Тип фильтра</th>
-              <th>Частота</th>
-              <th>Усиление</th>
-              <th>Добротность (Q)</th>
-              <th width="36" style="text-align: center;">Удалить</th>
+              <th width="36" style="text-align: center;">${thPower}</th>
+              <th>${thType}</th>
+              <th>${thFc}</th>
+              <th>${thGain}</th>
+              <th>${thQ}</th>
+              <th width="36" style="text-align: center;">${thDelete}</th>
             </tr>
           </thead>
           <tbody>
       `;
       block.filters.forEach((f) => {
-        const hint = FILTER_HINTS[f.type] || '';
+        const hint = getFilterHint(f.type);
+        const fltPowerTitle = f.enabled ? (window.t ? window.t('blocks.parametric.powerOn', null, 'Фильтр активен') : 'Фильтр активен') : (window.t ? window.t('blocks.parametric.powerOff', null, 'Фильтр выключен (Bypass)') : 'Фильтр выключен (Bypass)');
+        const fltTitleFc = window.t ? window.t('blocks.parametric.titleFc', null, 'Центральная частота обработки в Герцах') : 'Центральная частота обработки в Герцах';
+        const fltTitleGain = window.t ? window.t('blocks.parametric.titleGain', null, 'Подъем (+) или ослабление (-) частоты в децибелах') : 'Подъем (+) или ослабление (-) частоты в децибелах';
+        const fltTitleQ = window.t ? window.t('blocks.parametric.titleQ', null, 'Добротность / ширина полосы действия фильтра') : 'Добротность / ширина полосы действия фильтра';
+        const fltTitleDel = window.t ? window.t('blocks.parametric.titleDelete', null, 'Удалить эту полосу фильтра') : 'Удалить эту полосу фильтра';
+
         tableHtml += `
           <tr>
             <td class="cell-center">
-              <button class="power-btn ${f.enabled ? '' : 'off'}" data-parent="${block.id}" data-flt-id="${f.id}" title="${f.enabled ? 'Фильтр активен' : 'Фильтр выключен (Bypass)'}">
+              <button class="power-btn ${f.enabled ? '' : 'off'}" data-parent="${block.id}" data-flt-id="${f.id}" title="${fltPowerTitle}">
                 ${renderPowerIcon(9)}
               </button>
             </td>
             <td>
               <div style="display: flex; align-items: center; gap: 4px;">
                 <select class="win-select flt-type-sel" data-parent="${block.id}" data-flt-id="${f.id}" style="width: 230px;" title="${hint}">
-                  <option value="PK" ${f.type === 'PK' ? 'selected' : ''} title="${FILTER_HINTS.PK}">Параметрический (Колокол / Peaking)</option>
-                  <option value="LS" ${f.type === 'LS' ? 'selected' : ''} title="${FILTER_HINTS.LS}">НЧ полка (Low-shelf)</option>
-                  <option value="HS" ${f.type === 'HS' ? 'selected' : ''} title="${FILTER_HINTS.HS}">ВЧ полка (High-shelf)</option>
-                  <option value="LP" ${f.type === 'LP' ? 'selected' : ''} title="${FILTER_HINTS.LP}">Срез ВЧ (Low-pass / ФНЧ)</option>
-                  <option value="HP" ${f.type === 'HP' ? 'selected' : ''} title="${FILTER_HINTS.HP}">Срез НЧ (High-pass / ФВЧ)</option>
-                  <option value="NO" ${f.type === 'NO' ? 'selected' : ''} title="${FILTER_HINTS.NO}">Вырез помехи/гула (Notch)</option>
+                  <option value="PK" ${f.type === 'PK' ? 'selected' : ''} title="${getFilterHint('PK')}">${getFilterTypeName('PK')}</option>
+                  <option value="LS" ${f.type === 'LS' ? 'selected' : ''} title="${getFilterHint('LS')}">${getFilterTypeName('LS')}</option>
+                  <option value="HS" ${f.type === 'HS' ? 'selected' : ''} title="${getFilterHint('HS')}">${getFilterTypeName('HS')}</option>
+                  <option value="LP" ${f.type === 'LP' ? 'selected' : ''} title="${getFilterHint('LP')}">${getFilterTypeName('LP')}</option>
+                  <option value="HP" ${f.type === 'HP' ? 'selected' : ''} title="${getFilterHint('HP')}">${getFilterTypeName('HP')}</option>
+                  <option value="NO" ${f.type === 'NO' ? 'selected' : ''} title="${getFilterHint('NO')}">${getFilterTypeName('NO')}</option>
                 </select>
                 <span class="flt-info-badge" title="${hint}">?</span>
               </div>
               <div class="flt-hint-text">${hint}</div>
             </td>
-            <td><input type="number" class="win-input-num flt-fc" data-parent="${block.id}" data-flt-id="${f.id}" value="${Math.round(f.fc)}" min="20" max="20000" title="Центральная частота обработки в Герцах"> Гц</td>
-            <td><input type="number" step="0.5" class="win-input-num flt-gain" data-parent="${block.id}" data-flt-id="${f.id}" value="${f.gain.toFixed(1)}" title="Подъем (+) или ослабление (-) частоты в децибелах"> дБ</td>
-            <td><input type="number" step="0.05" class="win-input-num flt-q" data-parent="${block.id}" data-flt-id="${f.id}" value="${f.q.toFixed(2)}" min="0.1" max="20" title="Добротность / ширина полосы действия фильтра"></td>
+            <td><input type="number" class="win-input-num flt-fc" data-parent="${block.id}" data-flt-id="${f.id}" value="${Math.round(f.fc)}" min="20" max="20000" title="${fltTitleFc}"> ${unitHz}</td>
+            <td><input type="number" step="0.5" class="win-input-num flt-gain" data-parent="${block.id}" data-flt-id="${f.id}" value="${f.gain.toFixed(1)}" title="${fltTitleGain}"> ${unitDb}</td>
+            <td><input type="number" step="0.05" class="win-input-num flt-q" data-parent="${block.id}" data-flt-id="${f.id}" value="${f.q.toFixed(2)}" min="0.1" max="20" title="${fltTitleQ}"></td>
             <td class="cell-center">
-              <button class="flt-del-btn" data-parent="${block.id}" data-flt-id="${f.id}" title="Удалить эту полосу фильтра">&times;</button>
+              <button class="flt-del-btn" data-parent="${block.id}" data-flt-id="${f.id}" title="${fltTitleDel}">&times;</button>
             </td>
           </tr>
         `;
@@ -1043,58 +1235,41 @@ function renderBlocks(targetScrollBlockId = null) {
           </tbody>
         </table>
         <div style="margin-top: 8px;">
-          <button class="win-btn add-sub-flt-btn" data-parent="${block.id}">+ Добавить полосу фильтра</button>
+          <button class="win-btn add-sub-flt-btn" data-parent="${block.id}">${btnAddBand}</button>
         </div>
       `;
       content.innerHTML = tableHtml;
-    } else if (block.kind === 'graphiceq15') {
-      let ghtml = '<div class="graphic-eq-bank">';
+    } else if (block.kind === 'graphiceq15' || block.kind === 'graphiceq31') {
+      const is31 = block.kind === 'graphiceq31';
+      let ghtml = `<div class="graphic-eq-bank ${is31 ? 'geq-31' : ''}">`;
       block.bands.forEach((b, bi) => {
+        let label = b.f >= 1000 ? (b.f % 1000 === 0 ? (b.f / 1000) + 'k' : (b.f / 1000).toFixed(1) + 'k') : b.f;
         ghtml += `
           <div class="geq-slider-col">
             <span class="geq-db-val">${b.gain > 0 ? '+' : ''}${b.gain}</span>
             <input type="range" class="geq-v-slider" min="-15" max="15" step="1" value="${b.gain}" data-block-id="${block.id}" data-band-idx="${bi}">
-            <span class="geq-freq-label">${b.f >= 1000 ? (b.f/1000) + 'k' : b.f}</span>
+            <span class="geq-freq-label">${label}</span>
           </div>
         `;
       });
       ghtml += '</div>';
       content.innerHTML = ghtml;
     } else if (block.kind === 'vst') {
-      let meta = VST_PLUGINS_CATALOG[block.vstId];
-      if (!meta && Array.isArray(ALL_VST_98_CATALOG)) {
-        const found = ALL_VST_98_CATALOG.find(p => p.id === block.vstId || (block.library && block.library.toLowerCase().includes(p.dll.toLowerCase())));
-        if (found) {
-          meta = {
-            title: found.title,
-            category: found.catName,
-            desc: found.desc,
-            howItWorks: found.how,
-            params: [],
-            presets: []
-          };
-        }
-      }
-      if (!meta) {
-        meta = {
-          title: block.title || 'Пользовательский VST плагин',
-          category: 'VST Плагин',
-          desc: 'Сторонний плагин в формате VST 2.4 DLL для обработки звука в тракте Equalizer FD CRAFT.',
-          howItWorks: 'Загружается напрямую в аудиодрайвер audiodg.exe и обрабатывает аудиопоток с нулевой задержкой.',
-          params: [],
-          presets: []
-        };
-      }
+      const meta = getVstLocalizedMeta(block.vstId, block.library);
+      const purposeLbl = window.t ? window.t('blocks.vst.purposeLabel', null, 'Для чего нужен:') : 'Для чего нужен:';
+      const howLbl = window.t ? window.t('blocks.vst.howLabel', null, 'Как работает:') : 'Как работает:';
+      const dllLbl = window.t ? window.t('blocks.vst.dllLabel', null, 'DLL библиотека:') : 'DLL библиотека:';
+      const presetsLbl = window.t ? window.t('blocks.vst.presetsLabel', null, 'Быстрые пресеты:') : 'Быстрые пресеты:';
 
       let vhtml = `
         <div class="plugin-desc-banner">
           <div style="font-weight: 700; color: #166534; margin-bottom: 2px;">${meta.title} — ${meta.category}</div>
-          <div style="margin-bottom: 4px;"><strong>Для чего нужен:</strong> ${meta.desc}</div>
-          <div style="color: #475569;"><strong>Как работает:</strong> ${meta.howItWorks}</div>
+          <div style="margin-bottom: 4px;"><strong>${purposeLbl}</strong> ${meta.desc}</div>
+          <div style="color: #475569;"><strong>${howLbl}</strong> ${meta.howItWorks}</div>
         </div>
 
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-          <span style="font-size: 11px; font-weight: 600; color: #475569;">DLL библиотека:</span>
+          <span style="font-size: 11px; font-weight: 600; color: #475569;">${dllLbl}</span>
           <input type="text" class="win-select vst-lib-path" style="flex: 1; font-family: Consolas, monospace; font-size: 11px;" value="${block.library || ''}" data-block-id="${block.id}" title="Путь к 64-битному .dll файлу VST плагина">
         </div>
       `;
@@ -1121,7 +1296,7 @@ function renderBlocks(targetScrollBlockId = null) {
       if (meta.presets && meta.presets.length > 0) {
         vhtml += `
           <div class="preset-pills-row">
-            <span class="preset-pill-label">Быстрые пресеты:</span>
+            <span class="preset-pill-label">${presetsLbl}</span>
         `;
         meta.presets.forEach((pr, pi) => {
           vhtml += `
@@ -1135,20 +1310,16 @@ function renderBlocks(targetScrollBlockId = null) {
 
       content.innerHTML = vhtml;
     } else if (block.kind === 'rc505') {
-      const meta = RC505_CATALOG[block.effectId] || {
-        title: block.title || 'BOSS RC-505 Mk2 Effect',
-        category: 'Луп-станция BOSS RC-505 Mk2',
-        desc: 'Процессор эффектов легендарной луп-станции Roland Boss RC-505 Mk2.',
-        howItWorks: 'Цифровой алгоритм аппаратного DSP моделирования Roland BOSS.',
-        params: [],
-        presets: []
-      };
+      const meta = getRc505LocalizedMeta(block.effectId);
+      const purposeLbl = window.t ? window.t('blocks.rc505.purposeLabel', null, 'Для чего нужен:') : 'Для чего нужен:';
+      const howLbl = window.t ? window.t('blocks.rc505.howLabel', null, 'Как работает:') : 'Как работает:';
+      const presetsLbl = window.t ? window.t('blocks.rc505.presetsLabel', null, 'Студийные пресеты Roland BOSS:') : 'Студийные пресеты Roland BOSS:';
 
       let rhtml = `
         <div class="plugin-desc-banner rc505-desc">
           <div style="font-weight: 700; color: #1e40af; margin-bottom: 2px;">${meta.title} — ${meta.category}</div>
-          <div style="margin-bottom: 4px;"><strong>Для чего нужен:</strong> ${meta.desc}</div>
-          <div style="color: #475569;"><strong>Как работает:</strong> ${meta.howItWorks}</div>
+          <div style="margin-bottom: 4px;"><strong>${purposeLbl}</strong> ${meta.desc}</div>
+          <div style="color: #475569;"><strong>${howLbl}</strong> ${meta.howItWorks}</div>
         </div>
       `;
 
@@ -1191,7 +1362,7 @@ function renderBlocks(targetScrollBlockId = null) {
       if (meta.presets && meta.presets.length > 0) {
         rhtml += `
           <div class="preset-pills-row">
-            <span class="preset-pill-label">Студийные пресеты Roland BOSS:</span>
+            <span class="preset-pill-label">${presetsLbl}</span>
         `;
         meta.presets.forEach((pr, pi) => {
           rhtml += `
@@ -1211,6 +1382,20 @@ function renderBlocks(targetScrollBlockId = null) {
   });
 
   attachBlockEvents();
+
+  // Restore scroll position so reordering, deleting or updating never jumps to top/bottom
+  if (scrollContainer) {
+    if (targetScrollBlockId != null) {
+      const targetCard = blocksContainer ? blocksContainer.querySelector(`[data-block-id="${targetScrollBlockId}"]`) : null;
+      if (targetCard) {
+        targetCard.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+      } else {
+        scrollContainer.scrollTop = prevScrollTop;
+      }
+    } else {
+      scrollContainer.scrollTop = prevScrollTop;
+    }
+  }
 }
 
 function attachBlockEvents() {
@@ -1314,6 +1499,50 @@ function attachBlockEvents() {
       if (b) {
         b.gain = num;
         inp.value = `${num >= 0 ? '+' : ''}${num.toFixed(2)} dB`;
+        if (slider) slider.value = num;
+        updateAll();
+      }
+    };
+    inp.addEventListener('change', commitInput);
+    inp.addEventListener('blur', commitInput);
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        commitInput();
+        inp.blur();
+      }
+    });
+  });
+
+  // Delay slider & text input
+  document.querySelectorAll('.delay-slider').forEach(slider => {
+    const blockId = slider.dataset.blockId;
+    const b = tab.blocks.find(x => String(x.id) === String(blockId));
+    const input = slider.closest('.preamp-row')?.querySelector('.delay-input');
+
+    const onUpdate = (e) => {
+      const val = parseFloat(e.target.value);
+      if (b) {
+        b.delay = Math.max(0, val);
+        if (input) input.value = `${b.delay.toFixed(2)} ms`;
+        updateAll();
+      }
+    };
+    slider.addEventListener('input', onUpdate);
+    slider.addEventListener('change', onUpdate);
+  });
+
+  document.querySelectorAll('.delay-input').forEach(inp => {
+    const blockId = inp.dataset.blockId;
+    const b = tab.blocks.find(x => String(x.id) === String(blockId));
+    const slider = inp.closest('.preamp-row')?.querySelector('.delay-slider');
+
+    const commitInput = () => {
+      let num = parseFloat(inp.value.replace(/[^\d.-]/g, ''));
+      if (isNaN(num)) num = b ? b.delay : 10.0;
+      num = Math.max(0, Math.min(2000, num));
+      if (b) {
+        b.delay = num;
+        inp.value = `${num.toFixed(2)} ms`;
         if (slider) slider.value = num;
         updateAll();
       }
@@ -1624,20 +1853,6 @@ function attachBlockEvents() {
       showToast(`Файл ${targetName} открыт в новой вкладке`);
     });
   });
-
-  // Restore scroll position so reordering, deleting or updating never jumps to top/bottom
-  if (scrollContainer) {
-    if (targetScrollBlockId != null) {
-      const targetCard = blocksContainer.querySelector(`[data-block-id="${targetScrollBlockId}"]`);
-      if (targetCard) {
-        targetCard.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-      } else {
-        scrollContainer.scrollTop = prevScrollTop;
-      }
-    } else {
-      scrollContainer.scrollTop = prevScrollTop;
-    }
-  }
 }
 
 // --- Sleek Toast Notification Helper ---
@@ -1970,7 +2185,6 @@ function parseConfigIntoState(text, targetTab = null) {
     if (geqMatch) {
       currentParametric = null;
       const pts = geqMatch[1].split(';');
-      const ISO_FREQS = [25, 40, 63, 100, 160, 250, 400, 630, 1000, 1600, 2500, 4000, 6300, 10000, 16000];
       const parsedPoints = [];
 
       for (let p of pts) {
@@ -1983,6 +2197,11 @@ function parseConfigIntoState(text, targetTab = null) {
           }
         }
       }
+
+      const is31 = parsedPoints.length > 20;
+      const ISO_FREQS = is31
+        ? [20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000]
+        : [25, 40, 63, 100, 160, 250, 400, 630, 1000, 1600, 2500, 4000, 6300, 10000, 16000];
 
       const bands = ISO_FREQS.map(isoF => {
         let nearestG = 0;
@@ -1999,10 +2218,23 @@ function parseConfigIntoState(text, targetTab = null) {
 
       newBlocks.push({
         id: nextId(),
-        kind: 'graphiceq15',
-        title: 'Графический эквалайзер (15 полос ISO)',
+        kind: is31 ? 'graphiceq31' : 'graphiceq15',
+        title: is31 ? 'Графический эквалайзер (31 полоса ISO)' : 'Графический эквалайзер (15 полос ISO)',
         enabled: !isExplicitDisabled,
         bands: bands
+      });
+      continue;
+    }
+
+    const delayMatch = line.match(/^Delay:\s*([\d.]+)\s*(?:ms)?/i);
+    if (delayMatch) {
+      currentParametric = null;
+      newBlocks.push({
+        id: nextId(),
+        kind: 'delay',
+        title: 'Задержка канала (Delay)',
+        enabled: !isExplicitDisabled,
+        delay: parseFloat(delayMatch[1]) || 0.0
       });
       continue;
     }
@@ -2046,6 +2278,8 @@ function generateConfig() {
     const prefix = b.enabled ? '' : '# [Disabled] ';
     if (b.kind === 'preamp') {
       text += `${prefix}Preamp: ${b.gain >= 0 ? '+' : ''}${b.gain.toFixed(2)} dB\n`;
+    } else if (b.kind === 'delay') {
+      text += `${prefix}Delay: ${(b.delay || 0.0).toFixed(2)} ms\n`;
     } else if (b.kind === 'include') {
       text += `${prefix}Include: ${b.path}\n`;
     } else if (b.kind === 'vst') {
@@ -2058,7 +2292,7 @@ function generateConfig() {
       b.filters.forEach(f => {
         text += `${prefix}Filter: ${f.enabled ? 'ON' : 'OFF'} ${f.type} Fc ${Math.round(f.fc)} Hz Gain ${f.gain >= 0 ? '+' : ''}${f.gain.toFixed(2)} dB Q ${f.q.toFixed(4)}\n`;
       });
-    } else if (b.kind === 'graphiceq15') {
+    } else if (b.kind === 'graphiceq15' || b.kind === 'graphiceq31') {
       text += `${prefix}GraphicEQ: `;
       b.bands.forEach((band, bi) => {
         text += `${band.f} ${band.gain}${bi < b.bands.length - 1 ? '; ' : '\n'}`;
@@ -2134,7 +2368,8 @@ document.addEventListener('click', () => {
 
 document.querySelectorAll('.sub-menu button').forEach(btn => {
   btn.addEventListener('click', (e) => {
-    const action = e.target.dataset.action;
+    const targetBtn = e.target.closest('button');
+    const action = targetBtn ? targetBtn.dataset.action : e.target.dataset.action;
     addMenuDropdown.classList.add('hidden');
     const tab = getActiveTab();
     if (!tab) return;
@@ -2180,6 +2415,28 @@ document.querySelectorAll('.sub-menu button').forEach(btn => {
           { f: 6300, gain: 0 }, { f: 10000, gain: 0 }, { f: 16000, gain: 0 }
         ]
       });
+      showToast('Добавлен: Графический эквалайзер 15 полос');
+    } else if (action === 'add-geq31') {
+      tab.blocks.push({
+        id: nextId(),
+        kind: 'graphiceq31',
+        title: 'Графический эквалайзер (31 полоса ISO)',
+        enabled: true,
+        bands: [
+          { f: 20, gain: 0 }, { f: 25, gain: 0 }, { f: 31.5, gain: 0 },
+          { f: 40, gain: 0 }, { f: 50, gain: 0 }, { f: 63, gain: 0 },
+          { f: 80, gain: 0 }, { f: 100, gain: 0 }, { f: 125, gain: 0 },
+          { f: 160, gain: 0 }, { f: 200, gain: 0 }, { f: 250, gain: 0 },
+          { f: 315, gain: 0 }, { f: 400, gain: 0 }, { f: 500, gain: 0 },
+          { f: 630, gain: 0 }, { f: 800, gain: 0 }, { f: 1000, gain: 0 },
+          { f: 1250, gain: 0 }, { f: 1600, gain: 0 }, { f: 2000, gain: 0 },
+          { f: 2500, gain: 0 }, { f: 3150, gain: 0 }, { f: 4000, gain: 0 },
+          { f: 5000, gain: 0 }, { f: 6300, gain: 0 }, { f: 8000, gain: 0 },
+          { f: 10000, gain: 0 }, { f: 12500, gain: 0 }, { f: 16000, gain: 0 },
+          { f: 20000, gain: 0 }
+        ]
+      });
+      showToast('Добавлен: Графический эквалайзер 31 полоса');
     } else if (action === 'add-vst-reagate') {
       tab.blocks.push(createVstBlock('reagate'));
       showToast('Добавлен VST: ReaGate');
@@ -2231,6 +2488,15 @@ document.querySelectorAll('.sub-menu button').forEach(btn => {
     } else if (action === 'add-rc505-reverb') {
       tab.blocks.push(createRc505Block('reverb'));
       showToast('Добавлен BOSS RC-505: Space Reverb');
+    } else if (action === 'add-delay') {
+      tab.blocks.push({
+        id: nextId(),
+        kind: 'delay',
+        title: 'Задержка канала (Delay)',
+        enabled: true,
+        delay: 10.0
+      });
+      showToast('Добавлен фильтр: Задержка (Delay)');
     }
 
     renderBlocks();
@@ -2292,24 +2558,322 @@ window.addEventListener('mousemove', (e) => {
     updateAll();
   }
 
-  // Hover Tooltip
+  // Hover Tooltip with Musical Note name
   if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) {
     const f = Math.round(xToF(x, canvas.width));
     const db = yToDb(y, canvas.height).toFixed(1);
+    const note = freqToNoteName(f);
     curveTooltip.style.left = `${(x / canvas.width) * 100}%`;
     curveTooltip.style.top = `${(y / canvas.height) * 100}%`;
-    curveTooltip.textContent = `${f} Hz | ${db > 0 ? '+' : ''}${db} dB`;
+    curveTooltip.textContent = `${f} Hz ${note ? '(' + note + ')' : ''} | ${db > 0 ? '+' : ''}${db} dB`;
     curveTooltip.classList.remove('hidden');
   } else {
     curveTooltip.classList.add('hidden');
   }
 });
 
+function freqToNoteName(freq) {
+  if (freq < 16 || freq > 20000) return '';
+  const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const midiNum = Math.round(69 + 12 * Math.log2(freq / 440));
+  const note = notes[((midiNum % 12) + 12) % 12];
+  const octave = Math.floor(midiNum / 12) - 1;
+  return `${note}${octave}`;
+}
+
 window.addEventListener('mouseup', () => {
   if (state.draggingNode) {
     state.draggingNode = null;
     pushHistory();
     renderBlocks();
+  }
+});
+
+// Double click on canvas to add a new parametric filter node
+canvas.addEventListener('dblclick', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const f = Math.max(20, Math.min(20000, Math.round(xToF(x, canvas.width))));
+  const gain = Math.max(-20, Math.min(20, Math.round(yToDb(y, canvas.height) * 2) / 2));
+  addParametricWithFilter('PK', f, gain, 1.4142);
+  renderBlocks();
+  updateAll();
+  showToast(`Добавлен фильтр: ${f} Hz, ${gain > 0 ? '+' : ''}${gain} dB`);
+});
+
+// Mouse wheel on canvas node to dynamically adjust Q (bandwidth)
+canvas.addEventListener('wheel', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const tab = getActiveTab();
+  if (!tab) return;
+
+  let targetFlt = null;
+  tab.blocks.forEach(b => {
+    if (b.kind === 'parametric' && b.enabled) {
+      b.filters.forEach(flt => {
+        if (!flt.enabled) return;
+        const nx = fToX(flt.fc, canvas.width);
+        const ny = dbToY(flt.gain, canvas.height);
+        if (Math.hypot(x - nx, y - ny) < 18) {
+          targetFlt = flt;
+        }
+      });
+    }
+  });
+
+  if (targetFlt) {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.15 : -0.15;
+    targetFlt.q = Math.max(0.1, Math.min(20, Math.round((targetFlt.q + delta) * 100) / 100));
+    updateAll();
+    renderBlocks();
+    showToast(`Добротность Q: ${targetFlt.q.toFixed(2)}`);
+  }
+}, { passive: false });
+
+// --- Floating & Draggable Analysis Panel Controller ---
+const floatPanelBtn = document.getElementById('floatPanelBtn');
+const panelResizeHandle = document.getElementById('panelResizeHandle');
+const analysisPanelHeader = document.getElementById('analysisPanelHeader');
+
+function updateFloatBtnText(isFloating) {
+  if (!floatPanelBtn) return;
+  const key = isFloating ? 'analysis.floatBtnDock' : 'analysis.floatBtnUndock';
+  const defaultText = isFloating ? 'Прикрепить' : 'Открепить';
+  floatPanelBtn.setAttribute('data-i18n', key);
+  floatPanelBtn.textContent = (window.i18n && typeof window.i18n.t === 'function')
+    ? window.i18n.t(key, null, defaultText)
+    : defaultText;
+}
+
+function resizeCanvasToContainer() {
+  resizeAnalysisCanvas();
+}
+
+if (floatPanelBtn) {
+  floatPanelBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isFloating = analysisPanel.classList.toggle('floating');
+    if (isFloating) {
+      analysisPanel.classList.remove('collapsed');
+      analysisPanel.style.left = 'calc(50% - 380px)';
+      analysisPanel.style.top = '160px';
+      analysisPanel.style.width = '760px';
+      analysisPanel.style.height = '320px';
+      updateFloatBtnText(true);
+      showToast('Панель АЧХ откреплена (плавающий режим)');
+    } else {
+      analysisPanel.style.left = '';
+      analysisPanel.style.top = '';
+      analysisPanel.style.width = '';
+      analysisPanel.style.height = '';
+      updateFloatBtnText(false);
+      showToast('Панель АЧХ прикреплена к нижней границе');
+    }
+    setTimeout(resizeCanvasToContainer, 30);
+  });
+}
+
+// Dragging floating panel by its header
+if (analysisPanelHeader) {
+  let isDraggingPanel = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let panelStartLeft = 0;
+  let panelStartTop = 0;
+
+  analysisPanelHeader.addEventListener('mousedown', (e) => {
+    if (!analysisPanel.classList.contains('floating')) return;
+    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+
+    isDraggingPanel = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    const rect = analysisPanel.getBoundingClientRect();
+    panelStartLeft = rect.left;
+    panelStartTop = rect.top;
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDraggingPanel) return;
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    analysisPanel.style.left = `${Math.max(10, Math.min(window.innerWidth - 100, panelStartLeft + dx))}px`;
+    analysisPanel.style.top = `${Math.max(10, Math.min(window.innerHeight - 50, panelStartTop + dy))}px`;
+  });
+
+  window.addEventListener('mouseup', () => {
+    isDraggingPanel = false;
+  });
+}
+
+// Resizing floating panel via corner handle
+if (panelResizeHandle) {
+  let isResizing = false;
+  let resizeStartX = 0;
+  let resizeStartY = 0;
+  let panelStartW = 0;
+  let panelStartH = 0;
+  let resizeRaf = null;
+
+  panelResizeHandle.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    resizeStartX = e.clientX;
+    resizeStartY = e.clientY;
+    panelStartW = analysisPanel.offsetWidth;
+    panelStartH = analysisPanel.offsetHeight;
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    const dw = e.clientX - resizeStartX;
+    const dh = e.clientY - resizeStartY;
+    const newW = Math.max(440, Math.min(window.innerWidth - 40, panelStartW + dw));
+    const newH = Math.max(180, Math.min(window.innerHeight - 60, panelStartH + dh));
+    analysisPanel.style.width = `${newW}px`;
+    analysisPanel.style.height = `${newH}px`;
+    if (!resizeRaf) {
+      resizeRaf = requestAnimationFrame(() => {
+        resizeCanvasToContainer();
+        resizeRaf = null;
+      });
+    }
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (isResizing) {
+      isResizing = false;
+      if (resizeRaf) {
+        cancelAnimationFrame(resizeRaf);
+        resizeRaf = null;
+      }
+      resizeCanvasToContainer();
+    }
+  });
+}
+
+// --- Minimize to Tray on Close (Settings) ---
+let minimizeToTrayOnClose = localStorage.getItem('eq_craft_minimize_to_tray') !== 'false'; // default true
+
+function updateMinimizeToTrayUI() {
+  const chk = document.getElementById('chkMinimizeToTray');
+  if (chk) {
+    chk.textContent = minimizeToTrayOnClose ? '[Вкл]' : '[Выкл]';
+  }
+}
+updateMinimizeToTrayUI();
+
+document.getElementById('menuMinimizeToTray')?.addEventListener('click', () => {
+  minimizeToTrayOnClose = !minimizeToTrayOnClose;
+  localStorage.setItem('eq_craft_minimize_to_tray', minimizeToTrayOnClose ? 'true' : 'false');
+  updateMinimizeToTrayUI();
+  showToast(minimizeToTrayOnClose
+    ? 'Сворачивание в трей при закрытии включено'
+    : 'Сворачивание в трей отключено (закрытие [X] завершит программу)'
+  );
+});
+
+// Window Controls (Frameless Titlebar)
+const btnWinMin = document.getElementById('btnWinMin');
+const btnWinMax = document.getElementById('btnWinMax');
+const btnWinClose = document.getElementById('btnWinClose');
+
+if (btnWinMin) {
+  btnWinMin.addEventListener('click', () => {
+    fetch('/api/window/minimize', { method: 'POST' });
+  });
+}
+
+if (btnWinMax) {
+  btnWinMax.addEventListener('click', () => {
+    fetch('/api/window/maximize', { method: 'POST' });
+  });
+}
+
+async function handleWindowClose() {
+  if (minimizeToTrayOnClose) {
+    try {
+      await fetch('/api/window/hide', { method: 'POST' });
+      showToast('Приложение свернуто в системный трей');
+    } catch (e) {
+      exitApplication();
+    }
+  } else {
+    exitApplication();
+  }
+}
+
+if (btnWinClose) {
+  btnWinClose.addEventListener('click', () => {
+    handleWindowClose();
+  });
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.altKey && (e.key === 'F4' || e.keyCode === 115)) {
+    e.preventDefault();
+    handleWindowClose();
+  }
+});
+
+window.addEventListener('pagehide', () => {
+  if (!minimizeToTrayOnClose) {
+    try {
+      navigator.sendBeacon('/api/exit');
+    } catch (e) {}
+  }
+});
+
+// Window Controls Dragging & Native Window Actions
+const menubarEl = document.querySelector('.win-menubar');
+if (menubarEl) {
+  let isDraggingWindow = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+
+  menubarEl.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest('.menu-item') || e.target.closest('.window-controls') || e.target.closest('button')) {
+      return;
+    }
+    isDraggingWindow = true;
+    dragStartX = e.screenX;
+    dragStartY = e.screenY;
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDraggingWindow) return;
+    const dx = e.screenX - dragStartX;
+    const dy = e.screenY - dragStartY;
+    if (dx !== 0 || dy !== 0) {
+      dragStartX = e.screenX;
+      dragStartY = e.screenY;
+      fetch(`/api/window/move?dx=${dx}&dy=${dy}`, { method: 'POST' }).catch(() => {});
+    }
+  });
+
+  window.addEventListener('mouseup', () => {
+    isDraggingWindow = false;
+  });
+
+  menubarEl.addEventListener('dblclick', (e) => {
+    if (e.target.closest('.menu-item') || e.target.closest('.window-controls') || e.target.closest('button')) {
+      return;
+    }
+    fetch('/api/window/maximize', { method: 'POST' }).catch(() => {});
+  });
+}
+
+// Prevent browser F11 fullscreen override
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'F11' || e.keyCode === 122) {
+    e.preventDefault();
   }
 });
 
@@ -2650,10 +3214,15 @@ function renderVstCatalog(searchQuery = '', categoryFilter = 'all') {
     );
   });
 
+  const emptyText = window.t ? window.t('vstModal.emptySearch', null, 'Плагины по запросу не найдены. Попробуйте изменить параметры поиска или категории.') : 'Плагины по запросу не найдены.';
+  const purposeLbl = window.t ? window.t('vstModal.purpose', null, 'Назначение:') : 'Назначение:';
+  const howLbl = window.t ? window.t('vstModal.principle', null, 'Принцип работы:') : 'Принцип работы:';
+  const btnAddTxt = window.t ? window.t('vstModal.btnAdd', null, 'Добавить в цепочку') : 'Добавить в цепочку';
+
   if (filtered.length === 0) {
     vstCatalogList.innerHTML = `
       <div style="padding: 24px; text-align: center; color: #64748b; font-size: 13px;">
-        Плагины по запросу не найдены. Попробуйте изменить параметры поиска или категории.
+        ${emptyText}
       </div>
     `;
     return;
@@ -2661,19 +3230,20 @@ function renderVstCatalog(searchQuery = '', categoryFilter = 'all') {
 
   let html = '';
   filtered.forEach(p => {
+    const meta = getVstLocalizedMeta(p.id, p.dll);
     html += `
       <div class="vst-catalog-card" data-vst-id="${p.id}">
         <div class="vst-card-left">
           <div class="vst-card-title">
-            ${p.title}
-            <span class="vst-card-cat">${p.catName}</span>
+            ${meta.title}
+            <span class="vst-card-cat">${meta.category}</span>
           </div>
           <span class="vst-card-dll">${p.dll}</span>
-          <div class="vst-card-desc"><strong>Назначение:</strong> ${p.desc}</div>
-          <div class="vst-card-how"><strong>Принцип работы:</strong> ${p.how}</div>
+          <div class="vst-card-desc"><strong>${purposeLbl}</strong> ${meta.desc}</div>
+          <div class="vst-card-how"><strong>${howLbl}</strong> ${meta.howItWorks}</div>
         </div>
-        <button class="win-btn primary btn-add-catalog-vst" data-vst-id="${p.id}" data-vst-dll="${p.dll}" data-vst-title="${p.title}" style="height: 32px; font-weight: 600; padding: 0 14px; white-space: nowrap; flex-shrink: 0;">
-          Добавить в цепочку
+        <button class="win-btn primary btn-add-catalog-vst" data-vst-id="${p.id}" data-vst-dll="${p.dll}" data-vst-title="${meta.title}" style="height: 32px; font-weight: 600; padding: 0 14px; white-space: nowrap; flex-shrink: 0;">
+          ${btnAddTxt}
         </button>
       </div>
     `;
@@ -2844,17 +3414,17 @@ function openUpdateModal() {
 async function checkUpdates() {
   if (!btnCheckNowUpdate) return;
   btnCheckNowUpdate.disabled = true;
-  btnCheckNowUpdate.textContent = 'Проверка...';
-  if (updateStatusText) updateStatusText.textContent = 'Связь с сервером GitHub Releases...';
+  btnCheckNowUpdate.textContent = window.t ? window.t('update.checking', null, 'Проверка...') : 'Проверка...';
+  if (updateStatusText) updateStatusText.textContent = window.t ? window.t('update.connecting', null, 'Связь с сервером GitHub Releases...') : 'Связь с сервером GitHub Releases...';
 
   try {
     const res = await fetch('/api/update/check');
     const data = await res.json();
 
     if (updateCurrentVerText && data.current_version) {
-      updateCurrentVerText.textContent = `Текущая версия: v${data.current_version}`;
+      updateCurrentVerText.textContent = window.t ? window.t('update.currentVer', { ver: data.current_version }, `Текущая версия: v${data.current_version}`) : `Текущая версия: v${data.current_version}`;
     }
-    if (updateStatusText) updateStatusText.textContent = data.message || 'Проверка завершена';
+    if (updateStatusText) updateStatusText.textContent = data.message || (window.t ? window.t('update.readyToCheck') : 'Проверка завершена');
     if (updateResultBox) updateResultBox.classList.remove('hidden');
 
     if (data.has_update && data.download_url) {
@@ -2864,12 +3434,12 @@ async function checkUpdates() {
         updateBadgeStatus.style.background = '#dcfce7';
         updateBadgeStatus.style.color = '#15803d';
         updateBadgeStatus.style.borderColor = '#86efac';
-        updateBadgeStatus.textContent = `Доступно обновление: v${data.latest_version} (${data.asset_name || 'EqualizerFD-Craft.exe'})`;
+        updateBadgeStatus.textContent = window.t ? window.t('update.available', { ver: data.latest_version, asset: data.asset_name || 'EqualizerFD-Craft.exe' }) : `Доступно обновление: v${data.latest_version} (${data.asset_name || 'EqualizerFD-Craft.exe'})`;
       }
       if (btnInstallUpdate) {
         btnInstallUpdate.classList.remove('hidden');
         btnInstallUpdate.disabled = false;
-        btnInstallUpdate.textContent = 'Скачать и обновить';
+        btnInstallUpdate.textContent = window.t ? window.t('update.btnDownload', null, 'Скачать и обновить') : 'Скачать и обновить';
       }
     } else {
       pendingUpdateDownloadUrl = '';
@@ -2878,19 +3448,19 @@ async function checkUpdates() {
         updateBadgeStatus.style.background = '#f1f5f9';
         updateBadgeStatus.style.color = '#334155';
         updateBadgeStatus.style.borderColor = '#cbd5e1';
-        updateBadgeStatus.textContent = data.message || `У вас установлена последняя версия Equalizer FD CRAFT (v${data.current_version})`;
+        updateBadgeStatus.textContent = data.message || (window.t ? window.t('update.upToDate', { ver: data.current_version }) : `У вас установлена последняя версия Equalizer FD CRAFT (v${data.current_version})`);
       }
       if (btnInstallUpdate) btnInstallUpdate.classList.add('hidden');
     }
 
     if (updateNotesText) {
-      updateNotesText.textContent = data.release_notes || 'Описание релиза отсутствует.';
+      updateNotesText.textContent = data.release_notes || (window.t ? window.t('update.notesEmpty') : 'Описание релиза отсутствует.');
     }
   } catch (err) {
-    if (updateStatusText) updateStatusText.textContent = 'Ошибка проверки обновлений: ' + err.message;
+    if (updateStatusText) updateStatusText.textContent = window.t ? window.t('update.error', { msg: err.message }) : ('Ошибка проверки обновлений: ' + err.message);
   } finally {
     btnCheckNowUpdate.disabled = false;
-    btnCheckNowUpdate.textContent = 'Проверить сейчас';
+    btnCheckNowUpdate.textContent = window.t ? window.t('update.btnCheckNow', null, 'Проверить сейчас') : 'Проверить сейчас';
   }
 }
 
@@ -2921,7 +3491,7 @@ async function pollUpdateProgress() {
     }
 
     if (data.status === 'downloading') {
-      if (updateProgressLabel) updateProgressLabel.textContent = 'Скачивание EqualizerFD-Craft.exe...';
+      if (updateProgressLabel) updateProgressLabel.textContent = window.t ? window.t('update.progressLabel') : 'Скачивание EqualizerFD-Craft.exe...';
       updatePollTimer = setTimeout(pollUpdateProgress, 120);
     } else if (data.status === 'applying') {
       if (updateProgressBar) {
@@ -2929,8 +3499,8 @@ async function pollUpdateProgress() {
         updateProgressBar.style.background = '#059669';
       }
       if (updateProgressPercent) updateProgressPercent.textContent = '100%';
-      if (updateProgressLabel) updateProgressLabel.textContent = 'Установка обновления и замена файлов...';
-      if (updateProgressSpeed) updateProgressSpeed.textContent = 'Применение...';
+      if (updateProgressLabel) updateProgressLabel.textContent = window.t ? window.t('update.applying') : 'Установка обновления и замена файлов...';
+      if (updateProgressSpeed) updateProgressSpeed.textContent = window.t ? window.t('update.applyingSpeed', null, 'Применение...') : 'Применение...';
       updatePollTimer = setTimeout(pollUpdateProgress, 120);
     } else if (data.status === 'restarting' || data.status === 'completed') {
       if (updateProgressBar) {
@@ -2938,16 +3508,16 @@ async function pollUpdateProgress() {
         updateProgressBar.style.background = '#10b981';
       }
       if (updateProgressPercent) updateProgressPercent.textContent = '100%';
-      if (updateProgressLabel) updateProgressLabel.textContent = 'Обновление завершено! Перезапуск студии...';
-      if (updateProgressSpeed) updateProgressSpeed.textContent = 'Переподключение...';
-      showToast('Обновление завершено! Перезапуск Equalizer FD CRAFT...');
+      if (updateProgressLabel) updateProgressLabel.textContent = window.t ? window.t('update.restarting') : 'Обновление завершено! Перезапуск студии...';
+      if (updateProgressSpeed) updateProgressSpeed.textContent = window.t ? window.t('update.restartingSpeed', null, 'Переподключение...') : 'Переподключение...';
+      showToast(window.t ? window.t('toasts.updateRestarting', null, 'Обновление завершено! Перезапуск Equalizer FD CRAFT...') : 'Обновление завершено! Перезапуск Equalizer FD CRAFT...');
       waitForServerRestart();
     } else if (data.status === 'error') {
       if (updateProgressBar) updateProgressBar.style.background = '#dc2626';
-      if (updateProgressLabel) updateProgressLabel.textContent = 'Ошибка: ' + (data.error_message || 'Не удалось обновить');
+      if (updateProgressLabel) updateProgressLabel.textContent = window.t ? window.t('update.error', { msg: data.error_message || 'Не удалось обновить' }) : ('Ошибка: ' + (data.error_message || 'Не удалось обновить'));
       if (btnInstallUpdate) {
         btnInstallUpdate.disabled = false;
-        btnInstallUpdate.textContent = 'Повторить';
+        btnInstallUpdate.textContent = window.t ? window.t('update.btnRetry') : 'Повторить';
       }
     } else {
       updatePollTimer = setTimeout(pollUpdateProgress, 150);
@@ -2968,7 +3538,7 @@ function waitForServerRestart() {
       const res = await fetch('/api/info', { cache: 'no-store' });
       if (res.ok) {
         clearInterval(checkInterval);
-        if (updateProgressLabel) updateProgressLabel.textContent = 'Студия перезапущена! Страница обновляется...';
+        if (updateProgressLabel) updateProgressLabel.textContent = window.t ? window.t('update.restartedLabel', null, 'Студия перезапущена! Страница обновляется...') : 'Студия перезапущена! Страница обновляется...';
         setTimeout(() => {
           window.location.reload();
         }, 400);
@@ -2976,10 +3546,10 @@ function waitForServerRestart() {
     } catch (_) {
       if (attempts >= maxAttempts) {
         clearInterval(checkInterval);
-        if (updateProgressLabel) updateProgressLabel.textContent = 'Перезапустите приложение вручную.';
+        if (updateProgressLabel) updateProgressLabel.textContent = window.t ? window.t('update.manualRestart', null, 'Перезапустите приложение вручную.') : 'Перезапустите приложение вручную.';
         if (btnInstallUpdate) {
           btnInstallUpdate.disabled = false;
-          btnInstallUpdate.textContent = 'Скачать и обновить';
+          btnInstallUpdate.textContent = window.t ? window.t('update.btnDownload', null, 'Скачать и обновить') : 'Скачать и обновить';
         }
       }
     }
@@ -3426,19 +3996,22 @@ async function populateDeviceDropdown() {
 
     const optAll = document.createElement('option');
     optAll.value = 'all';
-    optAll.textContent = 'Все устройства (All Endpoints - Global)';
+    optAll.textContent = window.t ? window.t('toolbar.deviceAll', null, 'Все устройства (All Endpoints - Global)') : 'Все устройства (All Endpoints - Global)';
     sel.appendChild(optAll);
 
     const capGroup = document.createElement('optgroup');
-    capGroup.label = 'Микрофоны (Capture)';
+    capGroup.label = window.t ? window.t('toolbar.captureGroup', null, 'Микрофоны (Capture)') : 'Микрофоны (Capture)';
 
     const renGroup = document.createElement('optgroup');
-    renGroup.label = 'Воспроизведение (Render / Динамики / Наушники)';
+    renGroup.label = window.t ? window.t('toolbar.renderGroup', null, 'Воспроизведение (Render / Динамики / Наушники)') : 'Воспроизведение (Render / Динамики / Наушники)';
 
     devices.forEach(d => {
       const opt = document.createElement('option');
       opt.value = d.guid;
-      opt.textContent = `[${d.endpoint_type === 'Capture' ? 'Микрофон' : 'Динамики'}] ${d.name}`;
+      const prefix = d.endpoint_type === 'Capture'
+        ? (window.t ? window.t('toolbar.micPrefix', null, 'Микрофон') : 'Микрофон')
+        : (window.t ? window.t('toolbar.speakerPrefix', null, 'Динамики') : 'Динамики');
+      opt.textContent = `[${prefix}] ${d.name}`;
       if (d.endpoint_type === 'Capture') {
         capGroup.appendChild(opt);
       } else {
@@ -3462,6 +4035,9 @@ async function populateDeviceDropdown() {
 
 // App Initialization
 async function initApp() {
+  if (window.I18N && window.I18N.readyPromise) {
+    try { await window.I18N.readyPromise; } catch (_) {}
+  }
   renderTabs();
   resizeAnalysisCanvas();
 
@@ -3540,13 +4116,15 @@ async function checkStreamStatus() {
       const btn = document.getElementById('btnToggleStream');
       const box = document.getElementById('streamBridgeBox');
       if (btn && box) {
+        btn.dataset.active = data.active ? 'true' : 'false';
+        const isEn = window.I18N && window.I18N.lang === 'en';
         if (data.active) {
-          btn.textContent = '[В ЭФИРЕ]';
+          btn.textContent = window.t ? window.t('toolbar.streamLive', null, '[В ЭФИРЕ]') : '[В ЭФИРЕ]';
           btn.style.background = '#16a34a';
           box.style.background = '#dcfce7';
           box.style.borderColor = '#86efac';
         } else {
-          btn.textContent = '[ОСТАНОВЛЕН]';
+          btn.textContent = window.t ? window.t('toolbar.streamPaused', null, '[ОСТАНОВЛЕН]') : '[ОСТАНОВЛЕН]';
           btn.style.background = '#64748b';
           box.style.background = '#f1f5f9';
           box.style.borderColor = '#cbd5e1';
@@ -3561,12 +4139,17 @@ async function checkStreamStatus() {
       const clipTxt = document.getElementById('clipStatusText');
       if (clipBox && clipTxt && liveData.active && liveData.out_peak_db > -90) {
         const outPk = liveData.out_peak_db;
+        const isEn = window.I18N && window.I18N.lang === 'en';
         if (outPk > 0.0) {
           clipBox.className = 'status-indicator-clean clip';
-          clipTxt.textContent = `Клиппинг: +${outPk.toFixed(1)} dB`;
+          clipTxt.textContent = window.t
+            ? window.t('toolbar.clipOverload', { val: outPk.toFixed(1) }, `Клиппинг: +${outPk.toFixed(1)} dB`)
+            : `Клиппинг: +${outPk.toFixed(1)} dB`;
         } else {
           clipBox.className = 'status-indicator-clean ok';
-          clipTxt.textContent = `Сигнал: ${outPk.toFixed(1)} dB (Усиление: +${liveData.preamp_gain_db.toFixed(1)} dB)`;
+          clipTxt.textContent = window.t
+            ? window.t('toolbar.liveSignal', { peak: outPk.toFixed(1), gain: liveData.preamp_gain_db.toFixed(1) }, `Сигнал: ${outPk.toFixed(1)} dB (Усиление: +${liveData.preamp_gain_db.toFixed(1)} dB)`)
+            : `Сигнал: ${outPk.toFixed(1)} dB (Усиление: +${liveData.preamp_gain_db.toFixed(1)} dB)`;
         }
       }
     }
@@ -3576,12 +4159,12 @@ async function checkStreamStatus() {
 const btnToggleStream = document.getElementById('btnToggleStream');
 if (btnToggleStream) {
   btnToggleStream.addEventListener('click', async () => {
-    const isLive = btnToggleStream.textContent.includes('В ЭФИРЕ');
+    const isLive = btnToggleStream.dataset.active === 'true' || btnToggleStream.textContent.includes('В ЭФИРЕ') || btnToggleStream.textContent.includes('LIVE');
     btnToggleStream.textContent = '...';
     try {
       if (isLive) {
         await fetch('/api/stream/stop', { method: 'POST' });
-        showToast('WASAPI аудиомост остановлен');
+        showToast(window.t ? window.t('toasts.streamStopped') : 'WASAPI аудиомост остановлен');
       } else {
         const tab = getActiveTab();
         const cap = tab ? tab.selectedDevice : 'Microphone';
@@ -3590,7 +4173,7 @@ if (btnToggleStream) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ capture: cap, render: 'cable' })
         });
-        showToast('WASAPI аудиомост запущен!');
+        showToast(window.t ? window.t('toasts.streamActive') : 'WASAPI аудиомост запущен!');
       }
       setTimeout(checkStreamStatus, 400);
     } catch (e) {
@@ -3699,4 +4282,53 @@ if (btnOpenVbCableControlPanel) {
     }
   });
 }
+
+// Global Exports and Localization Listeners
+window.showToast = showToast;
+
+window.addEventListener('languageChanged', (e) => {
+  renderTabs();
+  renderBlocks();
+  renderAnalysis();
+  populateDeviceDropdown();
+  checkStreamStatus();
+});
+
+// Native Desktop Feel: Eliminate all browser manifestations
+// 1. Disable default browser context menu (Inspect Element, Back, Reload, Print)
+window.addEventListener('contextmenu', (e) => {
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+    e.preventDefault();
+  }
+});
+
+// 3. Block browser developer keys, print, search, and page reload shortcuts
+window.addEventListener('keydown', (e) => {
+  // Block F12 (DevTools), Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C, Ctrl+U (Page Source)
+  if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I', 'J', 'C', 'i', 'j', 'c'].includes(e.key)) || (e.ctrlKey && (e.key === 'u' || e.key === 'U'))) {
+    e.preventDefault();
+    return;
+  }
+  // Block Ctrl+P (Print), Ctrl+F (Find in page), F3, Ctrl+H (History), Ctrl+J (Downloads), Ctrl+O (Browser Open)
+  if ((e.ctrlKey && ['p', 'P', 'f', 'F', 'h', 'H', 'j', 'J'].includes(e.key)) || e.key === 'F3') {
+    e.preventDefault();
+    return;
+  }
+  // Block F5 and Ctrl+R (Browser Reload)
+  if (e.key === 'F5' || (e.ctrlKey && (e.key === 'r' || e.key === 'R'))) {
+    e.preventDefault();
+    return;
+  }
+});
+
+// 4. Disable accidental dragging of images, cards, and UI links
+window.addEventListener('dragstart', (e) => {
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+    e.preventDefault();
+  }
+});
+window.addEventListener('drop', (e) => e.preventDefault());
+
 

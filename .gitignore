@@ -25,6 +25,7 @@ target/
 
 # Whitelist root deliverables & bundled driver tools
 !/EqualizerFD-Craft.exe
+!/EqualizerTray.exe
 !/ResonaAPO.dll
 !/EqualizerFD-Craft.ico
 !tools/vbcable/**

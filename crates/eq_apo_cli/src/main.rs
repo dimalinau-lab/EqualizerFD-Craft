@@ -5,6 +5,7 @@ pub mod server;
 pub mod tray;
 pub mod updater;
 pub mod vbcable;
+pub mod window_manager;
 
 use eq_apo_core::{AudioPipeline, ConfigFile};
 use std::env;
@@ -51,6 +52,11 @@ fn main() {
         }
         "install-hooks" => {
             install_driver_hooks();
+            return;
+        }
+        "test-tray" => {
+            println!("Testing native system tray registration...");
+            tray::run_tray_test();
             return;
         }
         "devices" => {
@@ -173,13 +179,14 @@ fn main() {
 }
 
 use windows::core::w;
-use windows::Win32::Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE};
+use windows::Win32::Foundation::{CloseHandle, SetLastError, ERROR_ALREADY_EXISTS, GetLastError, HANDLE, WIN32_ERROR};
 use windows::Win32::System::Threading::CreateMutexW;
 
 static mut INSTANCE_MUTEX: HANDLE = HANDLE(std::ptr::null_mut());
 
 pub fn is_another_instance_running() -> bool {
     unsafe {
+        SetLastError(WIN32_ERROR(0));
         match CreateMutexW(None, false, w!("Local\\EqualizerFDCraftInstance")) {
             Ok(handle) => {
                 if GetLastError() == ERROR_ALREADY_EXISTS {
@@ -196,12 +203,18 @@ pub fn is_another_instance_running() -> bool {
 }
 
 pub fn open_or_focus_editor() {
+    if window_manager::focus_existing_window() {
+        return;
+    }
     let app_url = format!("http://127.0.0.1:{}", APP_PORT);
     launch_browser_window(&app_url);
 }
 
 pub fn launch_desktop_program() {
     if is_another_instance_running() {
+        if window_manager::focus_existing_window() {
+            return;
+        }
         open_or_focus_editor();
         return;
     }
@@ -215,12 +228,11 @@ pub fn launch_desktop_program() {
     // 3. Start background embedded server on port 49200
     let _ = server::start_embedded_server(APP_PORT);
 
-    // 3. Launch standalone desktop application window
+    // 4. Launch standalone desktop application window
     open_or_focus_editor();
 
-    loop {
-        std::thread::sleep(std::time::Duration::from_secs(3600));
-    }
+    // 5. Monitor application window and cleanly exit when user closes window [X]
+    window_manager::wait_for_window_and_monitor();
 }
 
 fn launch_browser_window(app_url: &str) {
@@ -236,7 +248,30 @@ fn launch_browser_window(app_url: &str) {
     let local_app_data = std::env::var("LOCALAPPDATA")
         .unwrap_or_else(|_| r"C:\Users\Default\AppData\Local".to_string());
     let profile_dir = format!(r"{}\EqualizerFDCraft\profile", local_app_data);
-    let _ = std::fs::create_dir_all(&profile_dir);
+    let default_dir = format!(r"{}\Default", profile_dir);
+    let _ = std::fs::create_dir_all(&default_dir);
+
+    let first_run_file = format!(r"{}\FirstLaunchAfterInstallation", profile_dir);
+    if !Path::new(&first_run_file).exists() {
+        let _ = std::fs::write(&first_run_file, b"");
+    }
+    let pref_file = format!(r"{}\Preferences", default_dir);
+    if !Path::new(&pref_file).exists() {
+        let default_pref = serde_json::json!({
+            "browser": {
+                "has_seen_welcome_page": true,
+                "check_default_browser": false
+            },
+            "distribution": {
+                "skip_first_run_ui": true,
+                "import_bookmarks": false,
+                "import_history": false,
+                "import_search_engine": false,
+                "make_chrome_default": false
+            }
+        });
+        let _ = std::fs::write(&pref_file, default_pref.to_string());
+    }
 
     let app_arg = format!("--app={}", app_url);
     let profile_arg = format!("--user-data-dir={}", profile_dir);
@@ -245,9 +280,18 @@ fn launch_browser_window(app_url: &str) {
         app_arg.as_str(),
         profile_arg.as_str(),
         "--window-size=1280,820",
+        "--force-light-mode",
+        "--blink-settings=forceDarkMode=0",
         "--no-first-run",
         "--no-default-browser-check",
-        "--disable-features=Translate,OptimizationHints,MediaRouter",
+        "--disable-background-mode",
+        "--disable-features=Translate,OptimizationHints,MediaRouter,EdgeShare,SidePanel,ReadAloud,msEdgeWebWidget",
+        "--disable-extensions",
+        "--disable-component-update",
+        "--disable-default-apps",
+        "--disable-popup-blocking",
+        "--disable-pinch",
+        "--overscroll-history-navigation=0",
     ];
 
     for path in edge_paths.iter().chain(chrome_paths.iter()) {

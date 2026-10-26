@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#f0f0f0">
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="desktop-app">
@@ -17,65 +17,71 @@
   <!-- Desktop Application Menu Bar -->
   <nav class="win-menubar">
     <div class="menu-item" id="menuFile">
-      <span id="lblMenuFile">Файл</span>
+      <span id="lblMenuFile" data-i18n="menu.file">Файл</span>
       <div class="menu-dropdown">
-        <button id="menuNew">Создать... <span class="shortcut">Ctrl+N</span></button>
-        <button id="menuOpen">Открыть... <span class="shortcut">Ctrl+O</span></button>
-        <button id="menuSave">Сохранить <span class="shortcut">Ctrl+S</span></button>
-        <button id="menuSaveAs">Сохранить как...</button>
+        <button id="menuNew"><span data-i18n="menu.new">Создать...</span> <span class="shortcut">Ctrl+N</span></button>
+        <button id="menuOpen"><span data-i18n="menu.open">Открыть...</span> <span class="shortcut">Ctrl+O</span></button>
+        <button id="menuSave"><span data-i18n="menu.save">Сохранить</span> <span class="shortcut">Ctrl+S</span></button>
+        <button id="menuSaveAs" data-i18n="menu.saveAs">Сохранить как...</button>
         <div class="menu-divider"></div>
-        <button id="menuImportRew">Импорт REW (Room EQ Wizard)...</button>
-        <button id="menuExportConfig">Экспорт в config.txt...</button>
+        <button id="menuImportRew" data-i18n="menu.importRew">Импорт REW (Room EQ Wizard)...</button>
+        <button id="menuExportConfig" data-i18n="menu.exportConfig">Экспорт в config.txt...</button>
         <div class="menu-divider"></div>
-        <button id="menuExit">Выход из программы</button>
+        <button id="menuExit" data-i18n="menu.exit">Выход из программы</button>
       </div>
     </div>
     <div class="menu-item" id="menuEdit">
-      <span id="lblMenuEdit">Правка</span>
+      <span id="lblMenuEdit" data-i18n="menu.edit">Правка</span>
       <div class="menu-dropdown">
-        <button id="menuUndo">Отменить <span class="shortcut">Ctrl+Z</span></button>
-        <button id="menuRedo">Повторить <span class="shortcut">Ctrl+Y</span></button>
+        <button id="menuUndo"><span data-i18n="menu.undo">Отменить</span> <span class="shortcut">Ctrl+Z</span></button>
+        <button id="menuRedo"><span data-i18n="menu.redo">Повторить</span> <span class="shortcut">Ctrl+Y</span></button>
         <div class="menu-divider"></div>
-        <button id="menuCut">Вырезать <span class="shortcut">Ctrl+X</span></button>
-        <button id="menuCopy">Копировать <span class="shortcut">Ctrl+C</span></button>
-        <button id="menuPaste">Вставить <span class="shortcut">Ctrl+V</span></button>
+        <button id="menuCut"><span data-i18n="menu.cut">Вырезать</span> <span class="shortcut">Ctrl+X</span></button>
+        <button id="menuCopy"><span data-i18n="menu.copy">Копировать</span> <span class="shortcut">Ctrl+C</span></button>
+        <button id="menuPaste"><span data-i18n="menu.paste">Вставить</span> <span class="shortcut">Ctrl+V</span></button>
       </div>
     </div>
     <div class="menu-item" id="menuView">
-      <span id="lblMenuView">Вид</span>
+      <span id="lblMenuView" data-i18n="menu.view">Вид</span>
       <div class="menu-dropdown">
-        <button id="menuToggleAnalysis">Панель анализа АЧХ <span class="shortcut">F8</span></button>
-        <button id="menuResetZoom">Сбросить масштаб</button>
-        <button id="menuRawText">Показать код config.txt</button>
+        <button id="menuToggleAnalysis"><span data-i18n="menu.toggleAnalysis">Панель анализа АЧХ</span> <span class="shortcut">F8</span></button>
+        <button id="menuResetZoom" data-i18n="menu.resetZoom">Сбросить масштаб</button>
+        <button id="menuRawText" data-i18n="menu.rawText">Показать код config.txt</button>
       </div>
     </div>
     <div class="menu-item" id="menuSettings">
-      <span id="lblMenuSettings">Настройки</span>
+      <span id="lblMenuSettings" data-i18n="menu.settings">Настройки</span>
       <div class="menu-dropdown">
-        <button id="menuWizard">Мастер быстрой настройки микрофона...</button>
-        <button id="menuVbCable">Установить VB-Audio Virtual Cable...</button>
-        <button id="menuOpenConfigurator">Конфигуратор устройств (DeviceSelector)...</button>
-        <button id="menuRegistryBackup">Создать бэкап реестра (.reg)...</button>
+        <button id="menuWizard" data-i18n="menu.wizard">Мастер быстрой настройки микрофона...</button>
+        <button id="menuVbCable" data-i18n="menu.vbCable">Установить VB-Audio Virtual Cable...</button>
+        <button id="menuOpenConfigurator" data-i18n="menu.deviceConfigurator">Конфигуратор устройств (DeviceSelector)...</button>
+        <button id="menuRegistryBackup" data-i18n="menu.registryBackup">Создать бэкап реестра (.reg)...</button>
         <div class="menu-divider"></div>
-        <button id="menuAutostart">Автозагрузка при старте Windows <span class="shortcut" id="chkAutostart"></span></button>
-        <button id="menuElevate">Перезапустить от имени Администратора (UAC)...</button>
+        <button id="menuAutostart"><span data-i18n="menu.autostart">Автозагрузка при старте Windows</span> <span class="shortcut" id="chkAutostart"></span></button>
+        <button id="menuMinimizeToTray"><span data-i18n="menu.minimizeToTray">Сворачивать в трей при закрытии</span> <span class="shortcut" id="chkMinimizeToTray">[Вкл]</span></button>
+        <button id="menuElevate" data-i18n="menu.elevate">Перезапустить от имени Администратора (UAC)...</button>
         <div class="menu-divider"></div>
-        <button id="menuCheckUpdate">Проверить обновления (GitHub)...</button>
+        <button id="menuCheckUpdate" data-i18n="menu.checkUpdate">Проверить обновления (GitHub)...</button>
       </div>
     </div>
     <div class="menu-item" id="menuLanguage">
-      <span id="lblMenuLanguage">Язык</span>
+      <span id="lblMenuLanguage" data-i18n="menu.language">Язык</span>
       <div class="menu-dropdown">
-        <button id="langRu">Русский <span class="shortcut" id="chkRu">[+]</span></button>
-        <button id="langEn">English <span class="shortcut" id="chkEn"></span></button>
+        <button id="langRu"><span data-i18n="menu.langRu">Русский</span> <span class="shortcut" id="chkRu">[+]</span></button>
+        <button id="langEn"><span data-i18n="menu.langEn">English</span> <span class="shortcut" id="chkEn"></span></button>
       </div>
     </div>
     <div class="menu-item" id="menuHelp">
-      <span id="lblMenuHelp">Справка</span>
+      <span id="lblMenuHelp" data-i18n="menu.help">Справка</span>
       <div class="menu-dropdown">
-        <button id="menuHelpUpdate">Проверить обновления...</button>
-        <button id="menuAbout">О программе...</button>
+        <button id="menuHelpUpdate" data-i18n="menu.helpUpdate">Проверить обновления...</button>
+        <button id="menuAbout" data-i18n="menu.about">О программе...</button>
       </div>
+    </div>
+    <div class="window-controls">
+      <button class="win-ctrl-btn btn-min" id="btnWinMin" title="Свернуть">&#8212;</button>
+      <button class="win-ctrl-btn btn-max" id="btnWinMax" title="Развернуть / Восстановить">&#9633;</button>
+      <button class="win-ctrl-btn btn-close" id="btnWinClose" title="Закрыть">&times;</button>
     </div>
   </nav>
 
@@ -85,13 +91,13 @@
   <!-- Desktop Windows Toolbar -->
   <div class="win-toolbar">
     <div class="toolbar-group">
-      <button class="tool-btn" id="tbNew" title="Создать новую конфигурацию (Ctrl+N)">
+      <button class="tool-btn" id="tbNew" data-i18n-title="toolbar.newTitle" title="Создать новую конфигурацию (Ctrl+N)">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#222" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       </button>
-      <button class="tool-btn" id="tbOpen" title="Открыть файл конфигурации .txt (Ctrl+O)">
+      <button class="tool-btn" id="tbOpen" data-i18n-title="toolbar.openTitle" title="Открыть файл конфигурации .txt (Ctrl+O)">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       </button>
-      <button class="tool-btn" id="tbSave" title="Сохранить в Equalizer FD CRAFT (Ctrl+S)">
+      <button class="tool-btn" id="tbSave" data-i18n-title="toolbar.saveTitle" title="Сохранить в Equalizer FD CRAFT (Ctrl+S)">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
       </button>
     </div>
@@ -99,10 +105,10 @@
     <div class="toolbar-sep"></div>
 
     <div class="toolbar-group">
-      <button class="tool-btn" id="tbUndo" title="Отменить последнее действие (Ctrl+Z)">
+      <button class="tool-btn" id="tbUndo" data-i18n-title="toolbar.undoTitle" title="Отменить последнее действие (Ctrl+Z)">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#222" stroke-width="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
       </button>
-      <button class="tool-btn" id="tbRedo" title="Повторить отмененное действие (Ctrl+Y)">
+      <button class="tool-btn" id="tbRedo" data-i18n-title="toolbar.redoTitle" title="Повторить отмененное действие (Ctrl+Y)">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#222" stroke-width="2"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg>
       </button>
     </div>
@@ -110,17 +116,17 @@
     <div class="toolbar-sep"></div>
 
     <!-- Instant Mode Checkbox -->
-    <label class="instant-mode-label" title="Мгновенно применять и сохранять изменения в аудиодрайвер в реальном времени">
+    <label class="instant-mode-label" data-i18n-title="toolbar.instantModeTitle" title="Мгновенно применять и сохранять изменения в аудиодрайвер в реальном времени">
       <input type="checkbox" id="instantModeCheck" checked>
-      <span id="lblInstantMode">Мгновенное применение</span>
+      <span id="lblInstantMode" data-i18n="toolbar.instantMode">Мгновенное применение</span>
     </label>
 
     <div class="toolbar-sep"></div>
 
     <!-- Virtual Cable Real-Time Bridge (Direct WASAPI) -->
-    <div id="streamBridgeBox" class="stream-bridge-chip" title="Прямой звуковой поток из микрофона в VB-Audio Virtual Cable с минимальной задержкой (~2 мс)">
+    <div id="streamBridgeBox" class="stream-bridge-chip" data-i18n-title="toolbar.streamTitleTooltip" title="Прямой звуковой поток из микрофона в VB-Audio Virtual Cable с минимальной задержкой (~2 мс)">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0369a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-      <span id="lblStreamTitle" style="font-weight: 600; color: #0369a1; font-size: 11px;">WASAPI аудиомост:</span>
+      <span id="lblStreamTitle" data-i18n="toolbar.streamTitle" style="font-weight: 600; color: #0369a1; font-size: 11px;">WASAPI аудиомост:</span>
       <button id="btnToggleStream" class="stream-toggle-btn">
         [В ЭФИРЕ]
       </button>
@@ -130,28 +136,28 @@
 
     <!-- Target Device Selector -->
     <div class="target-selector-group">
-      <span class="sel-label" id="lblDeviceSelector">Устройство:</span>
-      <select id="deviceSelector" class="win-select" title="Целевое аудиоустройство (Device)">
-        <option value="all" selected>Все устройства (All Endpoints - Global)</option>
+      <span class="sel-label" id="lblDeviceSelector" data-i18n="toolbar.deviceLabel">Устройство:</span>
+      <select id="deviceSelector" class="win-select" data-i18n-title="toolbar.deviceTitle" title="Целевое аудиоустройство (Device)">
+        <option value="all" data-i18n="toolbar.deviceAll" selected>Все устройства (All Endpoints - Global)</option>
       </select>
     </div>
 
     <!-- Channel Selector -->
     <div class="target-selector-group">
-      <span class="sel-label" id="lblChannelSelector">Канал:</span>
-      <select id="channelSelector" class="win-select" style="width: 90px;" title="Целевые каналы звука">
-        <option value="all" selected>all (все)</option>
-        <option value="L, R">L, R (стерео)</option>
-        <option value="L">L (левый)</option>
-        <option value="R">R (правый)</option>
-        <option value="C">C (центр)</option>
-        <option value="SUB">SUB (саб)</option>
+      <span class="sel-label" id="lblChannelSelector" data-i18n="toolbar.channelLabel">Канал:</span>
+      <select id="channelSelector" class="win-select" style="width: 90px;" data-i18n-title="toolbar.channelTitle" title="Целевые каналы звука">
+        <option value="all" data-i18n="toolbar.channelAll" selected>all (все)</option>
+        <option value="L, R" data-i18n="toolbar.channelStereo">L, R (стерео)</option>
+        <option value="L" data-i18n="toolbar.channelLeft">L (левый)</option>
+        <option value="R" data-i18n="toolbar.channelRight">R (правый)</option>
+        <option value="C" data-i18n="toolbar.channelCenter">C (центр)</option>
+        <option value="SUB" data-i18n="toolbar.channelSub">SUB (саб)</option>
       </select>
     </div>
 
     <!-- Peak Indicator -->
     <div class="toolbar-right">
-      <div id="clipStatusBox" class="status-indicator-clean ok" title="Индикатор перегрузки и пикового уровня громкости">
+      <div id="clipStatusBox" class="status-indicator-clean ok" data-i18n-title="toolbar.clipStatusTooltip" title="Индикатор перегрузки и пикового уровня громкости">
         <span class="status-dot"></span>
         <span id="clipStatusText">Нет клиппинга (Пик: 0.0 dB)</span>
       </div>
@@ -175,75 +181,75 @@
       <!-- Add Filter Button (Equalizer FD CRAFT Green Plus Button) -->
       <div class="add-block-control">
         <div class="add-btn-dropdown-wrapper">
-          <button id="addBlockBtn" class="win-add-button" title="Добавить фильтр или управляющий блок">
+          <button id="addBlockBtn" class="win-add-button" data-i18n-title="add.buttonTitle" title="Добавить фильтр или управляющий блок">
             <span class="plus-icon">+</span>
           </button>
           <div id="addMenuDropdown" class="add-menu-popup hidden">
             <div class="menu-category" data-cat="control">
-              <span>Управление</span>
+              <span data-i18n="add.catControl">Управление</span>
               <div class="sub-menu">
-                <button data-action="add-include">Include (Подключение внешнего файла)</button>
-                <button data-action="add-device">Device (Выбор устройства)</button>
-                <button data-action="add-channel">Channel (Выбор каналов)</button>
+                <button data-action="add-include" data-i18n="add.include">Include (Подключение внешнего файла)</button>
+                <button data-action="add-device" data-i18n="add.device">Device (Выбор устройства)</button>
+                <button data-action="add-channel" data-i18n="add.channel">Channel (Выбор каналов)</button>
               </div>
             </div>
             <div class="menu-category" data-cat="basic">
-              <span>Базовые фильтры</span>
+              <span data-i18n="add.catBasic">Базовые фильтры</span>
               <div class="sub-menu">
-                <button data-action="add-preamp">Preamp (Предусиление громкости)</button>
-                <button data-action="add-copy">Copy (Копирование между каналами)</button>
+                <button data-action="add-preamp" data-i18n="add.preamp">Preamp (Предусиление громкости)</button>
+                <button data-action="add-copy" data-i18n="add.copy">Copy (Копирование между каналами)</button>
               </div>
             </div>
             <div class="menu-category" data-cat="parametric">
-              <span>Параметрические фильтры (Biquad EQ)</span>
+              <span data-i18n="add.catParametric">Параметрические фильтры (Biquad EQ)</span>
               <div class="sub-menu">
-                <button data-action="add-peaking" title="Параметрический (Колокол): точечная регулировка частоты речи (бубнеж 350-500 Гц, разборчивость 2-3.5 кГц)">Параметрический (Колокол / Peaking)</button>
-                <button data-action="add-lowshelf" title="НЧ полка: подъем или срез всех низких частот (плотность и бархатистость голоса)">НЧ полка (Low-shelf)</button>
-                <button data-action="add-highshelf" title="ВЧ полка: подъем высоких частот (воздух, яркость и четкость согласных)">ВЧ полка (High-shelf)</button>
-                <button data-action="add-lowpass" title="Срез ВЧ: срезает высокочастотный шум, писк дросселей и шипение выше частоты (12-16 кГц)">Срез ВЧ (Low-pass / ФНЧ)</button>
-                <button data-action="add-highpass" title="Срез НЧ: полностью срезает инфразвук, удары по столу, гул стойки и дыхание (70-85 Гц)">Срез НЧ (High-pass / ФВЧ)</button>
-                <button data-action="add-notch" title="Вырез помехи: сверхточный вырез узкой полосы (свист кулера, гул сети 50 Гц)">Вырез помехи/гула (Notch)</button>
+                <button data-action="add-peaking" data-i18n="add.peaking" data-i18n-title="add.peakingTitle" title="Параметрический (Колокол): точечная регулировка частоты речи (бубнеж 350-500 Гц, разборчивость 2-3.5 кГц)">Параметрический (Колокол / Peaking)</button>
+                <button data-action="add-lowshelf" data-i18n="add.lowshelf" data-i18n-title="add.lowshelfTitle" title="НЧ полка: подъем или срез всех низких частот (плотность и бархатистость голоса)">НЧ полка (Low-shelf)</button>
+                <button data-action="add-highshelf" data-i18n="add.highshelf" data-i18n-title="add.highshelfTitle" title="ВЧ полка: подъем высоких частот (воздух, яркость и четкость согласных)">ВЧ полка (High-shelf)</button>
+                <button data-action="add-lowpass" data-i18n="add.lowpass" data-i18n-title="add.lowpassTitle" title="Срез ВЧ: срезает высокочастотный шум, писк дросселей и шипение выше частоты (12-16 кГц)">Срез ВЧ (Low-pass / ФНЧ)</button>
+                <button data-action="add-highpass" data-i18n="add.highpass" data-i18n-title="add.highpassTitle" title="Срез НЧ: полностью срезает инфразвук, удары по столу, гул стойки и дыхание (70-85 Гц)">Срез НЧ (High-pass / ФВЧ)</button>
+                <button data-action="add-notch" data-i18n="add.notch" data-i18n-title="add.notchTitle" title="Вырез помехи: сверхточный вырез узкой полосы (свист кулера, гул сети 50 Гц)">Вырез помехи/гула (Notch)</button>
               </div>
             </div>
             <div class="menu-category" data-cat="graphiceq">
-              <span>Графические эквалайзеры</span>
+              <span data-i18n="add.catGraphic">Графические эквалайзеры</span>
               <div class="sub-menu">
-                <button data-action="add-geq15">Графический эквалайзер (15 полос ISO)</button>
-                <button data-action="add-geq31">Графический эквалайзер (31 полоса ISO)</button>
+                <button data-action="add-geq15" data-i18n="add.geq15">Графический эквалайзер (15 полос ISO)</button>
+                <button data-action="add-geq31" data-i18n="add.geq31">Графический эквалайзер (31 полоса ISO)</button>
               </div>
             </div>
             <div class="menu-category" data-cat="vst">
-              <span>Плагины VST (APO-PLUGINS)</span>
+              <span data-i18n="add.catVst">Плагины VST (APO-PLUGINS)</span>
               <div class="sub-menu">
-                <button data-action="open-vst-catalog" style="font-weight: 700; color: #166534;" title="Открыть полный иллюстрированный каталог всех 98 VST плагинов">Каталог всех 98 VST плагинов...</button>
-                <button data-action="add-vst-reagate" title="ReaGate: профессиональный шумоподавитель, отсекает клавиатуру, дыхание и шум комнаты">ReaGate (Шумоподавитель / Gate)</button>
-                <button data-action="add-vst-reacomp" title="ReaComp: компрессор для плотности и ровной громкости голоса без перегрузок">ReaComp (Компрессор вокала)</button>
-                <button data-action="add-vst-reafir" title="ReaFIR: адаптивный FFT вычитатель шума без артефактов и металлического призвука">ReaFIR (Спектральное шумоподавление)</button>
-                <button data-action="add-vst-readelay" title="ReaDelay: стерео-дилэй с регулируемой задержкой, фильтрацией и хвостом">ReaDelay (Стерео-дилэй / Эхо)</button>
-                <button data-action="add-vst-reaxcomp" title="ReaXcomp: 4-полосный кроссовер-компрессор для радио-звучания">ReaXcomp (Многополосный компрессор)</button>
-                <button data-action="add-vst-basiq" title="basiQ: аналоговый Baxandall EQ для теплого баса и прозрачных высоких">basiQ (Kuassa 3-полосный EQ)</button>
-                <button data-action="add-vst-custom" title="Подключить любой сторонний .dll VST плагин">Сторонний VST плагин (.dll)...</button>
+                <button data-action="open-vst-catalog" style="font-weight: 700; color: #166534;" data-i18n="add.vstCatalog" data-i18n-title="add.vstCatalogTitle" title="Открыть полный иллюстрированный каталог всех 98 VST плагинов">Каталог всех 98 VST плагинов...</button>
+                <button data-action="add-vst-reagate" data-i18n="add.vstReagate" data-i18n-title="add.vstReagateTitle" title="ReaGate: профессиональный шумоподавитель, отсекает клавиатуру, дыхание и шум комнаты">ReaGate (Шумоподавитель / Gate)</button>
+                <button data-action="add-vst-reacomp" data-i18n="add.vstReacomp" data-i18n-title="add.vstReacompTitle" title="ReaComp: компрессор для плотности и ровной громкости голоса без перегрузок">ReaComp (Компрессор вокала)</button>
+                <button data-action="add-vst-reafir" data-i18n="add.vstReafir" data-i18n-title="add.vstReafirTitle" title="ReaFIR: адаптивный FFT вычитатель шума без артефактов и металлического призвука">ReaFIR (Спектральное шумоподавление)</button>
+                <button data-action="add-vst-readelay" data-i18n="add.vstReadelay" data-i18n-title="add.vstReadelayTitle" title="ReaDelay: стерео-дилэй с регулируемой задержкой, фильтрацией и хвостом">ReaDelay (Стерео-дилэй / Эхо)</button>
+                <button data-action="add-vst-reaxcomp" data-i18n="add.vstReaxcomp" data-i18n-title="add.vstReaxcompTitle" title="ReaXcomp: 4-полосный кроссовер-компрессор для радио-звучания">ReaXcomp (Многополосный компрессор)</button>
+                <button data-action="add-vst-basiq" data-i18n="add.vstBasiq" data-i18n-title="add.vstBasiqTitle" title="basiQ: аналоговый Baxandall EQ для теплого баса и прозрачных высоких">basiQ (Kuassa 3-полосный EQ)</button>
+                <button data-action="add-vst-custom" data-i18n="add.vstCustom" data-i18n-title="add.vstCustomTitle" title="Подключить любой сторонний .dll VST плагин">Сторонний VST плагин (.dll)...</button>
               </div>
             </div>
             <div class="menu-category" data-cat="rc505">
-              <span>Эффекты Boss RC-505 Mk2</span>
+              <span data-i18n="add.catRc505">Эффекты Boss RC-505 Mk2</span>
               <div class="sub-menu">
-                <button data-action="add-rc505-slicer" title="Beat Repeat / Slicer: ритмический нарезчик бита и гейт с синхронизацией долей">Beat Repeat / Slicer (Нарезчик)</button>
-                <button data-action="add-rc505-vinyl" title="Vinyl Flick / Tape Stop: остановка виниловой пластинки с падением питча">Vinyl Flick (Остановка пластинки)</button>
-                <button data-action="add-rc505-vocoder" title="Vocoder & Robot Pitch: робот-голос и формантный шифтер (Male/Female)">Vocoder / Robot Pitch (Вокодер)</button>
-                <button data-action="add-rc505-ringmod" title="Ring Modulator: колокольно-металлический тембр и sci-fi модуляция">Ring Modulator (Кольцевой модулятор)</button>
-                <button data-action="add-rc505-isolator" title="Isolator / DJ Filter: фильтр среза частот с высоким резонансом">Isolator / DJ Filter (DJ срез)</button>
-                <button data-action="add-rc505-lofi" title="Lo-Fi Radio & Bitcrush: эффект рации, мегафона и ретро-биткрашера">Lo-Fi Radio (Рация / Bitcrush)</button>
-                <button data-action="add-rc505-chorus" title="Chorus / Flanger: объемная модуляция и расширение стереопанорамы">Chorus & Flanger (Пространственный хорус)</button>
-                <button data-action="add-rc505-distortion" title="Distortion & Drive: ламповый перегруз и гармоническая сатурация">Distortion & Overdrive (Перегруз)</button>
-                <button data-action="add-rc505-scatter" title="Granular Scatter: гранулярный рассеиватель и глитч">Granular Scatter (Гранулярный глитч)</button>
-                <button data-action="add-rc505-reverb" title="Space Reverb: студийная реверберация луп-станции BOSS">Space Reverb (Студийный ревербератор)</button>
+                <button data-action="add-rc505-slicer" data-i18n="add.rc505Slicer">Beat Repeat / Slicer (Нарезчик)</button>
+                <button data-action="add-rc505-vinyl" data-i18n="add.rc505Vinyl">Vinyl Flick (Остановка пластинки)</button>
+                <button data-action="add-rc505-vocoder" data-i18n="add.rc505Vocoder">Vocoder / Robot Pitch (Вокодер)</button>
+                <button data-action="add-rc505-ringmod" data-i18n="add.rc505Ringmod">Ring Modulator (Кольцевой модулятор)</button>
+                <button data-action="add-rc505-isolator" data-i18n="add.rc505Isolator">Isolator / DJ Filter (DJ срез)</button>
+                <button data-action="add-rc505-lofi" data-i18n="add.rc505Lofi">Lo-Fi Radio (Рация / Bitcrush)</button>
+                <button data-action="add-rc505-chorus" data-i18n="add.rc505Chorus">Chorus & Flanger (Пространственный хорус)</button>
+                <button data-action="add-rc505-distortion" data-i18n="add.rc505Distortion">Distortion & Overdrive (Перегруз)</button>
+                <button data-action="add-rc505-scatter" data-i18n="add.rc505Scatter">Granular Scatter (Гранулярный глитч)</button>
+                <button data-action="add-rc505-reverb" data-i18n="add.rc505Reverb">Space Reverb (Студийный ревербератор)</button>
               </div>
             </div>
             <div class="menu-category" data-cat="advanced">
-              <span>Дополнительно</span>
+              <span data-i18n="add.catAdvanced">Дополнительно</span>
               <div class="sub-menu">
-                <button data-action="add-delay">Delay (Задержка канала в мс)</button>
+                <button data-action="add-delay" data-i18n="add.delay">Delay (Задержка канала в мс)</button>
               </div>
             </div>
           </div>
@@ -251,12 +257,13 @@
       </div>
     </div>
 
-    <!-- Docked Analysis Panel (Frequency Response Graph) -->
+    <!-- Docked / Floating Analysis Panel (Frequency Response Graph) -->
     <div class="analysis-panel" id="analysisPanel">
-      <div class="analysis-panel-header">
+      <div class="analysis-panel-header" id="analysisPanelHeader">
         <div class="panel-header-title">
-          <button class="toggle-btn" id="togglePanelBtn" title="Свернуть/Развернуть панель">&#9660;</button>
-          <span id="lblAnalysisPanelTitle">Панель анализа АЧХ</span>
+          <button class="toggle-btn" id="togglePanelBtn" data-i18n-title="analysis.toggleTooltip" title="Свернуть/Развернуть панель">&#9660;</button>
+          <span id="lblAnalysisPanelTitle" data-i18n="analysis.title">Панель анализа АЧХ</span>
+          <button class="float-panel-btn" id="floatPanelBtn" data-i18n="analysis.floatBtnUndock" data-i18n-title="analysis.floatTooltip" title="Открепить / Прикрепить панель">Открепить</button>
         </div>
         <div class="analysis-meta">
           <span id="analysisTimeText">Расчет: 0.2 мс</span>
@@ -269,6 +276,7 @@
         <canvas id="analysisCanvas" width="1280" height="230"></canvas>
         <div id="curveTooltip" class="curve-tooltip hidden"></div>
       </div>
+      <div class="panel-resize-handle" id="panelResizeHandle" title="Потяните для изменения размера"></div>
     </div>
 
   </div>
@@ -277,41 +285,41 @@
   <div id="newConfigModal" class="win-modal-overlay hidden">
     <div class="win-dialog" style="width: 530px;">
       <div class="dialog-header">
-        <span>Создание новой конфигурации</span>
+        <span data-i18n="dialogs.newConfig.title">Создание новой конфигурации</span>
         <button class="dialog-close" id="closeNewConfigBtn">&times;</button>
       </div>
       <div class="dialog-body" style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
         <div>
-          <label style="display: block; font-weight: 600; margin-bottom: 5px;">Имя файла конфигурации / вкладки:</label>
+          <label style="display: block; font-weight: 600; margin-bottom: 5px;" data-i18n="dialogs.newConfig.filenameLabel">Имя файла конфигурации / вкладки:</label>
           <input type="text" id="newConfigFilename" class="win-select" style="width: 100%; height: 28px; padding: 4px 8px; font-weight: 600;" value="custom_preset.txt">
-          <span style="font-size: 11px; color: #64748b; margin-top: 3px; display: block;">Будет добавлена новая отдельная вкладка без перезаписи текущей.</span>
+          <span style="font-size: 11px; color: #64748b; margin-top: 3px; display: block;" data-i18n="dialogs.newConfig.filenameDesc">Будет добавлена новая отдельная вкладка без перезаписи текущей.</span>
         </div>
 
         <div>
-          <label style="display: block; font-weight: 600; margin-bottom: 5px;">Начальный шаблон / Готовый пресет:</label>
+          <label style="display: block; font-weight: 600; margin-bottom: 5px;" data-i18n="dialogs.newConfig.presetLabel">Начальный шаблон / Готовый пресет:</label>
           <select id="newConfigPreset" class="win-select" style="width: 100%; height: 28px; padding: 2px 6px;">
-            <option value="empty">Чистый эквалайзер (Только Preamp 0 dB)</option>
-            <option value="voice_discord" selected>Стрим и Discord (High-Pass 80Hz + Peaking 1.2kHz + High-Shelf)</option>
-            <option value="podcast_warm">Теплый голос / Подкаст (Warmth 120Hz + Peaking 2.8kHz)</option>
-            <option value="noise_cut">Очистка от комнатного гула (Срез 75Hz + Notch 50Hz)</option>
-            <option value="geq15">Графический эквалайзер (15 полос ISO)</option>
+            <option value="empty" data-i18n="dialogs.newConfig.presetEmpty">Чистый эквалайзер (Только Preamp 0 dB)</option>
+            <option value="voice_discord" data-i18n="dialogs.newConfig.presetVoice" selected>Стрим и Discord (High-Pass 80Hz + Peaking 1.2kHz + High-Shelf)</option>
+            <option value="podcast_warm" data-i18n="dialogs.newConfig.presetPodcast">Теплый голос / Подкаст (Warmth 120Hz + Peaking 2.8kHz)</option>
+            <option value="noise_cut" data-i18n="dialogs.newConfig.presetNoiseCut">Очистка от комнатного гула (Срез 75Hz + Notch 50Hz)</option>
+            <option value="geq15" data-i18n="dialogs.newConfig.presetGeq15">Графический эквалайзер (15 полос ISO)</option>
           </select>
         </div>
 
         <div>
-          <label style="display: block; font-weight: 600; margin-bottom: 5px;">Целевое аудиоустройство:</label>
+          <label style="display: block; font-weight: 600; margin-bottom: 5px;" data-i18n="dialogs.newConfig.deviceLabel">Целевое аудиоустройство:</label>
           <select id="newConfigDevice" class="win-select" style="width: 100%; height: 28px; padding: 2px 6px;">
-            <option value="all">Все устройства (All Endpoints - Global)</option>
+            <option value="all" data-i18n="dialogs.newConfig.deviceAll">Все устройства (All Endpoints - Global)</option>
           </select>
         </div>
 
-        <div style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px 12px; font-size: 11px; color: #334155; line-height: 1.4;">
+        <div style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px 12px; font-size: 11px; color: #334155; line-height: 1.4;" data-i18n="dialogs.newConfig.info">
           Информация: новая конфигурация откроется в отдельной вкладке. Вы сможете переключаться между ними в любой момент.
         </div>
       </div>
       <div class="dialog-footer">
-        <button class="win-btn primary" id="btnConfirmNewConfig">Создать вкладку</button>
-        <button class="win-btn" id="btnCancelNewConfig">Отмена</button>
+        <button class="win-btn primary" id="btnConfirmNewConfig" data-i18n="dialogs.newConfig.btnCreate">Создать вкладку</button>
+        <button class="win-btn" id="btnCancelNewConfig" data-i18n="dialogs.newConfig.btnCancel">Отмена</button>
       </div>
     </div>
   </div>
@@ -320,19 +328,19 @@
   <div id="saveAsModal" class="win-modal-overlay hidden">
     <div class="win-dialog" style="width: 480px;">
       <div class="dialog-header">
-        <span>Сохранить конфигурацию как...</span>
+        <span data-i18n="dialogs.saveAs.title">Сохранить конфигурацию как...</span>
         <button class="dialog-close" id="closeSaveAsBtn">&times;</button>
       </div>
       <div class="dialog-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
-        <label style="font-weight: 600;">Имя файла для экспорта:</label>
+        <label style="font-weight: 600;" data-i18n="dialogs.saveAs.filenameLabel">Имя файла для экспорта:</label>
         <input type="text" id="saveAsFilename" class="win-select" style="width: 100%; height: 28px; padding: 4px 8px;" value="config_my_voice.txt">
-        <div style="font-size: 11px; color: #64748b;">
+        <div style="font-size: 11px; color: #64748b;" data-i18n="dialogs.saveAs.desc">
           Файл конфигурации будет сохранен на вашем компьютере с текущими настройками эквалайзера.
         </div>
       </div>
       <div class="dialog-footer">
-        <button class="win-btn primary" id="btnConfirmSaveAs">Экспорт и скачивание</button>
-        <button class="win-btn" id="btnCancelSaveAs">Отмена</button>
+        <button class="win-btn primary" id="btnConfirmSaveAs" data-i18n="dialogs.saveAs.btnExport">Экспорт и скачивание</button>
+        <button class="win-btn" id="btnCancelSaveAs" data-i18n="dialogs.saveAs.btnCancel">Отмена</button>
       </div>
     </div>
   </div>
@@ -341,15 +349,15 @@
   <div id="rawConfigModal" class="win-modal-overlay hidden">
     <div class="win-dialog" style="width: 640px;">
       <div class="dialog-header">
-        <span>Исходный код config.txt - Редактор</span>
+        <span data-i18n="dialogs.rawConfig.title">Исходный код config.txt - Редактор</span>
         <button class="dialog-close" id="closeRawModalBtn">&times;</button>
       </div>
       <div class="dialog-body">
         <textarea id="rawConfigText" class="dialog-textarea" spellcheck="false"></textarea>
       </div>
       <div class="dialog-footer">
-        <button class="win-btn primary" id="applyRawConfigBtn">Применить изменения кода</button>
-        <button class="win-btn" id="cancelRawModalBtn">Отмена</button>
+        <button class="win-btn primary" id="applyRawConfigBtn" data-i18n="dialogs.rawConfig.btnApply">Применить изменения кода</button>
+        <button class="win-btn" id="cancelRawModalBtn" data-i18n="dialogs.rawConfig.btnCancel">Отмена</button>
       </div>
     </div>
   </div>
@@ -358,24 +366,24 @@
   <div id="configuratorModal" class="win-modal-overlay hidden">
     <div class="win-dialog" style="width: 780px;">
       <div class="dialog-header">
-        <span>Конфигуратор аудиоустройств Equalizer FD CRAFT (Управление перехватом)</span>
+        <span data-i18n="dialogs.configurator.title">Конфигуратор аудиоустройств Equalizer FD CRAFT (Управление перехватом)</span>
         <button class="dialog-close" id="closeConfiguratorBtn">&times;</button>
       </div>
       <div class="dialog-body">
-        <p class="configurator-desc">Управление системным перехватом звука для микрофонов и динамиков:</p>
+        <p class="configurator-desc" data-i18n="dialogs.configurator.desc">Управление системным перехватом звука для микрофонов и динамиков:</p>
         <div class="configurator-tabs">
-          <button class="cfg-tab" data-tab="render">Устройства воспроизведения (Динамики/Наушники)</button>
-          <button class="cfg-tab active" data-tab="capture">Устройства записи (Микрофоны)</button>
+          <button class="cfg-tab" data-tab="render" data-i18n="dialogs.configurator.tabRender">Устройства воспроизведения (Динамики/Наушники)</button>
+          <button class="cfg-tab active" data-tab="capture" data-i18n="dialogs.configurator.tabCapture">Устройства записи (Микрофоны)</button>
         </div>
         <div class="cfg-table-wrap">
           <table class="cfg-table">
             <thead>
               <tr>
                 <th width="30"></th>
-                <th>Устройство</th>
-                <th>Разъем / Тип</th>
-                <th>Статус APO</th>
-                <th width="120">Резервная копия</th>
+                <th data-i18n="dialogs.configurator.thDevice">Устройство</th>
+                <th data-i18n="dialogs.configurator.thConnector">Разъем / Тип</th>
+                <th data-i18n="dialogs.configurator.thStatus">Статус APO</th>
+                <th width="120" data-i18n="dialogs.configurator.thBackup">Резервная копия</th>
               </tr>
             </thead>
             <tbody id="cfgTableBody"></tbody>
@@ -384,20 +392,20 @@
         <div class="cfg-troubleshoot">
           <label class="instant-mode-label">
             <input type="checkbox" id="cfgTroubleCheck">
-            <strong>Параметры устранения неполадок (Режимы перехвата APO)</strong>
+            <strong data-i18n="dialogs.configurator.troubleCheck">Параметры устранения неполадок (Режимы перехвата APO)</strong>
           </label>
           <div id="cfgTroubleBox" class="trouble-subbox hidden">
-            <label><input type="radio" name="apoMode" value="ALL" checked> <strong>Гибридный режим ALL (LFX/GFX + SFX/MFX/EFX)</strong> — Полный перехват Discord, Telegram и всех приложений</label><br>
-            <label><input type="radio" name="apoMode" value="SFX_MFX"> <strong>Установка как SFX/MFX</strong> — Режим голосовой связи Windows 10/11</label><br>
-            <label><input type="radio" name="apoMode" value="LFX_GFX"> <strong>Установка как LFX/GFX</strong> — Для классических USB-аудиоустройств</label><br>
-            <label><input type="checkbox" id="cfgUseOriginal" checked> Использовать оригинальный APO (Сохранять системные аудиоэффекты)</label>
+            <label><input type="radio" name="apoMode" value="ALL" checked> <strong data-i18n="dialogs.configurator.modeAll">Гибридный режим ALL (LFX/GFX + SFX/MFX/EFX) — Полный перехват Discord, Telegram и всех приложений</strong></label><br>
+            <label><input type="radio" name="apoMode" value="SFX_MFX"> <strong data-i18n="dialogs.configurator.modeSfx">Установка как SFX/MFX — Режим голосовой связи Windows 10/11</strong></label><br>
+            <label><input type="radio" name="apoMode" value="LFX_GFX"> <strong data-i18n="dialogs.configurator.modeLfx">Установка как LFX/GFX — Для классических USB-аудиоустройств</strong></label><br>
+            <label><input type="checkbox" id="cfgUseOriginal" checked> <span data-i18n="dialogs.configurator.useOriginal">Использовать оригинальный APO (Сохранять системные аудиоэффекты)</span></label>
           </div>
         </div>
       </div>
       <div class="dialog-footer">
-        <span class="dialog-note" style="margin-right:auto; color:#107c41; font-weight:600;">[OK] Служба Windows Audio активна</span>
-        <button class="win-btn primary" id="cfgSaveBtn">Применить перехват</button>
-        <button class="win-btn" id="cfgCancelBtn">Закрыть</button>
+        <span class="dialog-note" style="margin-right:auto; color:#107c41; font-weight:600;" data-i18n="dialogs.configurator.audioServiceOk">[OK] Служба Windows Audio активна</span>
+        <button class="win-btn primary" id="cfgSaveBtn" data-i18n="dialogs.configurator.btnSave">Применить перехват</button>
+        <button class="win-btn" id="cfgCancelBtn" data-i18n="dialogs.configurator.btnCancel">Закрыть</button>
       </div>
     </div>
   </div>
@@ -406,48 +414,48 @@
   <div id="wizardModal" class="win-modal-overlay hidden">
     <div class="win-dialog" style="width: 580px;">
       <div class="dialog-header">
-        <span>Мастер быстрой настройки микрофона</span>
+        <span data-i18n="wizard.title">Мастер быстрой настройки микрофона</span>
         <button class="dialog-close" id="closeWizardModalBtn">&times;</button>
       </div>
       <div class="dialog-body" style="padding: 18px; font-size: 12px; line-height: 1.5;">
-        <p style="margin-bottom: 14px; font-size: 13px; color: #1e293b;">
-          Добро пожаловать в <strong>Equalizer FD CRAFT</strong>! Давайте настроим ваш рабочий микрофон в 2 простых шага.
+        <p style="margin-bottom: 14px; font-size: 13px; color: #1e293b;" data-i18n="wizard.welcome">
+          Добро пожаловать в Equalizer FD CRAFT! Давайте настроим ваш рабочий микрофон в 2 простых шага.
         </p>
 
         <!-- Step 1: Choose Microphone -->
         <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; margin-bottom: 14px;">
-          <label style="display: block; font-weight: 600; margin-bottom: 6px; color: #0f172a;">
+          <label style="display: block; font-weight: 600; margin-bottom: 6px; color: #0f172a;" data-i18n="wizard.micDesc">
             Шаг 1 из 2: Выберите ваш рабочий микрофон (Вход):
           </label>
           <select id="wizardMicSelect" class="win-select" style="width: 100%; height: 30px; font-size: 12px;">
             <option value="">Загрузка аудиоустройств...</option>
           </select>
-          <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+          <div style="font-size: 11px; color: #64748b; margin-top: 4px;" data-i18n="wizard.micSub">
             Выберите микрофон, с которого идет ваш голос (любой USB-микрофон, Realtek, гарнитура).
           </div>
         </div>
 
         <!-- Step 2: Choose Output / Cable -->
         <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 12px; margin-bottom: 14px;">
-          <label style="display: block; font-weight: 600; color: #166534; margin-bottom: 6px;">
+          <label style="display: block; font-weight: 600; color: #166534; margin-bottom: 6px;" data-i18n="wizard.renderDesc">
             Шаг 2 из 2: Выберите устройство передачи звука (Вывод):
           </label>
           <select id="wizardRenderSelect" class="win-select" style="width: 100%; height: 30px; font-size: 12px;">
             <option value="">Загрузка устройств вывода...</option>
           </select>
-          <div style="font-size: 11px; color: #475569; margin-top: 6px;">
-            Рекомендуется выбрать <strong>CABLE Input (VB-Audio Virtual Cable)</strong>. Звук с микрофона будет моментально обрабатываться эквалайзером и передаваться в Discord/OBS без перезагрузки ПК и без изменения системного реестра.
+          <div style="font-size: 11px; color: #475569; margin-top: 6px;" data-i18n="wizard.renderSub">
+            Рекомендуется выбрать CABLE Input (VB-Audio Virtual Cable). Звук с микрофона будет моментально обрабатываться эквалайзером и передаваться в Discord/OBS без перезагрузки ПК и без изменения системного реестра.
           </div>
           <div id="wizardVbCableStatusBox" style="margin-top: 8px;"></div>
         </div>
 
-        <div style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; font-size: 11px; color: #475569;">
+        <div style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; font-size: 11px; color: #475569;" data-i18n="wizard.hint">
           Подсказка: вы сможете сменить микрофон или вывод в любой момент в панели инструментов.
         </div>
       </div>
       <div class="dialog-footer" style="padding: 10px 16px;">
-        <button class="win-btn primary" id="wizardApplyBtn" style="font-weight: 600; padding: 5px 20px;">Подключить и начать работу</button>
-        <button class="win-btn" id="wizardSkipBtn">Пропустить</button>
+        <button class="win-btn primary" id="wizardApplyBtn" style="font-weight: 600; padding: 5px 20px;" data-i18n="wizard.btnApply">Подключить и начать работу</button>
+        <button class="win-btn" id="wizardSkipBtn" data-i18n="wizard.btnClose">Пропустить</button>
       </div>
     </div>
   </div>
@@ -456,28 +464,28 @@
   <div id="vstCatalogModal" class="win-modal-overlay hidden">
     <div class="win-dialog" style="width: 820px; max-width: 95vw; height: 560px; display: flex; flex-direction: column;">
       <div class="dialog-header">
-        <span>Каталог VST плагинов (98 встроенных DLL из APO-PLUGINS)</span>
+        <span data-i18n="vstModal.catalogTitle">Каталог VST плагинов (98 встроенных DLL из APO-PLUGINS)</span>
         <button class="dialog-close" id="closeVstCatalogBtn">&times;</button>
       </div>
       <div style="padding: 10px 14px; background: #f8fafc; border-bottom: 1px solid #cbd5e1; display: flex; gap: 10px; align-items: center;">
-        <input type="text" id="vstSearchInput" class="win-select" placeholder="Быстрый поиск по названию или назначению..." style="flex: 1; height: 28px; padding: 4px 8px; font-size: 12px;">
+        <input type="text" id="vstSearchInput" class="win-select" data-i18n-placeholder="vstModal.searchPlaceholder" placeholder="Быстрый поиск по названию или назначению..." style="flex: 1; height: 28px; padding: 4px 8px; font-size: 12px;">
         <select id="vstCategoryFilter" class="win-select" style="width: 220px; height: 28px; font-size: 11px;">
-          <option value="all">Все категории (98 плагинов)</option>
-          <option value="dynamics">Компрессоры и гейты (16)</option>
-          <option value="eq">Эквалайзеры и тон (14)</option>
-          <option value="space">Реверберация и дилей (18)</option>
-          <option value="mod">Хорус и модуляция (12)</option>
-          <option value="drive">Сатурация, гитары и драйв (15)</option>
-          <option value="stereo">Стерео и мастеринг (12)</option>
-          <option value="vocal">Вокал, питч и утилиты (11)</option>
+          <option value="all" data-i18n="vstModal.catAll">Все категории (98 плагинов)</option>
+          <option value="dynamics" data-i18n="vstModal.catDynamics">Компрессоры и гейты (16)</option>
+          <option value="eq" data-i18n="vstModal.catEq">Эквалайзеры и тон (14)</option>
+          <option value="space" data-i18n="vstModal.catReverb">Реверберация и дилей (18)</option>
+          <option value="mod" data-i18n="vstModal.catModulation">Хорус и модуляция (12)</option>
+          <option value="drive" data-i18n="vstModal.catCreative">Сатурация, гитары и драйв (15)</option>
+          <option value="stereo" data-i18n="vstModal.catStereo">Стерео и мастеринг (12)</option>
+          <option value="vocal" data-i18n="vstModal.catVocal">Вокал, питч и утилиты (11)</option>
         </select>
       </div>
       <div class="dialog-body" id="vstCatalogList" style="flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
         <!-- Filled dynamically by JavaScript -->
       </div>
       <div class="dialog-footer" style="padding: 8px 14px; justify-content: space-between;">
-        <span style="font-size: 11px; color: #64748b;">Все DLL файлы размещены локально в папке: vst_plugins</span>
-        <button class="win-btn" id="cancelVstCatalogBtn">Закрыть</button>
+        <span style="font-size: 11px; color: #64748b;" data-i18n="vstModal.localDllNotice">Все DLL файлы размещены локально в папке: vst_plugins</span>
+        <button class="win-btn" id="cancelVstCatalogBtn" data-i18n="vstModal.btnCancel">Закрыть</button>
       </div>
     </div>
   </div>
@@ -486,37 +494,37 @@
   <div id="customVstModal" class="win-modal-overlay hidden">
     <div class="win-dialog" style="width: 580px;">
       <div class="dialog-header">
-        <span id="lblCustomVstTitle">Добавление стороннего VST плагина (.dll)</span>
+        <span id="lblCustomVstTitle" data-i18n="vstModal.customTitle">Добавление стороннего VST плагина (.dll)</span>
         <button class="dialog-close" id="closeCustomVstBtn">&times;</button>
       </div>
       <div class="dialog-body" style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
         <div>
-          <label style="display: block; font-weight: 600; margin-bottom: 6px;" id="lblCustomVstPath">Укажите полный путь к 64-битному файлу плагина (.dll):</label>
+          <label style="display: block; font-weight: 600; margin-bottom: 6px;" id="lblCustomVstPath" data-i18n="vstModal.pathLabel">Укажите полный путь к 64-битному файлу плагина (.dll):</label>
           <div style="display: flex; gap: 8px;">
             <input type="text" id="customVstPathInput" class="win-select" style="flex: 1; height: 28px; padding: 4px 8px; font-weight: 500;" placeholder="C:\Program Files\VSTPlugins\MyPlugin.dll">
-            <button class="win-btn" id="btnBrowseCustomVst" style="padding: 0 12px; height: 28px;">Обзор...</button>
+            <button class="win-btn" id="btnBrowseCustomVst" style="padding: 0 12px; height: 28px;" data-i18n="vstModal.btnBrowse">Обзор...</button>
             <input type="file" id="customVstFileInput" accept=".dll" style="display: none;">
           </div>
         </div>
 
         <div>
-          <label style="display: block; font-weight: 600; margin-bottom: 5px;">Быстрый выбор стандартных каталогов:</label>
+          <label style="display: block; font-weight: 600; margin-bottom: 5px;" data-i18n="vstModal.quickFolder">Быстрый выбор стандартных каталогов:</label>
           <select id="quickVstFolderSelect" class="win-select" style="width: 100%; height: 28px; padding: 2px 6px;">
-            <option value="">-- Выберите стандартную папку VST --</option>
-            <option id="optBundledVst" value="D:\testik\vst_plugins\">Встроенная библиотека VST: D:\testik\vst_plugins\</option>
+            <option value="" data-i18n="vstModal.optSelectFolder">-- Выберите стандартную папку VST --</option>
+            <option id="optBundledVst" value="D:\testik\vst_plugins\" data-i18n="vstModal.optBundled">Встроенная библиотека VST: D:\testik\vst_plugins\</option>
             <option value="C:\Program Files\VSTPlugins\">C:\Program Files\VSTPlugins\</option>
             <option value="C:\Program Files\Common Files\VST2\">C:\Program Files\Common Files\VST2\</option>
             <option value="C:\Program Files\Steinberg\VstPlugins\">C:\Program Files\Steinberg\VstPlugins\</option>
           </select>
         </div>
 
-        <div style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px 12px; font-size: 11px; color: #334155; line-height: 1.45;">
+        <div style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px 12px; font-size: 11px; color: #334155; line-height: 1.45;" data-i18n="vstModal.archNotice">
           <strong>Требование разрядности:</strong> Движок Equalizer FD CRAFT работает в 64-битном режиме Windows. Убедитесь, что выбираемый VST-плагин имеет 64-битную архитектуру (x64 / 64-bit). 32-битные плагины не смогут загрузиться без отдельного моста (jBridge).
         </div>
       </div>
       <div class="dialog-footer">
-        <button class="win-btn primary" id="btnConfirmCustomVst">Добавить плагин</button>
-        <button class="win-btn" id="btnCancelCustomVst">Отмена</button>
+        <button class="win-btn primary" id="btnConfirmCustomVst" data-i18n="vstModal.btnAddPlugin">Добавить плагин</button>
+        <button class="win-btn" id="btnCancelCustomVst" data-i18n="vstModal.btnCancel">Отмена</button>
       </div>
     </div>
   </div>
@@ -525,22 +533,22 @@
   <div id="updateModal" class="win-modal-overlay hidden">
     <div class="win-dialog" style="width: 560px;">
       <div class="dialog-header">
-        <span id="lblUpdateTitle">Обновление Equalizer FD CRAFT</span>
+        <span id="lblUpdateTitle" data-i18n="update.dialogTitle">Обновление Equalizer FD CRAFT</span>
         <button class="dialog-close" id="closeUpdateBtn">&times;</button>
       </div>
       <div class="dialog-body" style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">
           <div>
-            <div style="font-weight: 600; font-size: 13px;" id="updateCurrentVerText">Текущая версия: v0.1.1-BETA</div>
-            <div style="font-size: 11px; color: #64748b;" id="updateStatusText">Готов к проверке релизов GitHub</div>
+            <div style="font-weight: 600; font-size: 13px;" id="updateCurrentVerText">Текущая версия: v0.1.2-BETA</div>
+            <div style="font-size: 11px; color: #64748b;" id="updateStatusText" data-i18n="update.readyToCheck">Готов к проверке релизов GitHub</div>
           </div>
-          <button class="win-btn" id="btnCheckNowUpdate" style="height: 28px; padding: 0 14px;">Проверить сейчас</button>
+          <button class="win-btn" id="btnCheckNowUpdate" style="height: 28px; padding: 0 14px;" data-i18n="update.btnCheckNow">Проверить сейчас</button>
         </div>
 
         <div id="updateResultBox" class="hidden" style="display: flex; flex-direction: column; gap: 8px;">
           <div id="updateBadgeStatus" style="padding: 8px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0;"></div>
           <div>
-            <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Список изменений (Release Notes):</label>
+            <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;" data-i18n="update.releaseNotes">Список изменений (Release Notes):</label>
             <div id="updateNotesText" style="max-height: 140px; overflow-y: auto; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px 10px; font-size: 11px; white-space: pre-wrap; font-family: monospace;"></div>
           </div>
         </div>
@@ -548,7 +556,7 @@
         <!-- Real-time Download Progress Bar -->
         <div id="updateProgressBox" class="hidden" style="display: flex; flex-direction: column; gap: 6px; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px;">
           <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
-            <span id="updateProgressLabel" style="font-weight: 600; color: #1e293b;">Скачивание обновления...</span>
+            <span id="updateProgressLabel" style="font-weight: 600; color: #1e293b;" data-i18n="update.progressLabel">Скачивание обновления...</span>
             <span id="updateProgressPercent" style="font-weight: 700; color: #2563eb; font-family: monospace;">0%</span>
           </div>
           <div style="width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; position: relative;">
@@ -560,13 +568,13 @@
           </div>
         </div>
 
-        <div style="font-size: 11px; color: #64748b; padding-top: 4px;">
-          Репозиторий проекта: <a href="https://github.com/dimalinau-lab/EqualizerFD-Craft" target="_blank" style="color: #2563eb; text-decoration: underline;">github.com/dimalinau-lab/EqualizerFD-Craft</a> (открытый доступ, проверка выполняется автоматически).
+        <div style="font-size: 11px; color: #64748b; padding-top: 4px;" data-i18n="update.repoNote">
+          Репозиторий проекта: github.com/dimalinau-lab/EqualizerFD-Craft (открытый доступ, проверка выполняется автоматически).
         </div>
       </div>
       <div class="dialog-footer">
-        <button class="win-btn primary hidden" id="btnInstallUpdate">Скачать и перезапустить</button>
-        <button class="win-btn" id="btnCloseUpdateModal">Закрыть</button>
+        <button class="win-btn primary hidden" id="btnInstallUpdate" data-i18n="update.btnDownload">Скачать и перезапустить</button>
+        <button class="win-btn" id="btnCloseUpdateModal" data-i18n="update.btnClose">Закрыть</button>
       </div>
     </div>
   </div>
@@ -575,7 +583,7 @@
   <div id="aboutModal" class="win-modal-overlay hidden">
     <div class="win-dialog" style="width: 480px;">
       <div class="dialog-header">
-        <span>О программе Equalizer FD CRAFT</span>
+        <span data-i18n="about.title">О программе Equalizer FD CRAFT</span>
         <button class="dialog-close" id="closeAboutBtn">&times;</button>
       </div>
       <div class="dialog-body" style="padding: 18px; line-height: 1.6; font-size: 12px;">
@@ -585,24 +593,24 @@
           </div>
           <div>
             <strong style="font-size: 14px; color: #1e293b;">Equalizer FD CRAFT</strong><br>
-            <span style="color: #64748b;">Версия 1.0.0 (x64) • Studio Audio Engine</span>
+            <span style="color: #64748b;">Версия 0.1.2-BETA (x64) • Studio Audio Engine</span>
           </div>
         </div>
-        <p>Профессиональный редактор конфигураций и высокопроизводительный движок цифровой обработки звука (DSP) для Windows.</p>
+        <p data-i18n="about.desc">Профессиональный редактор конфигураций и высокопроизводительный движок цифровой обработки звука (DSP) для Windows.</p>
         <ul style="margin: 8px 0 8px 20px; color: #475569;">
-          <li>Прямой WASAPI Real-Time аудиомост (микрофон - VB-Audio Virtual Cable)</li>
-          <li>Встроенный Roland BOSS RC-505 Mk2 DSP процессор (Granular Beat Scatter, Space Reverb, Slicer, Vinyl, Vocoder, Isolator)</li>
-          <li>Поддержка 98 VST плагинов из комплекта APO-PLUGINS и сторонних 64-битных VST DLL</li>
-          <li>Параметрические фильтры Biquad IIR и 15-полосный графический эквалайзер ISO</li>
-          <li>Система автообновлений через GitHub Releases с атомарной заменой исполняемого файла</li>
-          <li>Многовкладочный интерфейс пресетов, адаптивный оконный режим, работа без консоли</li>
+          <li data-i18n="about.feat1">Прямой WASAPI Real-Time аудиомост (микрофон - VB-Audio Virtual Cable)</li>
+          <li data-i18n="about.feat2">Встроенный Roland BOSS RC-505 Mk2 DSP процессор (Granular Beat Scatter, Space Reverb, Slicer, Vinyl, Vocoder, Isolator)</li>
+          <li data-i18n="about.feat3">Поддержка 98 VST плагинов из комплекта APO-PLUGINS и сторонних 64-битных VST DLL</li>
+          <li data-i18n="about.feat4">Параметрические фильтры Biquad IIR и 15-полосный графический эквалайзер ISO</li>
+          <li data-i18n="about.feat5">Система автообновлений через GitHub Releases с атомарной заменой исполняемого файла</li>
+          <li data-i18n="about.feat6">Многовкладочный интерфейс пресетов, адаптивный оконный режим, работа без консоли</li>
         </ul>
-        <div style="border-top: 1px solid #e2e8f0; margin-top: 12px; padding-top: 8px; color: #94a3b8; font-size: 11px;">
+        <div style="border-top: 1px solid #e2e8f0; margin-top: 12px; padding-top: 8px; color: #94a3b8; font-size: 11px;" data-i18n="about.repo">
           Equalizer FD CRAFT Engine. Репозиторий: github.com/dimalinau-lab/EqualizerFD-Craft
         </div>
       </div>
       <div class="dialog-footer">
-        <button class="win-btn primary" id="btnOkAbout">OK</button>
+        <button class="win-btn primary" id="btnOkAbout" data-i18n="about.btnOk">OK</button>
       </div>
     </div>
   </div>
@@ -611,29 +619,28 @@
   <div id="vbCableModal" class="win-modal-overlay hidden">
     <div class="win-dialog" style="width: 560px; max-width: 95vw;">
       <div class="dialog-header">
-        <span>Установка и настройка VB-Audio Virtual Cable</span>
+        <span data-i18n="vbcable.title">Установка и настройка VB-Audio Virtual Cable</span>
         <button class="dialog-close" id="closeVbCableModalBtn">&times;</button>
       </div>
       <div class="dialog-body" style="padding: 16px; font-size: 12px; line-height: 1.5; color: #1e293b;">
         <div style="background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 6px; padding: 10px; margin-bottom: 12px;">
-          <div style="font-weight: 600; color: #0369a1; margin-bottom: 4px;">Зачем нужен виртуальный кабель?</div>
-          Equalizer FD CRAFT обрабатывает ваш микрофон в реальном времени и отправляет звук в виртуальный кабель (<strong>CABLE Input</strong>).
-          В Discord, Telegram, OBS, CS2 и Skype вы выбираете устройство ввода <strong>CABLE Output</strong> — и собеседники слышат обработанный звук студийного качества.
+          <div style="font-weight: 600; color: #0369a1; margin-bottom: 4px;" data-i18n="vbcable.whyTitle">Зачем нужен виртуальный кабель?</div>
+          <span data-i18n="vbcable.whyText">Equalizer FD CRAFT обрабатывает ваш микрофон в реальном времени и отправляет звук в виртуальный кабель (<strong>CABLE Input</strong>). В Discord, Telegram, OBS, CS2 и Skype вы выбираете устройство ввода <strong>CABLE Output</strong> — и собеседники слышат обработанный звук студийного качества.</span>
         </div>
 
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-            <span style="font-weight: 600;">Текущий статус в системе:</span>
+            <span style="font-weight: 600;" data-i18n="vbcable.statusLabel">Текущий статус в системе:</span>
             <span id="vbCableStatusBadge" style="font-weight: 600; padding: 2px 8px; border-radius: 4px; background: #e2e8f0; color: #475569;">Проверка...</span>
           </div>
           <div id="vbCableDevicesList" style="font-size: 11px; color: #64748b;"></div>
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 8px;">
-          <button class="win-btn primary" id="btnLaunchVbCableInstaller" style="padding: 8px 16px; font-weight: 600; background: #0284c7; color: #fff; text-align: center;">
+          <button class="win-btn primary" id="btnLaunchVbCableInstaller" style="padding: 8px 16px; font-weight: 600; background: #0284c7; color: #fff; text-align: center;" data-i18n="vbcable.btnInstall">
             Установить VB-Audio Virtual Cable (запуск от Администратора)
           </button>
-          <button class="win-btn" id="btnOpenVbCableControlPanel" style="padding: 6px 12px; font-size: 11px;">
+          <button class="win-btn" id="btnOpenVbCableControlPanel" style="padding: 6px 12px; font-size: 11px;" data-i18n="vbcable.btnControlPanel">
             Открыть панель управления VB-Cable (VBCABLE_ControlPanel)
           </button>
         </div>
@@ -641,17 +648,17 @@
         <div id="vbCableInstallMsg" style="margin-top: 10px; font-size: 11px; color: #0369a1; min-height: 18px;"></div>
 
         <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #64748b;">
-          <strong>Порядок установки:</strong>
+          <strong data-i18n="vbcable.orderTitle">Порядок установки:</strong>
           <ol style="margin: 4px 0 0 16px; padding: 0;">
-            <li>Нажмите синюю кнопку выше и подтвердите права Администратора (UAC).</li>
-            <li>В открывшемся окне официального установщика нажмите <strong>Install Driver</strong>.</li>
-            <li>Перезагрузите ПК или перезапустите аудиослужбу в настройках программы.</li>
-            <li>В Discord / Telegram / OBS в устройствах ввода выберите <strong>CABLE Output (VB-Audio Virtual Cable)</strong>.</li>
+            <li data-i18n="vbcable.step1">Нажмите синюю кнопку выше и подтвердите права Администратора (UAC).</li>
+            <li data-i18n="vbcable.step2">В открывшемся окне официального установщика нажмите <strong>Install Driver</strong>.</li>
+            <li data-i18n="vbcable.step3">Перезагрузите ПК или перезапустите аудиослужбу в настройках программы.</li>
+            <li data-i18n="vbcable.step4">В Discord / Telegram / OBS в устройствах ввода выберите <strong>CABLE Output (VB-Audio Virtual Cable)</strong>.</li>
           </ol>
         </div>
       </div>
       <div class="dialog-footer" style="padding: 10px 16px; display: flex; justify-content: flex-end;">
-        <button class="win-btn" id="closeVbCableModalFooterBtn">Закрыть</button>
+        <button class="win-btn" id="closeVbCableModalFooterBtn" data-i18n="vbcable.btnClose">Закрыть</button>
       </div>
     </div>
   </div>
@@ -659,6 +666,7 @@
   <!-- Toast Notification Feedback -->
   <div id="toastNotification" class="toast-notification hidden"></div>
 
+  <script src="i18n.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
