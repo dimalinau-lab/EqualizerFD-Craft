@@ -251,6 +251,15 @@ fn launch_browser_window(app_url: &str) {
     let default_dir = format!(r"{}\Default", profile_dir);
     let _ = std::fs::create_dir_all(&default_dir);
 
+    // Clean up any stale profile lockfiles to prevent Chromium "Error code: 32"
+    let lock1 = format!(r"{}\lockfile", profile_dir);
+    let lock2 = format!(r"{}\Default\lockfile", profile_dir);
+    if Path::new(&lock1).exists() || Path::new(&lock2).exists() {
+        window_manager::kill_app_browser_processes();
+        let _ = std::fs::remove_file(&lock1);
+        let _ = std::fs::remove_file(&lock2);
+    }
+
     let first_run_file = format!(r"{}\FirstLaunchAfterInstallation", profile_dir);
     if !Path::new(&first_run_file).exists() {
         let _ = std::fs::write(&first_run_file, b"");
@@ -280,12 +289,14 @@ fn launch_browser_window(app_url: &str) {
         app_arg.as_str(),
         profile_arg.as_str(),
         "--window-size=1280,820",
+        "--class=EqualizerFDCraft",
+        "--app-id=EqualizerFDCraft",
         "--force-light-mode",
         "--blink-settings=forceDarkMode=0",
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-background-mode",
-        "--disable-features=Translate,OptimizationHints,MediaRouter,EdgeShare,SidePanel,ReadAloud,msEdgeWebWidget",
+        "--disable-features=msEdgeStartupBoost,msEdgeStartupBoostUserOptIn,Translate,OptimizationHints,MediaRouter,EdgeShare,SidePanel,ReadAloud,msEdgeWebWidget",
         "--disable-extensions",
         "--disable-component-update",
         "--disable-default-apps",
@@ -305,12 +316,6 @@ fn launch_browser_window(app_url: &str) {
             }
         }
     }
-
-    // Fallback: PowerShell hidden launch without CMD flash
-    let _ = Command::new("powershell")
-        .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &format!("Start-Process '{}'", app_url)])
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn();
 }
 
 fn install_driver_hooks() {

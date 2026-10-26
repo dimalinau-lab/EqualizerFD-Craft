@@ -42,7 +42,7 @@ dependencies = [
 
 [[package]]
 name = "resona_apo"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "eq_apo_core",
  "serde_json",

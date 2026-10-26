@@ -2,7 +2,7 @@
 ; Equalizer FD CRAFT - Professional DSP & Configuration Studio
 
 #define MyAppName "Equalizer FD CRAFT"
-#define MyAppVersion "0.1.2-BETA"
+#define MyAppVersion "0.1.3-BETA"
 #define MyAppPublisher "Equalizer FD CRAFT Team"
 #define MyAppURL "https://github.com/dimalinau-lab/EqualizerFD-Craft"
 #define MyAppExeName "EqualizerFD-Craft.exe"

@@ -63,6 +63,53 @@ pub enum BossEffectKind {
         shimmer: f32,
         mix: f32,
     },
+    PitchShift {
+        semitones: f32,
+        fine_cents: f32,
+        mix: f32,
+    },
+    Flanger {
+        rate: f32,
+        depth: f32,
+        feedback: f32,
+        mix: f32,
+    },
+    Phaser {
+        rate: f32,
+        depth: f32,
+        feedback: f32,
+        mix: f32,
+    },
+    Delay {
+        time_ms: f32,
+        feedback: f32,
+        damp_fc: f32,
+        reverse: bool,
+        mix: f32,
+    },
+    AutoWah {
+        sensitivity: f32,
+        freq_min: f32,
+        freq_max: f32,
+        resonance_q: f32,
+        mix: f32,
+    },
+    Fuzz {
+        drive: f32,
+        tone: f32,
+        sustain: f32,
+        out_gain: f32,
+    },
+    BeatRepeat {
+        bpm: f32,
+        subdivision: f32,
+        decay: f32,
+        mix: f32,
+    },
+    Telephone {
+        drive: f32,
+        mix: f32,
+    },
 }
 
 #[derive(Clone)]
@@ -124,6 +171,45 @@ pub struct BossEffectState {
     pub rev_ap1_idx: usize,
     pub rev_ap2: Vec<f32>,
     pub rev_ap2_idx: usize,
+
+    // PitchShift
+    pub pitch_buf: Vec<f32>,
+    pub pitch_w_idx: usize,
+    pub pitch_phase1: f32,
+    pub pitch_phase2: f32,
+
+    // Flanger
+    pub flanger_buf: Vec<f32>,
+    pub flanger_w_idx: usize,
+    pub flanger_lfo: f32,
+
+    // Phaser
+    pub phaser_ap_x: [f32; 4],
+    pub phaser_ap_y: [f32; 4],
+    pub phaser_lfo: f32,
+    pub phaser_last_out: f32,
+
+    // Delay
+    pub delay_buf: Vec<f32>,
+    pub delay_w_idx: usize,
+    pub delay_lp: f32,
+
+    // AutoWah
+    pub wah_env: f32,
+    pub wah_filter: BiquadState,
+
+    // Fuzz
+    pub fuzz_tone_lp: f32,
+
+    // BeatRepeat
+    pub repeat_buf: Vec<f32>,
+    pub repeat_w_idx: usize,
+    pub repeat_pos: usize,
+    pub repeat_slice_len: usize,
+
+    // Telephone
+    pub tel_hp: BiquadState,
+    pub tel_lp: BiquadState,
 }
 
 impl Default for BossEffectState {
@@ -167,6 +253,29 @@ impl Default for BossEffectState {
             rev_ap1_idx: 0,
             rev_ap2: vec![0.0; 556],
             rev_ap2_idx: 0,
+            pitch_buf: vec![0.0; 4096],
+            pitch_w_idx: 0,
+            pitch_phase1: 0.0,
+            pitch_phase2: 1024.0,
+            flanger_buf: vec![0.0; 2048],
+            flanger_w_idx: 0,
+            flanger_lfo: 0.0,
+            phaser_ap_x: [0.0; 4],
+            phaser_ap_y: [0.0; 4],
+            phaser_lfo: 0.0,
+            phaser_last_out: 0.0,
+            delay_buf: vec![0.0; 96000],
+            delay_w_idx: 0,
+            delay_lp: 0.0,
+            wah_env: 0.0,
+            wah_filter: BiquadState::default(),
+            fuzz_tone_lp: 0.0,
+            repeat_buf: vec![0.0; 96000],
+            repeat_w_idx: 0,
+            repeat_pos: 0,
+            repeat_slice_len: 24000,
+            tel_hp: BiquadState::default(),
+            tel_lp: BiquadState::default(),
         }
     }
 }
@@ -321,6 +430,70 @@ pub fn parse_boss_directive(raw_body: &str, sample_rate: f32) -> Option<(BossEff
         let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(25.0) / 100.0) as f32;
 
         Some((BossEffectKind::Reverb { decay_time: time, predelay_ms: predelay, shimmer, mix }, state))
+    } else if eff_lower.contains("pitch") || eff_lower.contains("harmony") || eff_lower.contains("гармон") || eff_lower.contains("октав") {
+        let semitones = json.get("semitones").or_else(|| json.get("pitch")).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        let fine = json.get("fine").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(50.0) / 100.0) as f32;
+        Some((BossEffectKind::PitchShift { semitones, fine_cents: fine, mix }, state))
+    } else if (eff_lower.contains("flanger") || eff_lower.contains("флэнжер") || eff_lower.contains("фленджер")) && !eff_lower.contains("chorus") {
+        let rate = json.get("rate").and_then(|v| v.as_f64()).unwrap_or(0.5) as f32;
+        let depth = (json.get("depth").and_then(|v| v.as_f64()).unwrap_or(75.0) / 100.0) as f32;
+        let feedback = (json.get("feedback").and_then(|v| v.as_f64()).unwrap_or(60.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(50.0) / 100.0) as f32;
+        Some((BossEffectKind::Flanger { rate, depth, feedback, mix }, state))
+    } else if eff_lower.contains("phaser") || eff_lower.contains("фейзер") || eff_lower.contains("фазер") {
+        let rate = json.get("rate").and_then(|v| v.as_f64()).unwrap_or(0.6) as f32;
+        let depth = (json.get("depth").and_then(|v| v.as_f64()).unwrap_or(80.0) / 100.0) as f32;
+        let feedback = (json.get("feedback").and_then(|v| v.as_f64()).unwrap_or(50.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(50.0) / 100.0) as f32;
+        Some((BossEffectKind::Phaser { rate, depth, feedback, mix }, state))
+    } else if eff_lower.contains("delay") || eff_lower.contains("дилей") || eff_lower.contains("дилэй") || eff_lower.contains("эхо") {
+        let time_ms = json.get("time").or_else(|| json.get("time_ms")).and_then(|v| v.as_f64()).unwrap_or(350.0) as f32;
+        let feedback = (json.get("feedback").and_then(|v| v.as_f64()).unwrap_or(45.0) / 100.0) as f32;
+        let damp_fc = json.get("damp").or_else(|| json.get("tone")).and_then(|v| v.as_f64()).unwrap_or(4500.0) as f32;
+        let reverse = json.get("reverse").and_then(|v| v.as_bool()).unwrap_or(false) || eff_lower.contains("reverse") || eff_lower.contains("реверс");
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(35.0) / 100.0) as f32;
+        Some((BossEffectKind::Delay { time_ms, feedback, damp_fc, reverse, mix }, state))
+    } else if eff_lower.contains("wah") || eff_lower.contains("вау") {
+        let sensitivity = (json.get("sensitivity").or_else(|| json.get("sense")).and_then(|v| v.as_f64()).unwrap_or(65.0) / 100.0) as f32;
+        let freq_min = json.get("min_freq").and_then(|v| v.as_f64()).unwrap_or(350.0) as f32;
+        let freq_max = json.get("max_freq").and_then(|v| v.as_f64()).unwrap_or(3200.0) as f32;
+        let resonance_q = json.get("resonance").or_else(|| json.get("q")).and_then(|v| v.as_f64()).unwrap_or(5.5) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(75.0) / 100.0) as f32;
+        state.wah_filter.calculate(0, freq_min, 12.0, resonance_q, sample_rate);
+        Some((BossEffectKind::AutoWah { sensitivity, freq_min, freq_max, resonance_q, mix }, state))
+    } else if eff_lower.contains("fuzz") || eff_lower.contains("фуз") {
+        let drive = (json.get("drive").and_then(|v| v.as_f64()).unwrap_or(70.0) / 100.0) as f32;
+        let tone = json.get("tone").and_then(|v| v.as_f64()).unwrap_or(3800.0) as f32;
+        let sustain = (json.get("sustain").and_then(|v| v.as_f64()).unwrap_or(60.0) / 100.0) as f32;
+        let level = json.get("level").and_then(|v| v.as_f64()).unwrap_or(-3.0) as f32;
+        let out_gain = 10.0f32.powf(level / 20.0);
+        Some((BossEffectKind::Fuzz { drive, tone, sustain, out_gain }, state))
+    } else if eff_lower.contains("roll") || eff_lower.contains("ролл") || (eff_lower.contains("repeat") && !eff_lower.contains("slicer")) {
+        let bpm = json.get("rate").or_else(|| json.get("bpm")).and_then(|v| v.as_f64()).unwrap_or(128.0) as f32;
+        let pat_str = json.get("pattern").and_then(|v| v.as_str()).unwrap_or("1/16 Beat");
+        let subdiv = if pat_str.contains("1/4") {
+            1.0
+        } else if pat_str.contains("1/8 Triplet") || pat_str.contains("Triplet") {
+            3.0
+        } else if pat_str.contains("1/8") {
+            2.0
+        } else if pat_str.contains("1/32") {
+            8.0
+        } else {
+            4.0
+        };
+        let decay = (json.get("decay").and_then(|v| v.as_f64()).unwrap_or(85.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(60.0) / 100.0) as f32;
+        let slice_len = ((60.0 / bpm / subdiv) * sample_rate).clamp(128.0, 95000.0) as usize;
+        state.repeat_slice_len = slice_len;
+        Some((BossEffectKind::BeatRepeat { bpm, subdivision: subdiv, decay, mix }, state))
+    } else if eff_lower.contains("telephone") || eff_lower.contains("phone") || eff_lower.contains("телефон") {
+        let drive = (json.get("drive").and_then(|v| v.as_f64()).unwrap_or(40.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(85.0) / 100.0) as f32;
+        state.tel_hp.calculate(4, 380.0, 0.0, 0.7071, sample_rate);
+        state.tel_lp.calculate(3, 3300.0, 0.0, 0.7071, sample_rate);
+        Some((BossEffectKind::Telephone { drive, mix }, state))
     } else {
         None
     }
@@ -563,6 +736,156 @@ pub fn process_boss_effect(
             state.rev_ap2_idx = (state.rev_ap2_idx + 1) % allpass_lens[1];
 
             (1.0 - mix) * sample + mix * ap2_out
+        }
+
+        BossEffectKind::PitchShift { semitones, fine_cents, mix } => {
+            let buf_cap = state.pitch_buf.len();
+            let cur_w = state.pitch_w_idx;
+            state.pitch_buf[cur_w] = sample;
+            state.pitch_w_idx = (cur_w + 1) % buf_cap;
+
+            let grain_w = 2048.0f32;
+            let ratio = 2.0f32.powf((*semitones + *fine_cents * 0.01) / 12.0);
+
+            // Head 1
+            let read_pos1 = (cur_w as f32 + buf_cap as f32 - grain_w + state.pitch_phase1) % (buf_cap as f32);
+            let i1_0 = read_pos1.floor() as usize % buf_cap;
+            let i1_1 = (i1_0 + 1) % buf_cap;
+            let f1 = read_pos1 - read_pos1.floor();
+            let s1 = state.pitch_buf[i1_0] * (1.0 - f1) + state.pitch_buf[i1_1] * f1;
+            let w1 = (0.5 * (1.0 - (2.0 * std::f32::consts::PI * (state.pitch_phase1 / grain_w)).cos())).max(0.0);
+
+            // Head 2 (offset by 180 degrees / half grain)
+            let read_pos2 = (cur_w as f32 + buf_cap as f32 - grain_w + state.pitch_phase2) % (buf_cap as f32);
+            let i2_0 = read_pos2.floor() as usize % buf_cap;
+            let i2_1 = (i2_0 + 1) % buf_cap;
+            let f2 = read_pos2 - read_pos2.floor();
+            let s2 = state.pitch_buf[i2_0] * (1.0 - f2) + state.pitch_buf[i2_1] * f2;
+            let w2 = (0.5 * (1.0 - (2.0 * std::f32::consts::PI * (state.pitch_phase2 / grain_w)).cos())).max(0.0);
+
+            state.pitch_phase1 += ratio;
+            if state.pitch_phase1 >= grain_w {
+                state.pitch_phase1 -= grain_w;
+            }
+            state.pitch_phase2 += ratio;
+            if state.pitch_phase2 >= grain_w {
+                state.pitch_phase2 -= grain_w;
+            }
+
+            let denom = (w1 + w2).max(1e-4);
+            let shifted = (s1 * w1 + s2 * w2) / denom;
+            (1.0 - mix) * sample + mix * shifted
+        }
+
+        BossEffectKind::Flanger { rate, depth, feedback, mix } => {
+            let buf_cap = state.flanger_buf.len();
+            state.flanger_lfo += rate / sample_rate;
+            if state.flanger_lfo >= 1.0 {
+                state.flanger_lfo -= 1.0;
+            }
+            let lfo = (state.flanger_lfo * 2.0 * std::f32::consts::PI).sin();
+            let delay_samples = (0.0018 + 0.0014 * depth * lfo) * sample_rate;
+            let r_pos = (state.flanger_w_idx as f32 + buf_cap as f32 - delay_samples) % (buf_cap as f32);
+            let i0 = r_pos.floor() as usize % buf_cap;
+            let i1 = (i0 + 1) % buf_cap;
+            let frac = r_pos - r_pos.floor();
+            let delayed = state.flanger_buf[i0] * (1.0 - frac) + state.flanger_buf[i1] * frac;
+
+            state.flanger_buf[state.flanger_w_idx] = sample + delayed * feedback;
+            state.flanger_w_idx = (state.flanger_w_idx + 1) % buf_cap;
+            (1.0 - mix) * sample + mix * delayed
+        }
+
+        BossEffectKind::Phaser { rate, depth, feedback, mix } => {
+            state.phaser_lfo += rate / sample_rate;
+            if state.phaser_lfo >= 1.0 {
+                state.phaser_lfo -= 1.0;
+            }
+            let lfo = 0.5 + 0.5 * (state.phaser_lfo * 2.0 * std::f32::consts::PI).sin();
+            let fc = (450.0 + 2800.0 * depth * lfo).clamp(200.0, 16000.0);
+            let omega = (std::f32::consts::PI * fc / sample_rate).tan();
+            let a = (1.0 - omega) / (1.0 + omega);
+
+            let mut cur_in = sample + state.phaser_last_out * feedback * 0.7;
+            for i in 0..4 {
+                let ap_out = a * cur_in + state.phaser_ap_x[i] - a * state.phaser_ap_y[i];
+                state.phaser_ap_x[i] = cur_in;
+                state.phaser_ap_y[i] = ap_out;
+                cur_in = ap_out;
+            }
+            state.phaser_last_out = cur_in;
+            (1.0 - mix) * sample + mix * cur_in
+        }
+
+        BossEffectKind::Delay { time_ms, feedback, damp_fc, reverse, mix } => {
+            let buf_cap = state.delay_buf.len();
+            let delay_samples = ((*time_ms * 0.001) * sample_rate).clamp(10.0, (buf_cap - 128) as f32);
+            let cur_w = state.delay_w_idx;
+
+            let delayed = if *reverse {
+                let chunk_len = delay_samples as usize;
+                let phase_in_chunk = cur_w % chunk_len;
+                let r_idx = (cur_w + buf_cap - phase_in_chunk) % buf_cap;
+                state.delay_buf[r_idx]
+            } else {
+                let r_pos = (cur_w as f32 + buf_cap as f32 - delay_samples) % (buf_cap as f32);
+                let i0 = r_pos.floor() as usize % buf_cap;
+                let i1 = (i0 + 1) % buf_cap;
+                let frac = r_pos - r_pos.floor();
+                state.delay_buf[i0] * (1.0 - frac) + state.delay_buf[i1] * frac
+            };
+
+            let dt = 1.0 / sample_rate;
+            let rc = 1.0 / (2.0 * std::f32::consts::PI * damp_fc.clamp(1000.0, 18000.0));
+            let alpha = dt / (rc + dt);
+            state.delay_lp += alpha * (delayed - state.delay_lp);
+
+            state.delay_buf[cur_w] = sample + state.delay_lp * feedback.clamp(0.0, 0.95);
+            state.delay_w_idx = (cur_w + 1) % buf_cap;
+            (1.0 - mix) * sample + mix * delayed
+        }
+
+        BossEffectKind::AutoWah { sensitivity, freq_min, freq_max, resonance_q, mix } => {
+            state.wah_env = state.wah_env * 0.993 + sample.abs() * 0.007;
+            let mod_val = (state.wah_env * sensitivity * 6.5).clamp(0.0, 1.0);
+            let fc = freq_min + (freq_max - freq_min) * mod_val;
+            state.wah_filter.calculate(0, fc.clamp(200.0, 8000.0), 10.0, *resonance_q, sample_rate);
+            let filtered = state.wah_filter.process(sample);
+            (1.0 - mix) * sample + mix * filtered
+        }
+
+        BossEffectKind::Fuzz { drive, tone, sustain, out_gain } => {
+            let x = sample * (1.0 + sustain * 10.0) * (1.0 + drive * 16.0);
+            let sign = if x >= 0.0 { 1.0 } else { -1.0 };
+            let abs_x = x.abs();
+            let saturated = sign * (1.0 - (-abs_x).exp()) * 0.9 + 0.1 * (x / (1.0 + abs_x));
+
+            let dt = 1.0 / sample_rate;
+            let rc = 1.0 / (2.0 * std::f32::consts::PI * tone.clamp(800.0, 16000.0));
+            let alpha = dt / (rc + dt);
+            state.fuzz_tone_lp += alpha * (saturated - state.fuzz_tone_lp);
+            state.fuzz_tone_lp * out_gain
+        }
+
+        BossEffectKind::BeatRepeat { decay, mix, .. } => {
+            let buf_cap = state.repeat_buf.len();
+            let cur_w = state.repeat_w_idx;
+            state.repeat_buf[cur_w] = sample;
+            state.repeat_w_idx = (cur_w + 1) % buf_cap;
+
+            let slice = state.repeat_slice_len.max(128).min(buf_cap - 64);
+            let r_idx = (cur_w + buf_cap - slice + (state.repeat_pos % slice)) % buf_cap;
+            let repeated = state.repeat_buf[r_idx] * decay;
+            state.repeat_pos = (state.repeat_pos + 1) % slice;
+            (1.0 - mix) * sample + mix * repeated
+        }
+
+        BossEffectKind::Telephone { drive, mix } => {
+            let s_hp = state.tel_hp.process(sample);
+            let s_bp = state.tel_lp.process(s_hp);
+            let driven = s_bp * (1.0 + drive * 5.0);
+            let soft = driven / (1.0 + driven.abs());
+            (1.0 - mix) * sample + mix * soft
         }
     }
 }
