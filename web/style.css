@@ -1312,7 +1312,8 @@ body.desktop-app {
 }
 
 /* VST Catalog Styles */
-.vst-catalog-card {
+.vst-catalog-card,
+.rc505-catalog-card {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -1327,6 +1328,23 @@ body.desktop-app {
 .vst-catalog-card:hover {
   border-color: #16a34a;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.rc505-catalog-card:hover {
+  border-color: #2563eb;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.12);
+}
+
+.rc505-card-tag {
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  padding: 1px 6px;
+  border-radius: 3px;
+  display: inline-block;
+  margin-bottom: 6px;
+  font-weight: 600;
 }
 
 .vst-card-left {

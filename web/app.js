@@ -508,6 +508,546 @@ const RC505_CATALOG = {
       { name: 'Диспетчер радиостанции', values: { drive: 60, mix: 80 } },
       { name: 'Трубка переговорного устройства', values: { drive: 20, mix: 75 } }
     ]
+  },
+  autopitch: {
+    title: 'BOSS RC-505 Mk2: Auto Pitch (Electric 1)',
+    category: 'Вокал и Питч',
+    catGroup: 'vocal',
+    desc: 'Аппаратный алгоритм коррекции высоты тона BOSS RC-505 Mk2: мгновенная подтяжка нот к хроматической гамме, жесткий электро-вокальный квантайз (Hard Tune).',
+    howItWorks: 'Автокорреляционное отслеживание основного тона входного сигнала с фазовым синтезом и квантованием к ближайшей ноте с регулируемой скоростью атаки.',
+    params: [
+      { key: 'speed', label: 'Скорость подтяжки (Speed)', min: 0, max: 100, step: 1, unit: '%', default: 80 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 90 }
+    ],
+    presets: [
+      { name: 'Жесткий Auto-Tune', values: { speed: 95, mix: 100 } },
+      { name: 'Мягкая коррекция', values: { speed: 45, mix: 75 } },
+      { name: 'Электро-дабл', values: { speed: 85, mix: 60 } }
+    ]
+  },
+  robot: {
+    title: 'BOSS RC-505 Mk2: Robot Voice',
+    category: 'Вокал и Питч',
+    catGroup: 'vocal',
+    desc: 'Фирменный робо-голос Roland: фиксирует высоту голоса на единой ноте несущей, создавая монотонную речь сай-фай андроида или киборга.',
+    howItWorks: 'Замена естественного тона голоса на фиксированную синтетическую несущую с сохранением формантного профиля речи.',
+    params: [
+      { key: 'pitch', label: 'Базовый тон (Root Pitch)', min: -24, max: 24, step: 1, unit: 'st', default: 0 },
+      { key: 'robotic', label: 'Степень роботизации (Robotic)', min: 0, max: 100, step: 1, unit: '%', default: 90 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 85 }
+    ],
+    presets: [
+      { name: 'Классический киборг', values: { pitch: 0, robotic: 95, mix: 90 } },
+      { name: 'Глубокий мех (Бас)', values: { pitch: -12, robotic: 90, mix: 85 } },
+      { name: 'Высокий дроид', values: { pitch: 7, robotic: 85, mix: 80 } }
+    ]
+  },
+  harmony: {
+    title: 'BOSS RC-505 Mk2: Harmony (Vocal Multi-Part)',
+    category: 'Вокал и Питч',
+    catGroup: 'vocal',
+    desc: 'Многоголосная гармонизация вокала: мгновенно подпевает терцией, квинтой или октавой к вашему голосу для плотных хоровых партий.',
+    howItWorks: 'Параллельная линия гранулярного питч-шифтинга с музыкальными интервалами и сохранением темпового строя.',
+    params: [
+      { key: 'interval', label: 'Интервал гармонии', min: -12, max: 12, step: 1, unit: 'st', default: 4 },
+      { key: 'mix', label: 'Громкость подпевки (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 50 }
+    ],
+    presets: [
+      { name: 'Терция вверх (Мажор)', values: { interval: 4, mix: 50 } },
+      { name: 'Квинта вверх (Power)', values: { interval: 7, mix: 55 } },
+      { name: 'Кварта вниз', values: { interval: -5, mix: 45 } },
+      { name: 'Октавный хор', values: { interval: 12, mix: 40 } }
+    ]
+  },
+  transpose: {
+    title: 'BOSS RC-505 Mk2: Transpose (Key Shift)',
+    category: 'Вокал и Питч',
+    catGroup: 'vocal',
+    desc: 'Общее транспонирование трека или микрофона на заданное число полутонов для быстрой смены тональности петли.',
+    howItWorks: 'Полнополосный частотно-независимый транспонирующий алгоритм с перекрестным сглаживанием фазы.',
+    params: [
+      { key: 'semitones', label: 'Транспонирование (Semitones)', min: -12, max: 12, step: 1, unit: 'st', default: 2 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 100 }
+    ],
+    presets: [
+      { name: 'Тон вверх (+2 st)', values: { semitones: 2, mix: 100 } },
+      { name: 'Тон вниз (-2 st)', values: { semitones: -2, mix: 100 } },
+      { name: 'Квинта вверх (+7 st)', values: { semitones: 7, mix: 100 } }
+    ]
+  },
+  guitartobass: {
+    title: 'BOSS RC-505 Mk2: Guitar to Bass',
+    category: 'Вокал и Питч',
+    catGroup: 'vocal',
+    desc: 'Культовый суб-октавный процессор: превращает битбокс, голос или гитару в глубокую плотную бас-линию с мощным низкочастотным фундаментом.',
+    howItWorks: 'Делитель частоты с крутым фильтром среза ВЧ 280 Гц и генератором суб-гармоники (-1 октава) с компрессией.',
+    params: [
+      { key: 'gain', label: 'Плотность суб-баса (Gain)', min: 0, max: 12, step: 0.5, unit: 'dB', default: 3.0 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 75 }
+    ],
+    presets: [
+      { name: 'Битбокс суб-бас 808', values: { gain: 6.0, mix: 85 } },
+      { name: 'Плотный бас-синтезатор', values: { gain: 3.0, mix: 70 } },
+      { name: 'Легкий суб-подмес', values: { gain: 1.5, mix: 50 } }
+    ]
+  },
+  slowgear: {
+    title: 'BOSS RC-505 Mk2: Slow Gear (Violin Attack)',
+    category: 'Вокал и Питч',
+    catGroup: 'vocal',
+    desc: 'Легендарный эффект BOSS SG-1: убирает резкую атаку звука и плавно нарастает по громкости, превращая аккорды и голос в скрипичное легато.',
+    howItWorks: 'Оптический детектор атаки глушит фронт звука и запускает экспоненциальную огибающую открытия гейта.',
+    params: [
+      { key: 'attack', label: 'Время нарастания (Attack)', min: 50, max: 1000, step: 25, unit: 'ms', default: 250 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 100 }
+    ],
+    presets: [
+      { name: 'Скрипичный смычок (Fast)', values: { attack: 180, mix: 100 } },
+      { name: 'Плавный эмбиент-пэд (Slow)', values: { attack: 450, mix: 100 } },
+      { name: 'Космический swell', values: { attack: 750, mix: 100 } }
+    ]
+  },
+  tremolo: {
+    title: 'BOSS RC-505 Mk2: Tremolo (Amplitude LFO)',
+    category: 'Модуляция и Пространство',
+    catGroup: 'modulation',
+    desc: 'Классическое аналоговое тремоло: периодическая циклическая пульсация громкости в стиле винтажных ламповых усилителей Fender.',
+    howItWorks: 'Синусоидальный или треугольный LFO модулирует амплитуду сигнала с настраиваемой скоростью и глубиной.',
+    params: [
+      { key: 'rate', label: 'Скорость пульсации (Rate)', min: 0.5, max: 20.0, step: 0.5, unit: 'Hz', default: 5.0 },
+      { key: 'depth', label: 'Глубина пульсации (Depth)', min: 0, max: 100, step: 1, unit: '%', default: 75 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 100 }
+    ],
+    presets: [
+      { name: 'Серф-рок тремоло', values: { rate: 6.5, depth: 85, mix: 100 } },
+      { name: 'Медленный винтажный пульс', values: { rate: 2.5, depth: 60, mix: 100 } },
+      { name: 'Вертолетный стаккато-чоп', values: { rate: 12.0, depth: 100, mix: 100 } }
+    ]
+  },
+  vibrato: {
+    title: 'BOSS RC-505 Mk2: Vibrato (Pitch LFO)',
+    category: 'Модуляция и Пространство',
+    catGroup: 'modulation',
+    desc: 'Истинное аналоговое вибрато BOSS VB-2: периодическое плавное покачивание высоты тона без примеси сухого сигнала.',
+    howItWorks: 'Короткая линия задержки BBD непрерывно модулируется синусоидальным LFO, вызывая эффект Доплера по частоте.',
+    params: [
+      { key: 'rate', label: 'Скорость вибрато (Rate)', min: 1.0, max: 15.0, step: 0.5, unit: 'Hz', default: 6.0 },
+      { key: 'depth', label: 'Глубина покачивания (Depth)', min: 0, max: 100, step: 1, unit: '%', default: 60 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 100 }
+    ],
+    presets: [
+      { name: 'Шелковое вокальное вибрато', values: { rate: 5.5, depth: 45, mix: 100 } },
+      { name: 'Винтажный пленочный варп', values: { rate: 3.0, depth: 75, mix: 100 } },
+      { name: 'Морская качка (Deep)', values: { rate: 7.5, depth: 90, mix: 100 } }
+    ]
+  },
+  rotary: {
+    title: 'BOSS RC-505 Mk2: Rotary Speaker (Leslie)',
+    category: 'Модуляция и Пространство',
+    catGroup: 'modulation',
+    desc: 'Акустическая эмуляция вращающегося динамика Leslie: вихревой эффект Доплера, амплитудная модуляция и ощущение движения воздуха.',
+    howItWorks: 'Раздельная симуляция вращающегося высокочастотного рупора и низкочастотного барабана с фазовым расщеплением.',
+    params: [
+      { key: 'speed', label: 'Скорость вращения (Speed)', min: 0.5, max: 12.0, step: 0.5, unit: 'Hz', default: 4.0 },
+      { key: 'depth', label: 'Глубина вихря (Depth)', min: 0, max: 100, step: 1, unit: '%', default: 65 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 80 }
+    ],
+    presets: [
+      { name: 'Быстрый орган (Fast Leslie)', values: { speed: 6.8, depth: 75, mix: 85 } },
+      { name: 'Медленный хорал (Slow Horn)', values: { speed: 1.5, depth: 55, mix: 75 } },
+      { name: 'Психоделический вихрь', values: { speed: 4.0, depth: 90, mix: 90 } }
+    ]
+  },
+  autopan: {
+    title: 'BOSS RC-505 Mk2: Auto-Pan (Stereo Sweep)',
+    category: 'Модуляция и Пространство',
+    catGroup: 'modulation',
+    desc: 'Автоматическое панорамирование звука: плавный или резкий бег звука между левым и правым ухом для создания динамичного стерео-поля.',
+    howItWorks: 'Противофазная синусоидальная модуляция громкости левого и правого аудиоканалов.',
+    params: [
+      { key: 'rate', label: 'Скорость перемещения (Rate)', min: 0.1, max: 10.0, step: 0.1, unit: 'Hz', default: 1.5 },
+      { key: 'depth', label: 'Ширина панорамы (Depth)', min: 0, max: 100, step: 1, unit: '%', default: 80 }
+    ],
+    presets: [
+      { name: 'Плавный стерео-маятник', values: { rate: 1.0, depth: 75 } },
+      { name: 'Быстрый пинг-понг', values: { rate: 3.5, depth: 95 } },
+      { name: 'Медленный широкий дрейф', values: { rate: 0.3, depth: 65 } }
+    ]
+  },
+  lpf: {
+    title: 'BOSS RC-505 Mk2: Filter LPF (Resonant Low Pass)',
+    category: 'Фильтры и DJ',
+    catGroup: 'filter',
+    desc: '24 dB/окт аналоговый фильтр нижних частот с теплым резонансом. Идеален для создания клубных DJ-свипов и эффекта "звук из соседней комнаты".',
+    howItWorks: 'Каскадный фильтр IIR Баттерворта 4-го порядка с настраиваемой добротностью Q на частоте среза.',
+    params: [
+      { key: 'cutoff', label: 'Частота среза (Cutoff)', min: 100, max: 18000, step: 100, unit: 'Hz', default: 2200 },
+      { key: 'resonance', label: 'Острота резонанса (Resonance Q)', min: 0.5, max: 10.0, step: 0.5, unit: 'Q', default: 2.5 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 100 }
+    ],
+    presets: [
+      { name: 'DJ Cutoff Свип (1 kHz)', values: { cutoff: 1000, resonance: 3.0, mix: 100 } },
+      { name: 'Глухой сабвуфер (450 Hz)', values: { cutoff: 450, resonance: 1.5, mix: 100 } },
+      { name: 'Яркий резонансный пик', values: { cutoff: 3500, resonance: 6.0, mix: 100 } }
+    ]
+  },
+  bpf: {
+    title: 'BOSS RC-505 Mk2: Filter BPF (Resonant Band Pass)',
+    category: 'Фильтры и DJ',
+    catGroup: 'filter',
+    desc: 'Полосовой фильтр: пропускает только заданный узкий диапазон частот, отсекая как низ, так и верх для выделения формант голоса.',
+    howItWorks: 'Резонансный полосовой биквадрат с крутыми скатами и усилением центральной полосы.',
+    params: [
+      { key: 'center', label: 'Центральная частота (Center)', min: 200, max: 10000, step: 100, unit: 'Hz', default: 1200 },
+      { key: 'resonance', label: 'Ширина полосы (Resonance Q)', min: 0.5, max: 12.0, step: 0.5, unit: 'Q', default: 3.0 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 100 }
+    ],
+    presets: [
+      { name: 'Вокальная форманта (1.2 kHz)', values: { center: 1200, resonance: 4.0, mix: 100 } },
+      { name: 'Радио-горло (800 Hz)', values: { center: 800, resonance: 5.5, mix: 100 } },
+      { name: 'Телефонный пик (2.5 kHz)', values: { center: 2500, resonance: 3.0, mix: 100 } }
+    ]
+  },
+  hpf: {
+    title: 'BOSS RC-505 Mk2: Filter HPF (Resonant High Pass)',
+    category: 'Фильтры и DJ',
+    catGroup: 'filter',
+    desc: 'Фильтр верхних частот: полностью отсекает низкие частоты с резким резонансным подъемом на границе среза для танцевальных билдапов.',
+    howItWorks: 'Высокочастотный фильтр 2-го порядка с регулируемой точкой среза и добротностью.',
+    params: [
+      { key: 'cutoff', label: 'Срез низких частот (Cutoff)', min: 50, max: 8000, step: 50, unit: 'Hz', default: 800 },
+      { key: 'resonance', label: 'Резонанс (Resonance Q)', min: 0.5, max: 10.0, step: 0.5, unit: 'Q', default: 2.0 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 100 }
+    ],
+    presets: [
+      { name: 'Клубный Build-Up (800 Hz)', values: { cutoff: 800, resonance: 2.5, mix: 100 } },
+      { name: 'Тонкая рация (1.8 kHz)', values: { cutoff: 1800, resonance: 3.5, mix: 100 } },
+      { name: 'Чистый срез саба (120 Hz)', values: { cutoff: 120, resonance: 0.7, mix: 100 } }
+    ]
+  },
+  synth: {
+    title: 'BOSS RC-505 Mk2: Synth (Wave Follower)',
+    category: 'Фильтры и DJ',
+    catGroup: 'filter',
+    desc: 'Аналоговый моно-синтезатор: превращает голос или битбокс в жирный синтезаторный лид или бас, отслеживая огибающую входного звука.',
+    howItWorks: 'Генератор пилообразной/меандровой формы волны, модулируемый амплитудным детектором с резонансным фильтром.',
+    params: [
+      { key: 'cutoff', label: 'Фильтр тембра (Cutoff)', min: 200, max: 8000, step: 100, unit: 'Hz', default: 2500 },
+      { key: 'mix', label: 'Баланс синтезатора (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 65 }
+    ],
+    presets: [
+      { name: 'Жирный аналоговый лид', values: { cutoff: 3500, mix: 75 } },
+      { name: 'Синт-бас Moog', values: { cutoff: 1200, mix: 80 } },
+      { name: 'Космический подмес', values: { cutoff: 5000, mix: 50 } }
+    ]
+  },
+  overdrive: {
+    title: 'BOSS RC-505 Mk2: Warm Blues Overdrive',
+    category: 'Дисторшн, Фузз и Преампы',
+    catGroup: 'drive',
+    desc: 'Мягкий блюзовый овердрайв в стиле культовой педали BOSS BD-2 Blues Driver: теплое ламповое ограничение и отзывчивость к динамике.',
+    howItWorks: 'Асимметричный мягкий клиппинг диодной цепочки с подъемом гармоник 2-го порядка и регулировкой тембра.',
+    params: [
+      { key: 'drive', label: 'Степень перегруза (Drive)', min: 0, max: 100, step: 1, unit: '%', default: 40 },
+      { key: 'tone', label: 'Яркость тембра (Tone)', min: 1000, max: 12000, step: 200, unit: 'Hz', default: 5000 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 100 }
+    ],
+    presets: [
+      { name: 'Мягкое ламповое тепло', values: { drive: 25, tone: 6000, mix: 80 } },
+      { name: 'Блюзовый кранч', values: { drive: 50, tone: 4500, mix: 100 } },
+      { name: 'Горячий перегруз', values: { drive: 75, tone: 3800, mix: 100 } }
+    ]
+  },
+  metal: {
+    title: 'BOSS RC-505 Mk2: Metal DS (High-Gain Scoop)',
+    category: 'Дисторшн, Фузз и Преампы',
+    catGroup: 'drive',
+    desc: 'Легендарный дисторшн BOSS MT-2 Metal Zone: сокрушительный гейн, агрессивный вырез середины (Mid-Scoop) и мощный плотный бас.',
+    howItWorks: 'Многокаскадное жесткое клиппирование с двойной эквализацией: провал средних частот 1 кГц (-8 dB) и подъем низа и верха.',
+    params: [
+      { key: 'gain', label: 'Уровень гейна (Gain)', min: 0, max: 100, step: 1, unit: '%', default: 85 },
+      { key: 'tone', label: 'Верхние частоты (Tone)', min: 1000, max: 10000, step: 200, unit: 'Hz', default: 4200 },
+      { key: 'level', label: 'Выходная громкость (Level)', min: -15, max: 6, step: 0.5, unit: 'dB', default: -4.0 }
+    ],
+    presets: [
+      { name: 'Metal Zone классика', values: { gain: 85, tone: 4200, level: -4.0 } },
+      { name: 'Тяжелый хард-рок', values: { gain: 65, tone: 5000, level: -2.0 } },
+      { name: 'Экстремальный трэш', values: { gain: 100, tone: 3600, level: -5.0 } }
+    ]
+  },
+  octfuzz: {
+    title: 'BOSS RC-505 Mk2: Oct Fuzz (Octave Fuzz)',
+    category: 'Дисторшн, Фузз и Преампы',
+    catGroup: 'drive',
+    desc: 'Винтажный октавный фузз в стиле Jimi Hendrix Octavia: жирный грязный фузз с добавлением визжащей верхней октавы.',
+    howItWorks: 'Двухполупериодный выпрямитель формы волны, удваивающий базовую частоту, в паре с диодным насыщением.',
+    params: [
+      { key: 'drive', label: 'Уровень перегруза (Drive)', min: 0, max: 100, step: 1, unit: '%', default: 75 },
+      { key: 'tone', label: 'Срез тембра (Tone)', min: 1000, max: 10000, step: 200, unit: 'Hz', default: 3600 },
+      { key: 'level', label: 'Выходной уровень (Level)', min: -15, max: 6, step: 0.5, unit: 'dB', default: -2.0 }
+    ],
+    presets: [
+      { name: 'Хендрикс Соло (Octave Up)', values: { drive: 80, tone: 4000, level: -2.5 } },
+      { name: 'Грязный гаражный фузз', values: { drive: 60, tone: 3200, level: -1.0 } },
+      { name: 'Визжащий свинец', values: { drive: 95, tone: 4800, level: -4.0 } }
+    ]
+  },
+  crunch: {
+    title: 'BOSS RC-505 Mk2: Plexi Tube Crunch',
+    category: 'Дисторшн, Фузз и Преампы',
+    catGroup: 'drive',
+    desc: 'Хрустящий ламповый кранч британского стека Marshall Plexi: динамичный теплый брейкап при громких нотах и чистый звук при тихой речи.',
+    howItWorks: 'Моделирование триодного каскада 12AX7 с компрессией транзиентов и открытыми средними частотами.',
+    params: [
+      { key: 'gain', label: 'Уровень кранча (Gain)', min: 0, max: 100, step: 1, unit: '%', default: 30 },
+      { key: 'tone', label: 'Яркость (Tone)', min: 1000, max: 12000, step: 200, unit: 'Hz', default: 6000 },
+      { key: 'level', label: 'Уровень (Level)', min: -15, max: 6, step: 0.5, unit: 'dB', default: 0.0 }
+    ],
+    presets: [
+      { name: 'Британский Plexi Crunch', values: { gain: 35, tone: 6500, level: 0.0 } },
+      { name: 'Легкий вокальный хруст', values: { gain: 20, tone: 5500, level: 1.0 } },
+      { name: 'Роковый напор', values: { gain: 55, tone: 5000, level: -1.0 } }
+    ]
+  },
+  preamp: {
+    title: 'BOSS RC-505 Mk2: Preamp (Tube Warmth)',
+    category: 'Дисторшн, Фузз и Преампы',
+    catGroup: 'drive',
+    desc: 'Студийный ламповый предусилитель: окрашивает микрофон благородной аналоговой сатурацией, расширяет динамику и делает голос презентабельным.',
+    howItWorks: 'Ламповая передаточная функция с легкой компрессией пиков и добавлением четных гармоник.',
+    params: [
+      { key: 'drive', label: 'Насыщение лампы (Drive)', min: 0, max: 100, step: 1, unit: '%', default: 25 },
+      { key: 'tone', label: 'Воздух ВЧ (Tone)', min: 1000, max: 15000, step: 200, unit: 'Hz', default: 6500 },
+      { key: 'level', label: 'Выходное усиление (Level)', min: -15, max: 6, step: 0.5, unit: 'dB', default: 2.0 }
+    ],
+    presets: [
+      { name: 'Студийный дикторский преамп', values: { drive: 20, tone: 7000, level: 2.0 } },
+      { name: 'Плотный вокальный канал', values: { drive: 35, tone: 6000, level: 1.5 } },
+      { name: 'Чистый прозрачный тракт', values: { drive: 10, tone: 8000, level: 3.0 } }
+    ]
+  },
+  compressor: {
+    title: 'BOSS RC-505 Mk2: Studio Compressor (VCA Dynamics)',
+    category: 'Динамика и Гейты',
+    catGroup: 'dynamics',
+    desc: 'Студийный VCA компрессор: выравнивает перепады громкости между тихим шепотом и громким криком, делая звук ровным и плотным.',
+    howItWorks: 'Быстрый RMS детектор с настраиваемым порогом (Threshold), коэффициентом сжатия (Ratio) и компенсацией гейна (Makeup).',
+    params: [
+      { key: 'threshold', label: 'Порог срабатывания (Threshold)', min: -40, max: 0, step: 0.5, unit: 'dB', default: -18 },
+      { key: 'ratio', label: 'Коэффициент сжатия (Ratio)', min: 1.0, max: 20.0, step: 0.5, unit: ':1', default: 4.0 },
+      { key: 'attack', label: 'Время атаки (Attack)', min: 1, max: 100, step: 1, unit: 'ms', default: 20 },
+      { key: 'release', label: 'Время восстановления (Release)', min: 10, max: 500, step: 10, unit: 'ms', default: 150 },
+      { key: 'makeup', label: 'Компенсация громкости (Makeup)', min: 0, max: 24, step: 0.5, unit: 'dB', default: 4.0 }
+    ],
+    presets: [
+      { name: 'Плотный вокал (4:1)', values: { threshold: -18, ratio: 4.0, attack: 20, release: 150, makeup: 4.0 } },
+      { name: 'Агрессивный битбокс', values: { threshold: -24, ratio: 8.0, attack: 8, release: 80, makeup: 6.0 } },
+      { name: 'Мягкий стриминг левелер', values: { threshold: -14, ratio: 2.5, attack: 35, release: 220, makeup: 2.5 } }
+    ]
+  },
+  limiter: {
+    title: 'BOSS RC-505 Mk2: Peak Limiter',
+    category: 'Динамика и Гейты',
+    catGroup: 'dynamics',
+    desc: 'Пиковый кирпичный лимитер: защищает динамики и слушателей стрима от внезапных перегрузок и цифрового клиппинга при крике.',
+    howItWorks: 'Упреждающий (Lookahead) пиковый ограничитель с бесконечным ratio выше потолка Ceiling.',
+    params: [
+      { key: 'threshold', label: 'Порог ограничения (Threshold)', min: -20, max: 0, step: 0.5, unit: 'dB', default: -2.0 },
+      { key: 'ceiling', label: 'Максимальный потолок (Ceiling)', min: -6, max: 0, step: 0.1, unit: 'dB', default: -0.3 }
+    ],
+    presets: [
+      { name: 'Безопасный стрим (-0.3 dB)', values: { threshold: -2.0, ceiling: -0.3 } },
+      { name: 'Максимальная громкость (-0.1 dB)', values: { threshold: -4.0, ceiling: -0.1 } },
+      { name: 'Мягкая защита (-1.0 dB)', values: { threshold: -1.0, ceiling: -1.0 } }
+    ]
+  },
+  noisesuppressor: {
+    title: 'BOSS RC-505 Mk2: Noise Suppressor (NS)',
+    category: 'Динамика и Гейты',
+    catGroup: 'dynamics',
+    desc: 'Высокоскоростной подавитель шума BOSS NS-2: мгновенно и бесшумно закрывает звуковой тракт при молчании, убирая шум кулеров ПК и микрофона.',
+    howItWorks: 'Низкопороговый экспандер с адаптивным плавным спадом для сохранения естественного затухания голоса.',
+    params: [
+      { key: 'threshold', label: 'Порог шума (Threshold)', min: -70, max: -20, step: 1, unit: 'dB', default: -45.0 },
+      { key: 'release', label: 'Скорость закрытия (Release)', min: 10, max: 300, step: 10, unit: 'ms', default: 80.0 }
+    ],
+    presets: [
+      { name: 'Стандартный микрофон (-45 dB)', values: { threshold: -45, release: 80 } },
+      { name: 'Шумная комната (-38 dB)', values: { threshold: -38, release: 50 } },
+      { name: 'Тихая студия (-55 dB)', values: { threshold: -55, release: 120 } }
+    ]
+  },
+  panningdelay: {
+    title: 'BOSS RC-505 Mk2: Panning Delay (Ping-Pong)',
+    category: 'Дилэй, Эхо и Реверс',
+    catGroup: 'delay',
+    desc: 'Стерео-дилэй пинг-понг: каждый повтор эха поочередно перескакивает из левого уха в правое, создавая захватывающее пространственное движение.',
+    howItWorks: 'Две перекрестно связанные линии задержки с обратной связью между левым и правым каналами.',
+    params: [
+      { key: 'time', label: 'Время эха (Time)', min: 50, max: 1200, step: 10, unit: 'ms', default: 380 },
+      { key: 'feedback', label: 'Число повторов (Feedback)', min: 0, max: 90, step: 1, unit: '%', default: 50 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 40 }
+    ],
+    presets: [
+      { name: 'Пинг-понг 1/4 такта', values: { time: 468, feedback: 55, mix: 40 } },
+      { name: 'Быстрый стерео-отскок', values: { time: 220, feedback: 40, mix: 35 } },
+      { name: 'Длинное панорамное эхо', values: { time: 650, feedback: 70, mix: 45 } }
+    ]
+  },
+  tapeecho: {
+    title: 'BOSS RC-505 Mk2: Space Tape Echo',
+    category: 'Дилэй, Эхо и Реверс',
+    catGroup: 'delay',
+    desc: 'Винтажное ленточное эхо Roland RE-201 Space Echo: мягкое затемнение каждого повтора, легкая детонация ленты (Flutter) и теплое аналоговое звучание.',
+    howItWorks: 'Многоголовочная петля задержки с насыщением магнитной ленты и фильтром спада высоких частот.',
+    params: [
+      { key: 'time', label: 'Скорость ленты (Time)', min: 50, max: 1200, step: 10, unit: 'ms', default: 320 },
+      { key: 'feedback', label: 'Регенерация (Feedback)', min: 0, max: 90, step: 1, unit: '%', default: 55 },
+      { key: 'flutter', label: 'Детонация ленты (Flutter)', min: 0, max: 100, step: 1, unit: '%', default: 25 },
+      { key: 'mix', label: 'Баланс эха (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 40 }
+    ],
+    presets: [
+      { name: 'Roland RE-201 Space Echo', values: { time: 320, feedback: 55, flutter: 25, mix: 40 } },
+      { name: 'Даб-эхо (Dub Repeats)', values: { time: 540, feedback: 75, flutter: 40, mix: 50 } },
+      { name: 'Быстрый ленточный слэп', values: { time: 110, feedback: 20, flutter: 15, mix: 35 } }
+    ]
+  },
+  warpdelay: {
+    title: 'BOSS RC-505 Mk2: Warp Delay (Modulated Sweep)',
+    category: 'Дилэй, Эхо и Реверс',
+    catGroup: 'delay',
+    desc: 'Варп-дилэй BOSS: динамическое смещение времени задержки на лету, создающее психоделические звуковые переливы и эффект искривления пространства.',
+    howItWorks: 'Модуляция указателя чтения буфера задержки сглаженным LFO с насыщением цепи обратной связи.',
+    params: [
+      { key: 'time', label: 'Базовое время (Time)', min: 50, max: 1000, step: 10, unit: 'ms', default: 280 },
+      { key: 'feedback', label: 'Повторы (Feedback)', min: 0, max: 95, step: 1, unit: '%', default: 65 },
+      { key: 'warp', label: 'Глубина варпа (Warp)', min: 0, max: 100, step: 1, unit: '%', default: 60 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 45 }
+    ],
+    presets: [
+      { name: 'Космический варп-свип', values: { time: 280, feedback: 65, warp: 60, mix: 45 } },
+      { name: 'Глубокая волнорезка', values: { time: 420, feedback: 75, warp: 80, mix: 50 } },
+      { name: 'Мягкий хроматический дрейф', values: { time: 200, feedback: 50, warp: 30, mix: 35 } }
+    ]
+  },
+  twistdelay: {
+    title: 'BOSS RC-505 Mk2: Twist Delay (Oscillation Runaway)',
+    category: 'Дилэй, Эхо и Реверс',
+    catGroup: 'delay',
+    desc: 'Культовый спецэффект Twist: при удержании разгоняет фидбэк в агрессивный самоосциллирующий вой с нарастанием питча для мощных кульминаций.',
+    howItWorks: 'Нелинейная петля обратной связи с коэффициентом усиления > 1.0, софт-клиппером и динамическим укорачиванием времени задержки.',
+    params: [
+      { key: 'time', label: 'Время эха (Time)', min: 30, max: 800, step: 10, unit: 'ms', default: 220 },
+      { key: 'feedback', label: 'Разгон фидбэка (Feedback)', min: 0, max: 98, step: 1, unit: '%', default: 80 },
+      { key: 'twist', label: 'Интенсивность Твиста (Twist)', min: 0, max: 100, step: 1, unit: '%', default: 50 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 50 }
+    ],
+    presets: [
+      { name: 'Разгон перед дропом (Twist Drop)', values: { time: 180, feedback: 85, twist: 70, mix: 55 } },
+      { name: 'Самоосциллирующий гул', values: { time: 240, feedback: 92, twist: 40, mix: 50 } },
+      { name: 'Быстрый сиреневый взлет', values: { time: 100, feedback: 80, twist: 90, mix: 60 } }
+    ]
+  },
+  granulardelay: {
+    title: 'BOSS RC-505 Mk2: Granular Cloud Delay',
+    category: 'Дилэй, Эхо и Реверс',
+    catGroup: 'delay',
+    desc: 'Гранулярный облачный дилэй: дробит эхо на микроскопические звуковые частицы (гранулы), распыляя звук в кинематографичное переливающееся облако.',
+    howItWorks: 'Буфер эха считывается несколькими асинхронными гранулярными головками с перекрытием окон Хэнна.',
+    params: [
+      { key: 'grain', label: 'Размер гранул (Grain Size)', min: 20, max: 300, step: 10, unit: 'ms', default: 80 },
+      { key: 'feedback', label: 'Плотность облака (Feedback)', min: 0, max: 90, step: 1, unit: '%', default: 55 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 50 }
+    ],
+    presets: [
+      { name: 'Пышное гранулярное облако', values: { grain: 80, feedback: 60, mix: 50 } },
+      { name: 'Мерцающая дымка (Shimmer Cloud)', values: { grain: 40, feedback: 70, mix: 45 } },
+      { name: 'Текстурный пэд-шлейф', values: { grain: 160, feedback: 50, mix: 55 } }
+    ]
+  },
+  beatshift: {
+    title: 'BOSS RC-505 Mk2: Beat Shift (Step Offset)',
+    category: 'Ритм, Слайсер и Луп-статтер',
+    catGroup: 'beat',
+    desc: 'Ритмический сдвиг долей: задерживает аудиосигнал строго на 1/16 или 1/8 такта темпа, создавая синкопированный офф-бит кач и полиритмию.',
+    howItWorks: 'Буфер задержки, синхронизированный с темпом BPM, сдвигающий аудиопоток на фиксированное число долей.',
+    params: [
+      { key: 'bpm', label: 'Темп трека (BPM)', min: 40, max: 240, step: 1, unit: 'BPM', default: 120 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 50 }
+    ],
+    presets: [
+      { name: 'Синкопа 1/16 (Off-Beat 120)', values: { bpm: 120, mix: 50 } },
+      { name: 'Трэп синкопа (140 BPM)', values: { bpm: 140, mix: 55 } },
+      { name: 'Хаус грув (128 BPM)', values: { bpm: 128, mix: 50 } }
+    ]
+  },
+  roomreverb: {
+    title: 'BOSS RC-505 Mk2: Acoustic Room Reverb',
+    category: 'Пространство и Ревербераторы',
+    catGroup: 'space',
+    desc: 'Натуральная акустическая комната: добавляет голосу естественный объем живой комнаты звукозаписи с деревянной отделкой без длинного гулкого хвоста.',
+    howItWorks: 'Ранние отражения малой задержки с быстрым экспоненциальным затуханием и демпфированием высоких частот.',
+    params: [
+      { key: 'size', label: 'Размер помещения (Room Size)', min: 10, max: 100, step: 1, unit: '%', default: 40 },
+      { key: 'damp', label: 'Поглощение ВЧ (Damping)', min: 0, max: 100, step: 1, unit: '%', default: 50 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 25 }
+    ],
+    presets: [
+      { name: 'Уютная вокальная комната', values: { size: 35, damp: 50, mix: 20 } },
+      { name: 'Студийный тон-зал', values: { size: 55, damp: 40, mix: 25 } },
+      { name: 'Сухая дикторская кабина', values: { size: 20, damp: 70, mix: 15 } }
+    ]
+  },
+  hallreverb: {
+    title: 'BOSS RC-505 Mk2: Concert Hall Reverb',
+    category: 'Пространство и Ревербераторы',
+    catGroup: 'space',
+    desc: 'Акустика большого концертного зала: глубокое, благородное и широкое трехмерное пространство для солирующего вокала и медленных мелодий.',
+    howItWorks: 'Многозвенная диффузная сеть (FDN 8-го порядка) с предзадержкой (Pre-delay) для сохранения разборчивости слов.',
+    params: [
+      { key: 'size', label: 'Размер зала (Hall Size)', min: 20, max: 100, step: 1, unit: '%', default: 75 },
+      { key: 'predelay', label: 'Предзадержка (Pre-delay)', min: 0, max: 150, step: 5, unit: 'ms', default: 30 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 35 }
+    ],
+    presets: [
+      { name: 'Большой симфонический зал', values: { size: 85, predelay: 35, mix: 35 } },
+      { name: 'Камерный зал', values: { size: 60, predelay: 20, mix: 28 } },
+      { name: 'Бесконечный амфитеатр', values: { size: 100, predelay: 50, mix: 45 } }
+    ]
+  },
+  platereverb: {
+    title: 'BOSS RC-505 Mk2: EMT 140 Vintage Plate',
+    category: 'Пространство и Ревербераторы',
+    catGroup: 'space',
+    desc: 'Легендарный листовой ревербератор EMT 140: яркий, плотный и шелковистый металлический отклик, ставший стандартом звучания поп- и рок-вокала.',
+    howItWorks: 'Высокая начальная диффузия колебаний тонкого стального листа с ярким презенсом в районе 4-8 кГц.',
+    params: [
+      { key: 'decay', label: 'Время затухания (Decay)', min: 0.5, max: 8.0, step: 0.1, unit: 's', default: 2.8 },
+      { key: 'brightness', label: 'Яркость листа (Brightness)', min: 0, max: 100, step: 1, unit: '%', default: 65 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 30 }
+    ],
+    presets: [
+      { name: 'Шелковый вокальный плейт', values: { decay: 2.5, brightness: 70, mix: 28 } },
+      { name: 'Теплый винтажный металл', values: { decay: 3.8, brightness: 45, mix: 32 } },
+      { name: 'Яркий блеск (Bright Plate)', values: { decay: 1.8, brightness: 85, mix: 25 } }
+    ]
+  },
+  springreverb: {
+    title: 'BOSS RC-505 Mk2: Vintage Spring Reverb',
+    category: 'Пространство и Ревербераторы',
+    catGroup: 'space',
+    desc: 'Пружинный ревербератор гитарных комбоусилителей: характерный металлический звон, капли и вибрация стальных пружин при резких звуках.',
+    howItWorks: 'Моделирование крутильных волн в двух спиральных пружинах с дисперсионным фазовым сдвигом.',
+    params: [
+      { key: 'decay', label: 'Длина хвоста (Decay)', min: 10, max: 100, step: 1, unit: '%', default: 55 },
+      { key: 'tension', label: 'Натяжение пружины (Tension)', min: 0, max: 100, step: 1, unit: '%', default: 70 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 30 }
+    ],
+    presets: [
+      { name: 'Классический серф-пружинник', values: { decay: 65, tension: 75, mix: 35 } },
+      { name: 'Винтажный комбо Fender', values: { decay: 45, tension: 60, mix: 25 } },
+      { name: 'Глубокий даб-пружинный дроп', values: { decay: 85, tension: 85, mix: 45 } }
+    ]
   }
 };
 
@@ -2595,60 +3135,15 @@ document.querySelectorAll('.sub-menu button').forEach(btn => {
     } else if (action === 'add-vst-custom') {
       openCustomVstModal();
       return;
-    } else if (action === 'add-rc505-slicer') {
-      tab.blocks.push(createRc505Block('slicer'));
-      showToast('Добавлен BOSS RC-505: Slicer');
-    } else if (action === 'add-rc505-vinyl') {
-      tab.blocks.push(createRc505Block('vinyl'));
-      showToast('Добавлен BOSS RC-505: Vinyl Flick');
-    } else if (action === 'add-rc505-vocoder') {
-      tab.blocks.push(createRc505Block('vocoder'));
-      showToast('Добавлен BOSS RC-505: Vocoder');
-    } else if (action === 'add-rc505-ringmod') {
-      tab.blocks.push(createRc505Block('ringmod'));
-      showToast('Добавлен BOSS RC-505: Ring Modulator');
-    } else if (action === 'add-rc505-isolator') {
-      tab.blocks.push(createRc505Block('isolator'));
-      showToast('Добавлен BOSS RC-505: Isolator');
-    } else if (action === 'add-rc505-lofi') {
-      tab.blocks.push(createRc505Block('lofi'));
-      showToast('Добавлен BOSS RC-505: Lo-Fi Radio');
-    } else if (action === 'add-rc505-chorus') {
-      tab.blocks.push(createRc505Block('chorus'));
-      showToast('Добавлен BOSS RC-505: Space Chorus');
-    } else if (action === 'add-rc505-distortion') {
-      tab.blocks.push(createRc505Block('distortion'));
-      showToast('Добавлен BOSS RC-505: Distortion');
-    } else if (action === 'add-rc505-scatter') {
-      tab.blocks.push(createRc505Block('scatter'));
-      showToast('Добавлен BOSS RC-505: Granular Scatter');
-    } else if (action === 'add-rc505-reverb') {
-      tab.blocks.push(createRc505Block('reverb'));
-      showToast('Добавлен BOSS RC-505: Space Reverb');
-    } else if (action === 'add-rc505-pitchshift') {
-      tab.blocks.push(createRc505Block('pitchshift'));
-      showToast('Добавлен BOSS RC-505: Pitch Shift & Harmony');
-    } else if (action === 'add-rc505-flanger') {
-      tab.blocks.push(createRc505Block('flanger'));
-      showToast('Добавлен BOSS RC-505: Jet Flanger');
-    } else if (action === 'add-rc505-phaser') {
-      tab.blocks.push(createRc505Block('phaser'));
-      showToast('Добавлен BOSS RC-505: Multi-Stage Phaser');
-    } else if (action === 'add-rc505-delay') {
-      tab.blocks.push(createRc505Block('delay'));
-      showToast('Добавлен BOSS RC-505: Tape & Reverse Delay');
-    } else if (action === 'add-rc505-autowah') {
-      tab.blocks.push(createRc505Block('autowah'));
-      showToast('Добавлен BOSS RC-505: Auto-Wah');
-    } else if (action === 'add-rc505-fuzz') {
-      tab.blocks.push(createRc505Block('fuzz'));
-      showToast('Добавлен BOSS RC-505: Vintage Fuzz');
-    } else if (action === 'add-rc505-beatrepeat') {
-      tab.blocks.push(createRc505Block('beatrepeat'));
-      showToast('Добавлен BOSS RC-505: Beat Repeat & Roll');
-    } else if (action === 'add-rc505-telephone') {
-      tab.blocks.push(createRc505Block('telephone'));
-      showToast('Добавлен BOSS RC-505: Telephone EQ');
+    } else if (action === 'open-rc505-catalog') {
+      openRc505CatalogModal();
+      return;
+    } else if (action && action.startsWith('add-rc505-')) {
+      const effKey = action.replace('add-rc505-', '');
+      if (RC505_CATALOG[effKey]) {
+        tab.blocks.push(createRc505Block(effKey));
+        showToast(`Добавлен BOSS RC-505: ${RC505_CATALOG[effKey].title}`);
+      }
     } else if (action === 'add-delay') {
       tab.blocks.push({
         id: nextId(),
@@ -3455,6 +3950,130 @@ if (vstSearchInput) {
 if (vstCategoryFilter) {
   vstCategoryFilter.addEventListener('change', (e) => {
     renderVstCatalog(vstSearchInput ? vstSearchInput.value : '', e.target.value);
+  });
+}
+
+// --- Full Roland BOSS RC-505 Mk2 Catalog Modal (50 Effects) ---
+const rc505CatalogModal = document.getElementById('rc505CatalogModal');
+const rc505CatalogList = document.getElementById('rc505CatalogList');
+const rc505SearchInput = document.getElementById('rc505SearchInput');
+const rc505CategoryFilter = document.getElementById('rc505CategoryFilter');
+const closeRc505CatalogBtn = document.getElementById('closeRc505CatalogBtn');
+const cancelRc505CatalogBtn = document.getElementById('cancelRc505CatalogBtn');
+
+function getRc505CategoryGroup(id, item) {
+  if (item.catGroup) return item.catGroup;
+  if (['vocoder', 'pitchshift', 'autopitch', 'robot', 'harmony', 'transpose', 'guitartobass', 'slowgear'].includes(id)) return 'vocal';
+  if (['slicer', 'vinyl', 'scatter', 'beatrepeat', 'beatshift'].includes(id)) return 'beat';
+  if (['ringmod', 'chorus', 'flanger', 'phaser', 'tremolo', 'vibrato', 'rotary', 'autopan'].includes(id)) return 'modulation';
+  if (['isolator', 'lofi', 'autowah', 'telephone', 'lpf', 'bpf', 'hpf', 'synth'].includes(id)) return 'filter';
+  if (['distortion', 'fuzz', 'overdrive', 'metal', 'octfuzz', 'crunch', 'preamp'].includes(id)) return 'drive';
+  if (['compressor', 'limiter', 'noisesuppressor'].includes(id)) return 'dynamics';
+  if (['delay', 'panningdelay', 'tapeecho', 'warpdelay', 'twistdelay', 'granulardelay'].includes(id)) return 'delay';
+  if (['reverb', 'roomreverb', 'hallreverb', 'platereverb', 'springreverb'].includes(id)) return 'space';
+  return 'other';
+}
+
+function renderRc505Catalog(searchQuery = '', categoryFilter = 'all') {
+  if (!rc505CatalogList) return;
+  const q = searchQuery.trim().toLowerCase();
+
+  const entries = Object.entries(RC505_CATALOG).map(([id, item]) => ({
+    id,
+    ...item,
+    resolvedCat: getRc505CategoryGroup(id, item)
+  }));
+
+  const filtered = entries.filter(item => {
+    if (categoryFilter !== 'all' && item.resolvedCat !== categoryFilter) return false;
+    if (!q) return true;
+    return (
+      (item.title && item.title.toLowerCase().includes(q)) ||
+      (item.category && item.category.toLowerCase().includes(q)) ||
+      (item.desc && item.desc.toLowerCase().includes(q)) ||
+      (item.howItWorks && item.howItWorks.toLowerCase().includes(q)) ||
+      item.id.toLowerCase().includes(q)
+    );
+  });
+
+  const emptyText = window.t ? window.t('rc505Modal.emptySearch', null, 'Эффекты по запросу не найдены. Попробуйте изменить фильтр.') : 'Эффекты по запросу не найдены.';
+  const purposeLbl = window.t ? window.t('blocks.rc505.purposeLabel', null, 'Для чего нужен:') : 'Для чего нужен:';
+  const howLbl = window.t ? window.t('blocks.rc505.howLabel', null, 'Как работает:') : 'Как работает:';
+  const btnAddTxt = window.t ? window.t('rc505Modal.btnAdd', null, 'Добавить в цепочку') : 'Добавить в цепочку';
+
+  if (filtered.length === 0) {
+    rc505CatalogList.innerHTML = `
+      <div style="padding: 24px; text-align: center; color: #64748b; font-size: 13px;">
+        ${emptyText}
+      </div>
+    `;
+    return;
+  }
+
+  let html = '';
+  filtered.forEach(eff => {
+    const meta = getRc505LocalizedMeta(eff.id);
+    html += `
+      <div class="rc505-catalog-card" data-eff-id="${eff.id}">
+        <div class="vst-card-left">
+          <div class="vst-card-title">
+            ${meta.title}
+            <span class="vst-card-cat">${meta.category}</span>
+          </div>
+          <span class="rc505-card-tag">Roland BOSS RC-505 Mk2 DSP: #${eff.id.toUpperCase()}</span>
+          <div class="vst-card-desc"><strong>${purposeLbl}</strong> ${meta.desc}</div>
+          <div class="vst-card-how"><strong>${howLbl}</strong> ${meta.howItWorks}</div>
+        </div>
+        <button class="win-btn primary btn-add-catalog-rc505" data-eff-id="${eff.id}" data-eff-title="${meta.title}" style="height: 32px; font-weight: 600; padding: 0 14px; white-space: nowrap; flex-shrink: 0; background: #1d4ed8; color: #ffffff;">
+          ${btnAddTxt}
+        </button>
+      </div>
+    `;
+  });
+  rc505CatalogList.innerHTML = html;
+
+  rc505CatalogList.querySelectorAll('.btn-add-catalog-rc505').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const effId = btn.dataset.effId;
+      const effTitle = btn.dataset.effTitle;
+      const tab = getActiveTab();
+      if (!tab) return;
+
+      const newBlock = createRc505Block(effId);
+      tab.blocks.push(newBlock);
+
+      if (rc505CatalogModal) rc505CatalogModal.classList.add('hidden');
+      renderBlocks();
+      updateAll();
+      showToast(`Добавлен BOSS RC-505: ${effTitle}`);
+    });
+  });
+}
+
+function openRc505CatalogModal() {
+  if (!rc505CatalogModal) return;
+  rc505CatalogModal.classList.remove('hidden');
+  if (rc505SearchInput) rc505SearchInput.value = '';
+  if (rc505CategoryFilter) rc505CategoryFilter.value = 'all';
+  renderRc505Catalog('', 'all');
+  if (rc505SearchInput) rc505SearchInput.focus();
+}
+
+if (closeRc505CatalogBtn) {
+  closeRc505CatalogBtn.addEventListener('click', () => rc505CatalogModal.classList.add('hidden'));
+}
+if (cancelRc505CatalogBtn) {
+  cancelRc505CatalogBtn.addEventListener('click', () => rc505CatalogModal.classList.add('hidden'));
+}
+if (rc505SearchInput) {
+  rc505SearchInput.addEventListener('input', (e) => {
+    renderRc505Catalog(e.target.value, rc505CategoryFilter ? rc505CategoryFilter.value : 'all');
+  });
+}
+if (rc505CategoryFilter) {
+  rc505CategoryFilter.addEventListener('change', (e) => {
+    renderRc505Catalog(rc505SearchInput ? rc505SearchInput.value : '', e.target.value);
   });
 }
 

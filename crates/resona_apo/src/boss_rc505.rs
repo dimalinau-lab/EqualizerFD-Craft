@@ -110,6 +110,163 @@ pub enum BossEffectKind {
         drive: f32,
         mix: f32,
     },
+    // Complete BOSS RC-505 Mk2 50-FX Suite
+    AutoPitch {
+        speed: f32,
+        mix: f32,
+    },
+    Robot {
+        pitch_st: f32,
+        robotic: f32,
+        mix: f32,
+    },
+    Harmony {
+        interval: f32,
+        mix: f32,
+    },
+    Transpose {
+        semitones: f32,
+        mix: f32,
+    },
+    GuitarToBass {
+        gain: f32,
+        mix: f32,
+    },
+    SlowGear {
+        attack_ms: f32,
+        mix: f32,
+    },
+    Tremolo {
+        rate: f32,
+        depth: f32,
+        mix: f32,
+    },
+    Vibrato {
+        rate: f32,
+        depth: f32,
+        mix: f32,
+    },
+    Rotary {
+        speed: f32,
+        depth: f32,
+        mix: f32,
+    },
+    AutoPan {
+        rate: f32,
+        depth: f32,
+    },
+    FilterLpf {
+        cutoff: f32,
+        resonance_q: f32,
+        mix: f32,
+    },
+    FilterBpf {
+        center_freq: f32,
+        resonance_q: f32,
+        mix: f32,
+    },
+    FilterHpf {
+        cutoff: f32,
+        resonance_q: f32,
+        mix: f32,
+    },
+    Synth {
+        wave: u8,
+        cutoff: f32,
+        mix: f32,
+    },
+    Overdrive {
+        drive: f32,
+        tone: f32,
+        mix: f32,
+    },
+    MetalDs {
+        gain: f32,
+        tone: f32,
+        out_gain: f32,
+    },
+    OctFuzz {
+        drive: f32,
+        tone: f32,
+        out_gain: f32,
+    },
+    Crunch {
+        gain: f32,
+        tone: f32,
+        out_gain: f32,
+    },
+    Preamp {
+        drive: f32,
+        tone: f32,
+        out_gain: f32,
+    },
+    Compressor {
+        threshold_db: f32,
+        ratio: f32,
+        attack_ms: f32,
+        release_ms: f32,
+        makeup_db: f32,
+    },
+    Limiter {
+        threshold_db: f32,
+        ceiling_db: f32,
+    },
+    NoiseSuppressor {
+        threshold_db: f32,
+        release_ms: f32,
+    },
+    PanningDelay {
+        time_ms: f32,
+        feedback: f32,
+        mix: f32,
+    },
+    TapeEcho {
+        time_ms: f32,
+        feedback: f32,
+        flutter: f32,
+        mix: f32,
+    },
+    WarpDelay {
+        time_ms: f32,
+        feedback: f32,
+        warp: f32,
+        mix: f32,
+    },
+    TwistDelay {
+        time_ms: f32,
+        feedback: f32,
+        twist: f32,
+        mix: f32,
+    },
+    GranularDelay {
+        grain_ms: f32,
+        feedback: f32,
+        mix: f32,
+    },
+    BeatShift {
+        shift_samples: usize,
+        mix: f32,
+    },
+    RoomReverb {
+        size: f32,
+        damp: f32,
+        mix: f32,
+    },
+    HallReverb {
+        size: f32,
+        predelay: f32,
+        mix: f32,
+    },
+    PlateReverb {
+        decay: f32,
+        brightness: f32,
+        mix: f32,
+    },
+    SpringReverb {
+        decay: f32,
+        tension: f32,
+        mix: f32,
+    },
 }
 
 #[derive(Clone)]
@@ -210,6 +367,19 @@ pub struct BossEffectState {
     // Telephone
     pub tel_hp: BiquadState,
     pub tel_lp: BiquadState,
+
+    // Additional 50-FX State Variables
+    pub tremolo_lfo: f32,
+    pub vibrato_lfo: f32,
+    pub rotary_lfo: f32,
+    pub autopan_lfo: f32,
+    pub slowgear_env: f32,
+    pub slowgear_gain: f32,
+    pub comp_env: f32,
+    pub ns_env: f32,
+    pub synth_phase: f32,
+    pub generic_filter1: BiquadState,
+    pub generic_filter2: BiquadState,
 }
 
 impl Default for BossEffectState {
@@ -276,6 +446,17 @@ impl Default for BossEffectState {
             repeat_slice_len: 24000,
             tel_hp: BiquadState::default(),
             tel_lp: BiquadState::default(),
+            tremolo_lfo: 0.0,
+            vibrato_lfo: 0.0,
+            rotary_lfo: 0.0,
+            autopan_lfo: 0.0,
+            slowgear_env: 0.0,
+            slowgear_gain: 0.0,
+            comp_env: 0.0,
+            ns_env: 0.0,
+            synth_phase: 0.0,
+            generic_filter1: BiquadState::default(),
+            generic_filter2: BiquadState::default(),
         }
     }
 }
@@ -494,6 +675,167 @@ pub fn parse_boss_directive(raw_body: &str, sample_rate: f32) -> Option<(BossEff
         state.tel_hp.calculate(4, 380.0, 0.0, 0.7071, sample_rate);
         state.tel_lp.calculate(3, 3300.0, 0.0, 0.7071, sample_rate);
         Some((BossEffectKind::Telephone { drive, mix }, state))
+    } else if eff_lower.contains("autopitch") || eff_lower.contains("electric") || eff_lower.contains("автопитч") {
+        let speed = (json.get("speed").and_then(|v| v.as_f64()).unwrap_or(80.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(90.0) / 100.0) as f32;
+        Some((BossEffectKind::AutoPitch { speed, mix }, state))
+    } else if eff_lower.contains("robot") || eff_lower.contains("робот") {
+        let pitch_st = json.get("pitch").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        let robotic = (json.get("robotic").and_then(|v| v.as_f64()).unwrap_or(90.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(85.0) / 100.0) as f32;
+        Some((BossEffectKind::Robot { pitch_st, robotic, mix }, state))
+    } else if eff_lower.contains("harmony") || eff_lower.contains("гармон") {
+        let interval = json.get("interval").and_then(|v| v.as_f64()).unwrap_or(4.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(50.0) / 100.0) as f32;
+        Some((BossEffectKind::Harmony { interval, mix }, state))
+    } else if eff_lower.contains("transpose") || eff_lower.contains("транспон") {
+        let semitones = json.get("semitones").and_then(|v| v.as_f64()).unwrap_or(2.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(100.0) / 100.0) as f32;
+        Some((BossEffectKind::Transpose { semitones, mix }, state))
+    } else if eff_lower.contains("guitartobass") || eff_lower.contains("guitar to bass") || eff_lower.contains("бас") {
+        let gain = (json.get("gain").and_then(|v| v.as_f64()).unwrap_or(3.0)) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(75.0) / 100.0) as f32;
+        state.generic_filter1.calculate(3, 280.0, 0.0, 0.7071, sample_rate);
+        Some((BossEffectKind::GuitarToBass { gain, mix }, state))
+    } else if eff_lower.contains("slowgear") || eff_lower.contains("slow gear") || eff_lower.contains("скрипк") {
+        let attack_ms = json.get("attack").and_then(|v| v.as_f64()).unwrap_or(250.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(100.0) / 100.0) as f32;
+        Some((BossEffectKind::SlowGear { attack_ms, mix }, state))
+    } else if eff_lower.contains("tremolo") || eff_lower.contains("тремоло") {
+        let rate = json.get("rate").and_then(|v| v.as_f64()).unwrap_or(5.0) as f32;
+        let depth = (json.get("depth").and_then(|v| v.as_f64()).unwrap_or(75.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(100.0) / 100.0) as f32;
+        Some((BossEffectKind::Tremolo { rate, depth, mix }, state))
+    } else if eff_lower.contains("vibrato") || eff_lower.contains("вибрато") {
+        let rate = json.get("rate").and_then(|v| v.as_f64()).unwrap_or(6.0) as f32;
+        let depth = (json.get("depth").and_then(|v| v.as_f64()).unwrap_or(60.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(100.0) / 100.0) as f32;
+        Some((BossEffectKind::Vibrato { rate, depth, mix }, state))
+    } else if eff_lower.contains("rotary") || eff_lower.contains("ротари") || eff_lower.contains("лесли") {
+        let speed = json.get("speed").and_then(|v| v.as_f64()).unwrap_or(4.0) as f32;
+        let depth = (json.get("depth").and_then(|v| v.as_f64()).unwrap_or(65.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(80.0) / 100.0) as f32;
+        Some((BossEffectKind::Rotary { speed, depth, mix }, state))
+    } else if eff_lower.contains("autopan") || eff_lower.contains("auto pan") || eff_lower.contains("панорам") {
+        let rate = json.get("rate").and_then(|v| v.as_f64()).unwrap_or(1.5) as f32;
+        let depth = (json.get("depth").and_then(|v| v.as_f64()).unwrap_or(80.0) / 100.0) as f32;
+        Some((BossEffectKind::AutoPan { rate, depth }, state))
+    } else if eff_lower.contains("lpf") || eff_lower.contains("low pass") || eff_lower.contains("нч фильтр") {
+        let cutoff = json.get("cutoff").and_then(|v| v.as_f64()).unwrap_or(2200.0) as f32;
+        let res = json.get("resonance").and_then(|v| v.as_f64()).unwrap_or(2.5) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(100.0) / 100.0) as f32;
+        state.generic_filter1.calculate(3, cutoff, 0.0, res, sample_rate);
+        Some((BossEffectKind::FilterLpf { cutoff, resonance_q: res, mix }, state))
+    } else if eff_lower.contains("bpf") || eff_lower.contains("band pass") || eff_lower.contains("полосов") {
+        let center = json.get("center").and_then(|v| v.as_f64()).unwrap_or(1200.0) as f32;
+        let res = json.get("resonance").and_then(|v| v.as_f64()).unwrap_or(3.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(100.0) / 100.0) as f32;
+        state.generic_filter1.calculate(0, center, 6.0, res, sample_rate);
+        Some((BossEffectKind::FilterBpf { center_freq: center, resonance_q: res, mix }, state))
+    } else if eff_lower.contains("hpf") || eff_lower.contains("high pass") || eff_lower.contains("вч фильтр") {
+        let cutoff = json.get("cutoff").and_then(|v| v.as_f64()).unwrap_or(800.0) as f32;
+        let res = json.get("resonance").and_then(|v| v.as_f64()).unwrap_or(2.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(100.0) / 100.0) as f32;
+        state.generic_filter1.calculate(4, cutoff, 0.0, res, sample_rate);
+        Some((BossEffectKind::FilterHpf { cutoff, resonance_q: res, mix }, state))
+    } else if eff_lower.contains("synth") || eff_lower.contains("синт") {
+        let cutoff = json.get("cutoff").and_then(|v| v.as_f64()).unwrap_or(2500.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(65.0) / 100.0) as f32;
+        Some((BossEffectKind::Synth { wave: 1, cutoff, mix }, state))
+    } else if eff_lower.contains("overdrive") || eff_lower.contains("овердрайв") {
+        let drive = (json.get("drive").and_then(|v| v.as_f64()).unwrap_or(40.0) / 100.0) as f32;
+        let tone = json.get("tone").and_then(|v| v.as_f64()).unwrap_or(5000.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(100.0) / 100.0) as f32;
+        Some((BossEffectKind::Overdrive { drive, tone, mix }, state))
+    } else if eff_lower.contains("metal") || eff_lower.contains("метал") {
+        let gain = (json.get("gain").and_then(|v| v.as_f64()).unwrap_or(85.0) / 100.0) as f32;
+        let tone = json.get("tone").and_then(|v| v.as_f64()).unwrap_or(4200.0) as f32;
+        let out_gain = 10.0f32.powf((json.get("level").and_then(|v| v.as_f64()).unwrap_or(-4.0) as f32) / 20.0);
+        state.generic_filter1.calculate(0, 1000.0, -8.0, 1.4, sample_rate); // Mid scoop
+        Some((BossEffectKind::MetalDs { gain, tone, out_gain }, state))
+    } else if eff_lower.contains("octfuzz") || eff_lower.contains("oct fuzz") || eff_lower.contains("октав фуз") {
+        let drive = (json.get("drive").and_then(|v| v.as_f64()).unwrap_or(75.0) / 100.0) as f32;
+        let tone = json.get("tone").and_then(|v| v.as_f64()).unwrap_or(3600.0) as f32;
+        let out_gain = 10.0f32.powf((json.get("level").and_then(|v| v.as_f64()).unwrap_or(-2.0) as f32) / 20.0);
+        Some((BossEffectKind::OctFuzz { drive, tone, out_gain }, state))
+    } else if eff_lower.contains("crunch") || eff_lower.contains("кранч") {
+        let gain = (json.get("gain").and_then(|v| v.as_f64()).unwrap_or(30.0) / 100.0) as f32;
+        let tone = json.get("tone").and_then(|v| v.as_f64()).unwrap_or(6000.0) as f32;
+        let out_gain = 10.0f32.powf((json.get("level").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32) / 20.0);
+        Some((BossEffectKind::Crunch { gain, tone, out_gain }, state))
+    } else if eff_lower.contains("preamp") || eff_lower.contains("преамп") {
+        let drive = (json.get("drive").and_then(|v| v.as_f64()).unwrap_or(25.0) / 100.0) as f32;
+        let tone = json.get("tone").and_then(|v| v.as_f64()).unwrap_or(6500.0) as f32;
+        let out_gain = 10.0f32.powf((json.get("level").and_then(|v| v.as_f64()).unwrap_or(2.0) as f32) / 20.0);
+        Some((BossEffectKind::Preamp { drive, tone, out_gain }, state))
+    } else if eff_lower.contains("compressor") || eff_lower.contains("компрессор") {
+        let thresh = json.get("threshold").and_then(|v| v.as_f64()).unwrap_or(-18.0) as f32;
+        let ratio = json.get("ratio").and_then(|v| v.as_f64()).unwrap_or(4.0) as f32;
+        let attack = json.get("attack").and_then(|v| v.as_f64()).unwrap_or(20.0) as f32;
+        let release = json.get("release").and_then(|v| v.as_f64()).unwrap_or(150.0) as f32;
+        let makeup = json.get("makeup").and_then(|v| v.as_f64()).unwrap_or(4.0) as f32;
+        Some((BossEffectKind::Compressor { threshold_db: thresh, ratio, attack_ms: attack, release_ms: release, makeup_db: makeup }, state))
+    } else if eff_lower.contains("limiter") || eff_lower.contains("лимитер") {
+        let thresh = json.get("threshold").and_then(|v| v.as_f64()).unwrap_or(-2.0) as f32;
+        let ceiling = json.get("ceiling").and_then(|v| v.as_f64()).unwrap_or(-0.3) as f32;
+        Some((BossEffectKind::Limiter { threshold_db: thresh, ceiling_db: ceiling }, state))
+    } else if eff_lower.contains("noisesuppressor") || eff_lower.contains("ns") || eff_lower.contains("шумоподав") {
+        let thresh = json.get("threshold").and_then(|v| v.as_f64()).unwrap_or(-45.0) as f32;
+        let rel = json.get("release").and_then(|v| v.as_f64()).unwrap_or(80.0) as f32;
+        Some((BossEffectKind::NoiseSuppressor { threshold_db: thresh, release_ms: rel }, state))
+    } else if eff_lower.contains("panningdelay") || eff_lower.contains("panning delay") {
+        let time_ms = json.get("time").and_then(|v| v.as_f64()).unwrap_or(380.0) as f32;
+        let feedback = (json.get("feedback").and_then(|v| v.as_f64()).unwrap_or(50.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(40.0) / 100.0) as f32;
+        Some((BossEffectKind::PanningDelay { time_ms, feedback, mix }, state))
+    } else if eff_lower.contains("tapeecho") || eff_lower.contains("tape echo") {
+        let time_ms = json.get("time").and_then(|v| v.as_f64()).unwrap_or(320.0) as f32;
+        let feedback = (json.get("feedback").and_then(|v| v.as_f64()).unwrap_or(55.0) / 100.0) as f32;
+        let flutter = (json.get("flutter").and_then(|v| v.as_f64()).unwrap_or(25.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(40.0) / 100.0) as f32;
+        Some((BossEffectKind::TapeEcho { time_ms, feedback, flutter, mix }, state))
+    } else if eff_lower.contains("warpdelay") || eff_lower.contains("warp") {
+        let time_ms = json.get("time").and_then(|v| v.as_f64()).unwrap_or(280.0) as f32;
+        let feedback = (json.get("feedback").and_then(|v| v.as_f64()).unwrap_or(65.0) / 100.0) as f32;
+        let warp = (json.get("warp").and_then(|v| v.as_f64()).unwrap_or(60.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(45.0) / 100.0) as f32;
+        Some((BossEffectKind::WarpDelay { time_ms, feedback, warp, mix }, state))
+    } else if eff_lower.contains("twistdelay") || eff_lower.contains("twist") {
+        let time_ms = json.get("time").and_then(|v| v.as_f64()).unwrap_or(220.0) as f32;
+        let feedback = (json.get("feedback").and_then(|v| v.as_f64()).unwrap_or(80.0) / 100.0) as f32;
+        let twist = (json.get("twist").and_then(|v| v.as_f64()).unwrap_or(50.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(50.0) / 100.0) as f32;
+        Some((BossEffectKind::TwistDelay { time_ms, feedback, twist, mix }, state))
+    } else if eff_lower.contains("granulardelay") || eff_lower.contains("granular delay") {
+        let grain_ms = json.get("grain").and_then(|v| v.as_f64()).unwrap_or(80.0) as f32;
+        let feedback = (json.get("feedback").and_then(|v| v.as_f64()).unwrap_or(55.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(50.0) / 100.0) as f32;
+        Some((BossEffectKind::GranularDelay { grain_ms, feedback, mix }, state))
+    } else if eff_lower.contains("beatshift") || eff_lower.contains("beat shift") {
+        let bpm = json.get("bpm").and_then(|v| v.as_f64()).unwrap_or(120.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(50.0) / 100.0) as f32;
+        let shift_samples = ((60.0 / bpm * 0.25) * sample_rate) as usize;
+        Some((BossEffectKind::BeatShift { shift_samples, mix }, state))
+    } else if eff_lower.contains("roomreverb") || eff_lower.contains("комнат") {
+        let size = (json.get("size").and_then(|v| v.as_f64()).unwrap_or(40.0) / 100.0) as f32;
+        let damp = (json.get("damp").and_then(|v| v.as_f64()).unwrap_or(50.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(25.0) / 100.0) as f32;
+        Some((BossEffectKind::RoomReverb { size, damp, mix }, state))
+    } else if eff_lower.contains("hallreverb") || eff_lower.contains("концерт") {
+        let size = (json.get("size").and_then(|v| v.as_f64()).unwrap_or(75.0) / 100.0) as f32;
+        let predelay = json.get("predelay").and_then(|v| v.as_f64()).unwrap_or(30.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(35.0) / 100.0) as f32;
+        Some((BossEffectKind::HallReverb { size, predelay, mix }, state))
+    } else if eff_lower.contains("platereverb") || eff_lower.contains("пластинчат") {
+        let decay = json.get("decay").and_then(|v| v.as_f64()).unwrap_or(2.8) as f32;
+        let bright = (json.get("brightness").and_then(|v| v.as_f64()).unwrap_or(65.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(30.0) / 100.0) as f32;
+        Some((BossEffectKind::PlateReverb { decay, brightness: bright, mix }, state))
+    } else if eff_lower.contains("springreverb") || eff_lower.contains("пружин") {
+        let decay = (json.get("decay").and_then(|v| v.as_f64()).unwrap_or(55.0) / 100.0) as f32;
+        let tension = (json.get("tension").and_then(|v| v.as_f64()).unwrap_or(70.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(30.0) / 100.0) as f32;
+        Some((BossEffectKind::SpringReverb { decay, tension, mix }, state))
     } else {
         None
     }
@@ -886,6 +1228,358 @@ pub fn process_boss_effect(
             let driven = s_bp * (1.0 + drive * 5.0);
             let soft = driven / (1.0 + driven.abs());
             (1.0 - mix) * sample + mix * soft
+        }
+
+        BossEffectKind::AutoPitch { speed, mix } => {
+            let snapped = (sample * 8.0).round() / 8.0;
+            let tuned = (1.0 - speed) * sample + speed * snapped;
+            (1.0 - mix) * sample + mix * tuned
+        }
+
+        BossEffectKind::Robot { pitch_st, robotic, mix } => {
+            let f0 = 130.81 * 2.0f32.powf(*pitch_st / 12.0);
+            state.synth_phase += f0 / sample_rate;
+            if state.synth_phase >= 1.0 { state.synth_phase -= 1.0; }
+            let carrier = if state.synth_phase < 0.5 { 1.0 } else { -1.0 };
+            state.comp_env = state.comp_env * 0.99 + sample.abs() * 0.01;
+            let robot = carrier * state.comp_env * 2.8;
+            let out = (1.0 - robotic) * sample + robotic * robot;
+            (1.0 - mix) * sample + mix * out
+        }
+
+        BossEffectKind::Harmony { interval, mix } => {
+            let buf_cap = state.pitch_buf.len();
+            let cur_w = state.pitch_w_idx;
+            state.pitch_buf[cur_w] = sample;
+            state.pitch_w_idx = (cur_w + 1) % buf_cap;
+            let grain_w = 2048.0f32;
+            let ratio = 2.0f32.powf(*interval / 12.0);
+            let r_pos = (cur_w as f32 + buf_cap as f32 - grain_w + state.pitch_phase1) % (buf_cap as f32);
+            let i0 = r_pos.floor() as usize % buf_cap;
+            let i1 = (i0 + 1) % buf_cap;
+            let frac = r_pos - r_pos.floor();
+            let shifted = state.pitch_buf[i0] * (1.0 - frac) + state.pitch_buf[i1] * frac;
+            state.pitch_phase1 += ratio;
+            if state.pitch_phase1 >= grain_w { state.pitch_phase1 -= grain_w; }
+            (1.0 - mix) * sample + mix * (sample * 0.6 + shifted * 0.6)
+        }
+
+        BossEffectKind::Transpose { semitones, mix } => {
+            let buf_cap = state.pitch_buf.len();
+            let cur_w = state.pitch_w_idx;
+            state.pitch_buf[cur_w] = sample;
+            state.pitch_w_idx = (cur_w + 1) % buf_cap;
+            let grain_w = 2048.0f32;
+            let ratio = 2.0f32.powf(*semitones / 12.0);
+            let r_pos = (cur_w as f32 + buf_cap as f32 - grain_w + state.pitch_phase1) % (buf_cap as f32);
+            let i0 = r_pos.floor() as usize % buf_cap;
+            let i1 = (i0 + 1) % buf_cap;
+            let frac = r_pos - r_pos.floor();
+            let shifted = state.pitch_buf[i0] * (1.0 - frac) + state.pitch_buf[i1] * frac;
+            state.pitch_phase1 += ratio;
+            if state.pitch_phase1 >= grain_w { state.pitch_phase1 -= grain_w; }
+            (1.0 - mix) * sample + mix * shifted
+        }
+
+        BossEffectKind::GuitarToBass { gain, mix, .. } => {
+            let lp = state.generic_filter1.process(sample);
+            let sub = (lp * 2.5).clamp(-1.0, 1.0) * gain;
+            (1.0 - mix) * sample + mix * sub
+        }
+
+        BossEffectKind::SlowGear { attack_ms, mix } => {
+            let env = sample.abs();
+            if env > 0.05 && state.slowgear_gain < 0.05 {
+                state.slowgear_gain = 0.05;
+            }
+            let step = 1.0 / (attack_ms * 0.001 * sample_rate).max(10.0);
+            state.slowgear_gain = (state.slowgear_gain + step).min(1.0);
+            if env < 0.02 {
+                state.slowgear_gain *= 0.98;
+            }
+            let out = sample * state.slowgear_gain;
+            (1.0 - mix) * sample + mix * out
+        }
+
+        BossEffectKind::Tremolo { rate, depth, mix } => {
+            state.tremolo_lfo += rate / sample_rate;
+            if state.tremolo_lfo >= 1.0 { state.tremolo_lfo -= 1.0; }
+            let lfo = 0.5 * (1.0 + (state.tremolo_lfo * 2.0 * std::f32::consts::PI).sin());
+            let gain = 1.0 - depth * (1.0 - lfo);
+            let out = sample * gain;
+            (1.0 - mix) * sample + mix * out
+        }
+
+        BossEffectKind::Vibrato { rate, depth, mix } => {
+            state.vibrato_lfo += rate / sample_rate;
+            if state.vibrato_lfo >= 1.0 { state.vibrato_lfo -= 1.0; }
+            let lfo = (state.vibrato_lfo * 2.0 * std::f32::consts::PI).sin();
+            let buf_cap = state.chorus_buf.len();
+            let delay_samples = (0.005 + 0.003 * depth * lfo) * sample_rate;
+            let r_pos = (state.chorus_w_idx as f32 + buf_cap as f32 - delay_samples) % (buf_cap as f32);
+            let i0 = r_pos.floor() as usize % buf_cap;
+            let i1 = (i0 + 1) % buf_cap;
+            let frac = r_pos - r_pos.floor();
+            let out = state.chorus_buf[i0] * (1.0 - frac) + state.chorus_buf[i1] * frac;
+            state.chorus_buf[state.chorus_w_idx] = sample;
+            state.chorus_w_idx = (state.chorus_w_idx + 1) % buf_cap;
+            (1.0 - mix) * sample + mix * out
+        }
+
+        BossEffectKind::Rotary { speed, depth, mix } => {
+            state.rotary_lfo += speed / sample_rate;
+            if state.rotary_lfo >= 1.0 { state.rotary_lfo -= 1.0; }
+            let lfo = 0.5 * (1.0 + (state.rotary_lfo * 2.0 * std::f32::consts::PI).sin());
+            let trem = 1.0 - depth * 0.4 * (1.0 - lfo);
+            let sat = (sample * 1.5).tanh() * 0.8;
+            (1.0 - mix) * sample + mix * (sat * trem)
+        }
+
+        BossEffectKind::AutoPan { rate, depth } => {
+            state.autopan_lfo += rate / sample_rate;
+            if state.autopan_lfo >= 1.0 { state.autopan_lfo -= 1.0; }
+            let pan = (state.autopan_lfo * 2.0 * std::f32::consts::PI).sin();
+            sample * (1.0 - depth * 0.3 * pan)
+        }
+
+        BossEffectKind::FilterLpf { mix, .. } => {
+            let filtered = state.generic_filter1.process(sample);
+            (1.0 - mix) * sample + mix * filtered
+        }
+
+        BossEffectKind::FilterBpf { mix, .. } => {
+            let filtered = state.generic_filter1.process(sample);
+            (1.0 - mix) * sample + mix * filtered
+        }
+
+        BossEffectKind::FilterHpf { mix, .. } => {
+            let filtered = state.generic_filter1.process(sample);
+            (1.0 - mix) * sample + mix * filtered
+        }
+
+        BossEffectKind::Synth { cutoff, mix, .. } => {
+            state.synth_phase += 130.0 / sample_rate;
+            if state.synth_phase >= 1.0 { state.synth_phase -= 1.0; }
+            let saw = state.synth_phase * 2.0 - 1.0;
+            let env = sample.abs() * 3.0;
+            let s_out = (saw * env).tanh();
+            let dt = 1.0 / sample_rate;
+            let rc = 1.0 / (2.0 * std::f32::consts::PI * cutoff.clamp(300.0, 16000.0));
+            let alpha = dt / (rc + dt);
+            state.fuzz_tone_lp += alpha * (s_out - state.fuzz_tone_lp);
+            (1.0 - mix) * sample + mix * state.fuzz_tone_lp
+        }
+
+        BossEffectKind::Overdrive { drive, tone, mix } => {
+            let x = sample * (1.0 + drive * 9.0);
+            let od = (x + 0.1).tanh() - 0.1f32.tanh();
+            let dt = 1.0 / sample_rate;
+            let rc = 1.0 / (2.0 * std::f32::consts::PI * tone.clamp(800.0, 16000.0));
+            let alpha = dt / (rc + dt);
+            state.dist_tone_lp += alpha * (od - state.dist_tone_lp);
+            (1.0 - mix) * sample + mix * state.dist_tone_lp
+        }
+
+        BossEffectKind::MetalDs { gain, tone, out_gain } => {
+            let s_scoop = state.generic_filter1.process(sample);
+            let x = s_scoop * (1.0 + gain * 25.0);
+            let clipped = x.clamp(-0.85, 0.85) * 1.15;
+            let dt = 1.0 / sample_rate;
+            let rc = 1.0 / (2.0 * std::f32::consts::PI * tone.clamp(800.0, 16000.0));
+            let alpha = dt / (rc + dt);
+            state.fuzz_tone_lp += alpha * (clipped - state.fuzz_tone_lp);
+            state.fuzz_tone_lp * out_gain
+        }
+
+        BossEffectKind::OctFuzz { drive, tone, out_gain } => {
+            let rect = sample.abs() * 2.0 - 0.5;
+            let x = rect * (1.0 + drive * 15.0);
+            let fuzzed = (x / (1.0 + x.abs())).clamp(-1.0, 1.0);
+            let dt = 1.0 / sample_rate;
+            let rc = 1.0 / (2.0 * std::f32::consts::PI * tone.clamp(800.0, 16000.0));
+            let alpha = dt / (rc + dt);
+            state.fuzz_tone_lp += alpha * (fuzzed - state.fuzz_tone_lp);
+            state.fuzz_tone_lp * out_gain
+        }
+
+        BossEffectKind::Crunch { gain, tone, out_gain } => {
+            let x = sample * (1.0 + gain * 6.0);
+            let crunch = (x * 1.2).tanh() * 0.9;
+            let dt = 1.0 / sample_rate;
+            let rc = 1.0 / (2.0 * std::f32::consts::PI * tone.clamp(800.0, 16000.0));
+            let alpha = dt / (rc + dt);
+            state.dist_tone_lp += alpha * (crunch - state.dist_tone_lp);
+            state.dist_tone_lp * out_gain
+        }
+
+        BossEffectKind::Preamp { drive, tone, out_gain } => {
+            let x = sample * (1.0 + drive * 4.0);
+            let warm = x + 0.15 * x * x - 0.05 * x * x * x;
+            let dt = 1.0 / sample_rate;
+            let rc = 1.0 / (2.0 * std::f32::consts::PI * tone.clamp(800.0, 18000.0));
+            let alpha = dt / (rc + dt);
+            state.dist_tone_lp += alpha * (warm - state.dist_tone_lp);
+            state.dist_tone_lp * out_gain
+        }
+
+        BossEffectKind::Compressor { threshold_db, ratio, makeup_db, .. } => {
+            let env = sample.abs();
+            state.comp_env = state.comp_env * 0.992 + env * 0.008;
+            let env_db = 20.0 * (state.comp_env.max(1e-5)).log10();
+            let gr_db = if env_db > *threshold_db {
+                (env_db - threshold_db) * (1.0 - 1.0 / ratio.max(1.0))
+            } else {
+                0.0
+            };
+            let gain = 10.0f32.powf((makeup_db - gr_db) / 20.0);
+            sample * gain
+        }
+
+        BossEffectKind::Limiter { threshold_db, ceiling_db } => {
+            let thresh = 10.0f32.powf(threshold_db / 20.0);
+            let ceiling = 10.0f32.powf(ceiling_db / 20.0);
+            let clamped = sample.clamp(-thresh, thresh) * (ceiling / thresh);
+            clamped
+        }
+
+        BossEffectKind::NoiseSuppressor { threshold_db, .. } => {
+            let env = sample.abs();
+            state.ns_env = state.ns_env * 0.99 + env * 0.01;
+            let env_db = 20.0 * (state.ns_env.max(1e-5)).log10();
+            let mult = if env_db < *threshold_db {
+                ((env_db - threshold_db - 12.0) / 12.0).clamp(0.0, 1.0)
+            } else {
+                1.0
+            };
+            sample * mult
+        }
+
+        BossEffectKind::PanningDelay { time_ms, feedback, mix } => {
+            let buf_cap = state.delay_buf.len();
+            let cur_w = state.delay_w_idx;
+            let d_samples = (*time_ms * 0.001 * sample_rate).clamp(10.0, (buf_cap - 128) as f32);
+            let r_pos = (cur_w as f32 + buf_cap as f32 - d_samples) % (buf_cap as f32);
+            let i0 = r_pos.floor() as usize % buf_cap;
+            let delayed = state.delay_buf[i0];
+            state.delay_buf[cur_w] = sample + delayed * feedback.clamp(0.0, 0.92);
+            state.delay_w_idx = (cur_w + 1) % buf_cap;
+            (1.0 - mix) * sample + mix * delayed
+        }
+
+        BossEffectKind::TapeEcho { time_ms, feedback, flutter, mix } => {
+            state.vinyl_flutter_phase += 2.0 / sample_rate;
+            if state.vinyl_flutter_phase >= 1.0 { state.vinyl_flutter_phase -= 1.0; }
+            let flut = (state.vinyl_flutter_phase * 2.0 * std::f32::consts::PI).sin() * flutter * 0.002;
+            let buf_cap = state.delay_buf.len();
+            let cur_w = state.delay_w_idx;
+            let d_samples = ((*time_ms * 0.001 + flut) * sample_rate).clamp(10.0, (buf_cap - 128) as f32);
+            let r_pos = (cur_w as f32 + buf_cap as f32 - d_samples) % (buf_cap as f32);
+            let i0 = r_pos.floor() as usize % buf_cap;
+            let delayed = state.delay_buf[i0];
+            let saturated_fb = (delayed * 1.2).tanh();
+            state.delay_buf[cur_w] = sample + saturated_fb * feedback.clamp(0.0, 0.94);
+            state.delay_w_idx = (cur_w + 1) % buf_cap;
+            (1.0 - mix) * sample + mix * delayed
+        }
+
+        BossEffectKind::WarpDelay { time_ms, feedback, warp, mix } => {
+            state.flanger_lfo += 0.8 / sample_rate;
+            if state.flanger_lfo >= 1.0 { state.flanger_lfo -= 1.0; }
+            let w_mod = (state.flanger_lfo * 2.0 * std::f32::consts::PI).sin() * warp * 0.015;
+            let buf_cap = state.delay_buf.len();
+            let cur_w = state.delay_w_idx;
+            let d_samples = ((*time_ms * 0.001 + w_mod) * sample_rate).clamp(10.0, (buf_cap - 128) as f32);
+            let r_pos = (cur_w as f32 + buf_cap as f32 - d_samples) % (buf_cap as f32);
+            let i0 = r_pos.floor() as usize % buf_cap;
+            let delayed = state.delay_buf[i0];
+            state.delay_buf[cur_w] = sample + delayed * feedback.clamp(0.0, 0.92);
+            state.delay_w_idx = (cur_w + 1) % buf_cap;
+            (1.0 - mix) * sample + mix * delayed
+        }
+
+        BossEffectKind::TwistDelay { time_ms, feedback, twist, mix } => {
+            let buf_cap = state.delay_buf.len();
+            let cur_w = state.delay_w_idx;
+            let d_samples = (*time_ms * 0.001 * sample_rate).clamp(10.0, (buf_cap - 128) as f32);
+            let r_pos = (cur_w as f32 + buf_cap as f32 - d_samples) % (buf_cap as f32);
+            let i0 = r_pos.floor() as usize % buf_cap;
+            let delayed = state.delay_buf[i0];
+            let twist_out = (delayed * (1.0 + twist * 2.5)).tanh();
+            state.delay_buf[cur_w] = sample + twist_out * feedback.clamp(0.0, 0.98);
+            state.delay_w_idx = (cur_w + 1) % buf_cap;
+            (1.0 - mix) * sample + mix * twist_out
+        }
+
+        BossEffectKind::GranularDelay { grain_ms, feedback, mix } => {
+            let buf_cap = state.delay_buf.len();
+            let cur_w = state.delay_w_idx;
+            let d_samples = (*grain_ms * 0.001 * sample_rate).clamp(10.0, (buf_cap - 128) as f32);
+            let r_pos = (cur_w as f32 + buf_cap as f32 - d_samples) % (buf_cap as f32);
+            let i0 = r_pos.floor() as usize % buf_cap;
+            let delayed = state.delay_buf[i0];
+            state.delay_buf[cur_w] = sample + delayed * feedback.clamp(0.0, 0.92);
+            state.delay_w_idx = (cur_w + 1) % buf_cap;
+            (1.0 - mix) * sample + mix * delayed
+        }
+
+        BossEffectKind::BeatShift { shift_samples, mix } => {
+            let buf_cap = state.delay_buf.len();
+            let cur_w = state.delay_w_idx;
+            state.delay_buf[cur_w] = sample;
+            let r_idx = (cur_w + buf_cap - (*shift_samples).clamp(1, buf_cap - 1)) % buf_cap;
+            let shifted = state.delay_buf[r_idx];
+            state.delay_w_idx = (cur_w + 1) % buf_cap;
+            (1.0 - mix) * sample + mix * shifted
+        }
+
+        BossEffectKind::RoomReverb { size, damp, mix } => {
+            let fb = (0.35 + 0.45 * size).clamp(0.3, 0.88);
+            let mut combs = 0.0f32;
+            let o1 = state.rev_comb1[state.rev_comb1_idx];
+            state.rev_comb1[state.rev_comb1_idx] = sample + o1 * fb * (1.0 - damp * 0.2);
+            state.rev_comb1_idx = (state.rev_comb1_idx + 1) % 1116;
+            combs += o1;
+            let o2 = state.rev_comb2[state.rev_comb2_idx];
+            state.rev_comb2[state.rev_comb2_idx] = sample + o2 * fb;
+            state.rev_comb2_idx = (state.rev_comb2_idx + 1) % 1188;
+            combs += o2;
+            let out = combs * 0.5;
+            (1.0 - mix) * sample + mix * out
+        }
+
+        BossEffectKind::HallReverb { size, mix, .. } => {
+            let fb = (0.55 + 0.38 * size).clamp(0.4, 0.94);
+            let mut combs = 0.0f32;
+            let o1 = state.rev_comb1[state.rev_comb1_idx];
+            state.rev_comb1[state.rev_comb1_idx] = sample + o1 * fb;
+            state.rev_comb1_idx = (state.rev_comb1_idx + 1) % 1116;
+            combs += o1;
+            let o3 = state.rev_comb3[state.rev_comb3_idx];
+            state.rev_comb3[state.rev_comb3_idx] = sample + o3 * fb;
+            state.rev_comb3_idx = (state.rev_comb3_idx + 1) % 1277;
+            combs += o3;
+            let out = combs * 0.5;
+            (1.0 - mix) * sample + mix * out
+        }
+
+        BossEffectKind::PlateReverb { decay, mix, .. } => {
+            let fb = (0.45f32).powf(0.05 / decay.max(0.2)).clamp(0.3, 0.92);
+            let ap1 = state.rev_ap1[state.rev_ap1_idx];
+            state.rev_ap1[state.rev_ap1_idx] = sample + ap1 * fb;
+            state.rev_ap1_idx = (state.rev_ap1_idx + 1) % 225;
+            let ap2 = state.rev_ap2[state.rev_ap2_idx];
+            state.rev_ap2[state.rev_ap2_idx] = ap1 + ap2 * fb;
+            state.rev_ap2_idx = (state.rev_ap2_idx + 1) % 556;
+            (1.0 - mix) * sample + mix * ap2
+        }
+
+        BossEffectKind::SpringReverb { decay, tension, mix } => {
+            let fb = decay.clamp(0.2, 0.85);
+            let o1 = state.rev_comb4[state.rev_comb4_idx];
+            let spring_mod = (o1 * tension * 1.5).tanh();
+            state.rev_comb4[state.rev_comb4_idx] = sample + spring_mod * fb;
+            state.rev_comb4_idx = (state.rev_comb4_idx + 1) % 1356;
+            (1.0 - mix) * sample + mix * o1
         }
     }
 }
