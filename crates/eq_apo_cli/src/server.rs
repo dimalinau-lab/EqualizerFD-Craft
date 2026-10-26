@@ -251,7 +251,9 @@ fn handle_client(mut stream: TcpStream) {
                 respond_ok(&mut stream, "application/json", b"{\"status\":\"hidden_to_tray\"}");
             }
             "/api/window/show" => {
-                crate::window_manager::focus_existing_window();
+                if !crate::window_manager::focus_existing_window() {
+                    crate::open_or_focus_editor();
+                }
                 respond_ok(&mut stream, "application/json", b"{\"status\":\"shown\"}");
             }
             "/api/window/minimize" => {
@@ -371,14 +373,14 @@ fn handle_client(mut stream: TcpStream) {
                 let resp = serde_json::json!({ "enabled": enabled }).to_string();
                 respond_ok(&mut stream, "application/json", resp.as_bytes());
             }
-            "/api/stream/status" => {
+            "/api/status" | "/api/stream/status" => {
                 let active = if let Ok(lock) = STREAM_CONTROLLER.lock() {
                     lock.as_ref().map(|c| c.is_active()).unwrap_or(false)
                 } else {
                     false
                 };
                 let wizard = WIZARD_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst);
-                let resp = format!("{{\"active\":{},\"capture\":\"Microphone\",\"render\":\"VB-Audio Virtual Cable\",\"open_wizard\":{}}}", active, wizard);
+                let resp = format!("{{\"active\":{},\"stream_active\":{},\"capture\":\"Microphone\",\"render\":\"VB-Audio Virtual Cable\",\"open_wizard\":{}}}", active, active, wizard);
                 respond_ok(&mut stream, "application/json", resp.as_bytes());
             }
             "/api/wizard/trigger" => {
@@ -450,7 +452,9 @@ fn handle_client(mut stream: TcpStream) {
                 respond_ok(&mut stream, "application/json", b"{\"status\":\"hidden_to_tray\"}");
             }
             "/api/window/show" => {
-                crate::window_manager::focus_existing_window();
+                if !crate::window_manager::focus_existing_window() {
+                    crate::open_or_focus_editor();
+                }
                 respond_ok(&mut stream, "application/json", b"{\"status\":\"shown\"}");
             }
             "/api/window/minimize" => {
@@ -600,6 +604,26 @@ fn handle_client(mut stream: TcpStream) {
                     }
                 }
                 respond_ok(&mut stream, "application/json", b"{\"status\":\"stopped\"}");
+            }
+            "/api/stream/toggle" => {
+                let mut is_active = false;
+                if let Ok(mut lock) = STREAM_CONTROLLER.lock() {
+                    if let Some(ref mut ctrl) = *lock {
+                        if ctrl.is_active() {
+                            ctrl.stop();
+                        } else {
+                            let _ = ctrl.start("Microphone".to_string(), "cable".to_string());
+                            is_active = true;
+                        }
+                    } else {
+                        let mut new_ctrl = eq_apo_device::stream::StreamController::new();
+                        let _ = new_ctrl.start("Microphone".to_string(), "cable".to_string());
+                        is_active = true;
+                        *lock = Some(new_ctrl);
+                    }
+                }
+                let resp = format!("{{\"status\":\"{}\",\"active\":{},\"stream_active\":{}}}", if is_active { "started" } else { "stopped" }, is_active, is_active);
+                respond_ok(&mut stream, "application/json", resp.as_bytes());
             }
             "/api/apo/apply-batch" => {
                 let mut applied_count = 0;

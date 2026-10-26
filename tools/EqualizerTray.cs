@@ -14,6 +14,8 @@ class EqualizerTrayApp {
     [DllImport("user32.dll")]
     static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")]
+    static extern bool BringWindowToTop(IntPtr hWnd);
+    [DllImport("user32.dll")]
     static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
@@ -74,7 +76,7 @@ class EqualizerTrayApp {
             MenuItem restartAudioItem = new MenuItem("Перезапустить аудиослужбу (audiodg.exe)", (s, e) => RestartAudioService());
             menu.MenuItems.Add(restartAudioItem);
 
-            MenuItem folderItem = new MenuItem("Открыть папку с пресетами и VST", (s, e) => OpenAppFolder());
+            MenuItem folderItem = new MenuItem("Открыть папку приложения", (s, e) => OpenAppFolder());
             menu.MenuItems.Add(folderItem);
 
             menu.MenuItems.Add("-");
@@ -116,7 +118,7 @@ class EqualizerTrayApp {
         foreach (string path in candidates) {
             if (File.Exists(path)) {
                 try {
-                    return new Icon(path, 16, 16);
+                    return new Icon(path, 32, 32);
                 } catch {
                     try {
                         return new Icon(path);
@@ -127,16 +129,23 @@ class EqualizerTrayApp {
         return SystemIcons.Application;
     }
 
-
     static void FocusOrOpenApp() {
+        bool httpSuccess = false;
         try {
             HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:49200/api/window/show");
             req.Method = "POST";
             req.ContentLength = 0;
-            req.Timeout = 800;
-            using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse()) { }
-            return;
+            req.Timeout = 1500;
+            using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse()) {
+                if (resp.StatusCode == HttpStatusCode.OK) {
+                    httpSuccess = true;
+                }
+            }
         } catch { }
+
+        if (httpSuccess) {
+            return;
+        }
 
         IntPtr targetHwnd = IntPtr.Zero;
         EnumWindows((hWnd, lParam) => {
@@ -154,6 +163,7 @@ class EqualizerTrayApp {
         if (targetHwnd != IntPtr.Zero) {
             ShowWindow(targetHwnd, SW_SHOW);
             ShowWindow(targetHwnd, SW_RESTORE);
+            BringWindowToTop(targetHwnd);
             SetForegroundWindow(targetHwnd);
         } else {
             try {
@@ -197,7 +207,8 @@ class EqualizerTrayApp {
                 using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
                 using (StreamReader reader = new StreamReader(resp.GetResponseStream())) {
                     string json = reader.ReadToEnd();
-                    bool active = json.IndexOf("\"stream_active\":true", StringComparison.OrdinalIgnoreCase) >= 0;
+                    bool active = json.IndexOf("\"stream_active\":true", StringComparison.OrdinalIgnoreCase) >= 0
+                               || json.IndexOf("\"active\":true", StringComparison.OrdinalIgnoreCase) >= 0;
                     if (streamMenuItem != null) {
                         streamMenuItem.Text = active
                             ? "WASAPI аудиомост: [В ЭФИРЕ] (клик для паузы)"
@@ -221,6 +232,7 @@ class EqualizerTrayApp {
                 req.Timeout = 2000;
                 using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse()) { }
             } catch { }
+            Thread.Sleep(200);
             UpdateStreamStatus();
         });
     }
@@ -260,12 +272,29 @@ class EqualizerTrayApp {
 
     static void RestartAudioService() {
         ThreadPool.QueueUserWorkItem((state) => {
+            // First try internal server API (elevated without UAC prompt)
+            try {
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:49200/api/apo/restart-engine");
+                req.Method = "POST";
+                req.ContentLength = 0;
+                req.Timeout = 3000;
+                using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse()) {
+                    if (resp.StatusCode == HttpStatusCode.OK) {
+                        if (trayIcon != null) {
+                            trayIcon.ShowBalloonTip(2000, "Equalizer FD CRAFT", "Аудиослужба (audiodg.exe) успешно перезапущена", ToolTipIcon.Info);
+                        }
+                        return;
+                    }
+                }
+            } catch { }
+
+            // Fallback to elevated cmd
             try {
                 ProcessStartInfo psi = new ProcessStartInfo();
                 psi.FileName = "cmd.exe";
                 psi.Arguments = "/c net stop audiosrv /y && net start audiosrv";
                 psi.CreateNoWindow = true;
-                psi.UseShellExecute = false;
+                psi.UseShellExecute = true; // Required for Verb = "runas"
                 psi.Verb = "runas";
                 Process.Start(psi);
             } catch { }
@@ -274,7 +303,8 @@ class EqualizerTrayApp {
 
     static void OpenAppFolder() {
         try {
-            Process.Start("explorer.exe", AppDomain.CurrentDomain.BaseDirectory);
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
+            Process.Start("explorer.exe", "\"" + baseDir + "\"");
         } catch { }
     }
 
@@ -284,11 +314,22 @@ class EqualizerTrayApp {
                 trayIcon.Visible = false;
                 trayIcon.Dispose();
             }
-            Process[] procs = Process.GetProcessesByName("EqualizerFD-Craft");
-            foreach (Process p in procs) {
-                try { p.Kill(); } catch { }
-            }
         } catch { }
+
+        try {
+            HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:49200/api/app/quit");
+            req.Method = "POST";
+            req.ContentLength = 0;
+            req.Timeout = 1200;
+            using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse()) { }
+        } catch {
+            try {
+                Process[] procs = Process.GetProcessesByName("EqualizerFD-Craft");
+                foreach (Process p in procs) {
+                    try { p.Kill(); } catch { }
+                }
+            } catch { }
+        }
         Application.Exit();
     }
 }

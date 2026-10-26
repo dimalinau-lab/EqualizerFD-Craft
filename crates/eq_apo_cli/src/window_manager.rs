@@ -4,12 +4,20 @@ use std::sync::atomic::{AtomicIsize, Ordering};
 use std::time::Duration;
 use windows::core::HRESULT;
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT, WPARAM};
+use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetClassNameW, GetWindowRect, GetWindowTextW, IsWindow, IsZoomed,
+    BringWindowToTop, EnumWindows, GetClassNameW, GetForegroundWindow,
+    GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsWindow, IsZoomed,
     LoadImageW, SendMessageW, SetForegroundWindow, SetWindowPos, ShowWindow,
-    IMAGE_ICON, LR_DEFAULTSIZE, LR_LOADFROMFILE, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER,
-    SW_HIDE, SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE, SW_SHOW, WM_SETICON,
+    IMAGE_ICON, LR_DEFAULTSIZE, LR_LOADFROMFILE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE, SW_SHOW,
+    WM_SETICON,
 };
+
+#[link(name = "user32")]
+extern "system" {
+    fn AttachThreadInput(id_attach: u32, id_attach_to: u32, f_attach: BOOL) -> BOOL;
+}
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 static STORED_APP_HWND: AtomicIsize = AtomicIsize::new(0);
@@ -169,9 +177,28 @@ pub fn move_window_by(dx: i32, dy: i32) {
 pub fn focus_existing_window() -> bool {
     if let Some(hwnd) = find_app_window() {
         unsafe {
+            // 1. Un-hide and restore window
             let _ = ShowWindow(hwnd, SW_SHOW);
             let _ = ShowWindow(hwnd, SW_RESTORE);
+            let _ = SetWindowPos(
+                hwnd,
+                HWND(std::ptr::null_mut()),
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW,
+            );
+
+            // 2. Bypass Windows foreground restriction via thread input attachment
+            let fg = GetForegroundWindow();
+            let fg_thread = GetWindowThreadProcessId(fg, None);
+            let cur_thread = GetCurrentThreadId();
+            if fg_thread != cur_thread && fg_thread != 0 {
+                let _ = AttachThreadInput(cur_thread, fg_thread, BOOL(1));
+            }
+            let _ = BringWindowToTop(hwnd);
             let _ = SetForegroundWindow(hwnd);
+            if fg_thread != cur_thread && fg_thread != 0 {
+                let _ = AttachThreadInput(cur_thread, fg_thread, BOOL(0));
+            }
         }
         true
     } else {
