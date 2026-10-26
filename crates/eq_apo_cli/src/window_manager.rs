@@ -17,6 +17,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 #[link(name = "user32")]
 extern "system" {
     fn AttachThreadInput(id_attach: u32, id_attach_to: u32, f_attach: BOOL) -> BOOL;
+    fn SetClassLongPtrW(hwnd: HWND, n_index: i32, dw_new_long: isize) -> usize;
 }
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -136,20 +137,35 @@ pub fn make_window_frameless(hwnd: HWND) {
         for opt_path in candidate_paths.into_iter().flatten() {
             if opt_path.exists() {
                 let wide: Vec<u16> = opt_path.to_string_lossy().encode_utf16().chain(Some(0)).collect();
-                if let Ok(handle) = LoadImageW(
+                let handle_small = LoadImageW(
                     None,
                     windows::core::PCWSTR(wide.as_ptr()),
                     IMAGE_ICON,
-                    0,
-                    0,
-                    LR_LOADFROMFILE | LR_DEFAULTSIZE,
-                ) {
-                    if !handle.is_invalid() {
-                        let _ = SendMessageW(hwnd, WM_SETICON, WPARAM(1), LPARAM(handle.0 as isize));
-                        let _ = SendMessageW(hwnd, WM_SETICON, WPARAM(0), LPARAM(handle.0 as isize));
-                        break;
+                    16,
+                    16,
+                    LR_LOADFROMFILE,
+                );
+                let handle_large = LoadImageW(
+                    None,
+                    windows::core::PCWSTR(wide.as_ptr()),
+                    IMAGE_ICON,
+                    32,
+                    32,
+                    LR_LOADFROMFILE,
+                );
+                if let Ok(hs) = handle_small {
+                    if !hs.is_invalid() {
+                        let _ = SendMessageW(hwnd, WM_SETICON, WPARAM(0), LPARAM(hs.0 as isize));
+                        let _ = SetClassLongPtrW(hwnd, -34, hs.0 as isize); // GCLP_HICONSM
                     }
                 }
+                if let Ok(hl) = handle_large {
+                    if !hl.is_invalid() {
+                        let _ = SendMessageW(hwnd, WM_SETICON, WPARAM(1), LPARAM(hl.0 as isize));
+                        let _ = SetClassLongPtrW(hwnd, -14, hl.0 as isize); // GCLP_HICON
+                    }
+                }
+                break;
             }
         }
     }

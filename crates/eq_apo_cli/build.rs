@@ -5,6 +5,8 @@ fn main() {
         res.set("ProductName", "Equalizer FD CRAFT");
         res.set("FileDescription", "Equalizer FD CRAFT - Studio Audio Engine");
         res.set("LegalCopyright", "Copyright (c) 2026 Equalizer FD CRAFT Team");
+        println!("cargo:rerun-if-changed=icon.ico");
+        println!("cargo:rerun-if-changed=build.rs");
         if let Err(e) = res.compile() {
             eprintln!("Warning: Failed to compile windows resource: {}", e);
         }

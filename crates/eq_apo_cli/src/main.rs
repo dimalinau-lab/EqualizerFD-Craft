@@ -260,6 +260,12 @@ fn launch_browser_window(app_url: &str) {
         let _ = std::fs::remove_file(&lock2);
     }
 
+    // Purge stale favicon and hub app caches so Edge reloads the new 4K icon immediately
+    let _ = std::fs::remove_file(format!(r"{}\Favicons", default_dir));
+    let _ = std::fs::remove_file(format!(r"{}\Favicons-journal", default_dir));
+    let _ = std::fs::remove_file(format!(r"{}\HubApps Icons", default_dir));
+    let _ = std::fs::remove_file(format!(r"{}\HubApps Icons-journal", default_dir));
+
     let first_run_file = format!(r"{}\FirstLaunchAfterInstallation", profile_dir);
     if !Path::new(&first_run_file).exists() {
         let _ = std::fs::write(&first_run_file, b"");
@@ -309,7 +315,6 @@ fn launch_browser_window(app_url: &str) {
         if Path::new(path).exists() {
             let res = Command::new(path)
                 .args(&window_args)
-                .creation_flags(CREATE_NO_WINDOW)
                 .spawn();
             if res.is_ok() {
                 return;
