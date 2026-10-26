@@ -61,8 +61,6 @@ $releaseBody = @"
    - **Быстрое обновление (ZIP-архив)** без повторного скачивания плагинов.
 4. **`EqualizerFD-Craft-v0.1.3-BETA-Portable.zip`** (3.20 MB):
    - Портативная версия без инсталляции.
-5. **`EqualizerFD-Craft.exe`** (1.98 MB):
-   - Исполняемый файл программы.
 "@
 
 if (-not $release) {
@@ -97,8 +95,7 @@ $filesToUpload = @(
     @{ Name = "EqualizerFD-Craft-Setup-v0.1.3-BETA.exe"; Path = "dist\EqualizerFD-Craft-Setup-v0.1.3-BETA.exe"; ContentType = "application/vnd.microsoft.portable-executable" },
     @{ Name = "EqualizerFD-Craft-Update-Installer.exe"; Path = "dist\EqualizerFD-Craft-Update-Installer.exe"; ContentType = "application/vnd.microsoft.portable-executable" },
     @{ Name = "EqualizerFD-Craft-Update.zip"; Path = "dist\EqualizerFD-Craft-Update.zip"; ContentType = "application/zip" },
-    @{ Name = "EqualizerFD-Craft-v0.1.3-BETA-Portable.zip"; Path = "dist\EqualizerFD-Craft-v0.1.3-BETA-Portable.zip"; ContentType = "application/zip" },
-    @{ Name = "EqualizerFD-Craft.exe"; Path = "EqualizerFD-Craft.exe"; ContentType = "application/vnd.microsoft.portable-executable" }
+    @{ Name = "EqualizerFD-Craft-v0.1.3-BETA-Portable.zip"; Path = "dist\EqualizerFD-Craft-v0.1.3-BETA-Portable.zip"; ContentType = "application/zip" }
 )
 
 Write-Host ">>> [4/5] Uploading release assets..."
