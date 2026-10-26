@@ -55,11 +55,13 @@ $releaseBody = @"
 ## 📦 Варианты установки и скачивания
 1. **`EqualizerFD-Craft-Setup-v0.1.3-BETA.exe`** (165.68 MB):
    - **Полный офлайн установщик Inno Setup** со всеми встроенными **98 профессиональными 64-битными VST плагинами** (ReaPlugs, Blue Cat, Kuassa и др.).
-2. **`EqualizerFD-Craft-Update.zip`** (1.85 MB):
-   - **Быстрое обновление** без повторного скачивания плагинов (только обновленный движок, веб-интерфейс, трей и APO).
-3. **`EqualizerFD-Craft-v0.1.3-BETA-Portable.zip`** (3.20 MB):
+2. **`EqualizerFD-Craft-Update-Installer.exe`** (3.10 MB):
+   - **Быстрое обновление (рекомендуется)**: легкий установщик Inno Setup. Обновляет исполняемые файлы программы, системный трей и веб-интерфейс, сохраняя все ваши пресеты и плагины.
+3. **`EqualizerFD-Craft-Update.zip`** (1.85 MB):
+   - **Быстрое обновление (ZIP-архив)** без повторного скачивания плагинов.
+4. **`EqualizerFD-Craft-v0.1.3-BETA-Portable.zip`** (3.20 MB):
    - Портативная версия без инсталляции.
-4. **`EqualizerFD-Craft.exe`** (1.97 MB):
+5. **`EqualizerFD-Craft.exe`** (1.98 MB):
    - Исполняемый файл программы.
 "@
 
@@ -93,6 +95,7 @@ $existingAssets = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/rel
 
 $filesToUpload = @(
     @{ Name = "EqualizerFD-Craft-Setup-v0.1.3-BETA.exe"; Path = "dist\EqualizerFD-Craft-Setup-v0.1.3-BETA.exe"; ContentType = "application/vnd.microsoft.portable-executable" },
+    @{ Name = "EqualizerFD-Craft-Update-Installer.exe"; Path = "dist\EqualizerFD-Craft-Update-Installer.exe"; ContentType = "application/vnd.microsoft.portable-executable" },
     @{ Name = "EqualizerFD-Craft-Update.zip"; Path = "dist\EqualizerFD-Craft-Update.zip"; ContentType = "application/zip" },
     @{ Name = "EqualizerFD-Craft-v0.1.3-BETA-Portable.zip"; Path = "dist\EqualizerFD-Craft-v0.1.3-BETA-Portable.zip"; ContentType = "application/zip" },
     @{ Name = "EqualizerFD-Craft.exe"; Path = "EqualizerFD-Craft.exe"; ContentType = "application/vnd.microsoft.portable-executable" }
@@ -108,11 +111,16 @@ foreach ($file in $filesToUpload) {
 
     Write-Host "`nProcessing $fileName ($fileSizeMB MB)..."
 
-    # Check if already present and delete to avoid duplicate error
+    # Check if already present
     if ($existingAssets) {
         $found = $existingAssets | Where-Object { $_.name -eq $fileName }
         if ($found) {
-            Write-Host "Asset $fileName already exists (ID: $($found.id)). Deleting previous version..."
+            $localLen = (Get-Item $filePath).Length
+            if ($found.size -eq $localLen -and $found.state -eq "uploaded") {
+                Write-Host "Asset $fileName already exists and size matches ($($found.size) bytes). Skipping upload."
+                continue
+            }
+            Write-Host "Asset $fileName exists with different size (remote: $($found.size), local: $localLen). Deleting previous version..."
             Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/assets/$($found.id)" -Headers $headers -Method Delete
             Start-Sleep -Seconds 1
         }

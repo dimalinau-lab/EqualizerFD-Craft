@@ -426,7 +426,7 @@ fn handle_client(mut stream: TcpStream) {
                 let resp = serde_json::json!({
                     "app_dir": exe_dir,
                     "vst_dir": vst_dir,
-                    "version": "0.1.2-BETA"
+                    "version": crate::updater::CURRENT_VERSION
                 }).to_string();
                 respond_ok(&mut stream, "application/json", resp.as_bytes());
             }
@@ -689,6 +689,8 @@ fn handle_client(mut stream: TcpStream) {
                 let mut download_url = String::new();
                 let mut expected_size = 0u64;
                 let mut token = None;
+                let mut asset_name: Option<String> = None;
+                let mut is_installer = false;
                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body_str) {
                     if let Some(u) = val.get("url").and_then(|v| v.as_str()) {
                         download_url = u.to_string();
@@ -700,6 +702,14 @@ fn handle_client(mut stream: TcpStream) {
                         if !t.trim().is_empty() {
                             token = Some(t.to_string());
                         }
+                    }
+                    if let Some(a) = val.get("asset_name").and_then(|v| v.as_str()) {
+                        if !a.trim().is_empty() {
+                            asset_name = Some(a.to_string());
+                        }
+                    }
+                    if let Some(inst) = val.get("is_installer").and_then(|v| v.as_bool()) {
+                        is_installer = inst;
                     }
                 }
 
@@ -718,7 +728,7 @@ fn handle_client(mut stream: TcpStream) {
                                 ctrl.stop();
                             }
                         }
-                        if let Err(e) = crate::updater::download_and_install_update(&download_url, expected_size, token.as_deref()) {
+                        if let Err(e) = crate::updater::download_and_install_update(&download_url, expected_size, token.as_deref(), asset_name.as_deref(), is_installer) {
                             eprintln!("[Equalizer FD CRAFT Updater] Error: {}", e);
                         }
                     });

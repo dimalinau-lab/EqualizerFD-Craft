@@ -4159,7 +4159,16 @@ const updateModal = document.getElementById('updateModal');
 const closeUpdateBtn = document.getElementById('closeUpdateBtn');
 const btnCloseUpdateModal = document.getElementById('btnCloseUpdateModal');
 const btnCheckNowUpdate = document.getElementById('btnCheckNowUpdate');
-const btnInstallUpdate = document.getElementById('btnInstallUpdate');
+const btnStartFastUpdate = document.getElementById('btnStartFastUpdate');
+const btnStartFullInstall = document.getElementById('btnStartFullInstall');
+const cardFastUpdate = document.getElementById('cardFastUpdate');
+const cardFullInstall = document.getElementById('cardFullInstall');
+const badgeFastSize = document.getElementById('badgeFastSize');
+const badgeFullSize = document.getElementById('badgeFullSize');
+const fileFastName = document.getElementById('fileFastName');
+const fileFullName = document.getElementById('fileFullName');
+const updateOptionsBox = document.getElementById('updateOptionsBox');
+
 const updateStatusText = document.getElementById('updateStatusText');
 const updateResultBox = document.getElementById('updateResultBox');
 const updateBadgeStatus = document.getElementById('updateBadgeStatus');
@@ -4172,8 +4181,7 @@ const updateProgressBar = document.getElementById('updateProgressBar');
 const updateProgressBytes = document.getElementById('updateProgressBytes');
 const updateProgressSpeed = document.getElementById('updateProgressSpeed');
 
-let pendingUpdateDownloadUrl = '';
-let pendingUpdateAssetSize = 0;
+let currentUpdateData = null;
 let updatePollTimer = null;
 let lastBytesDownloaded = 0;
 let lastSpeedTime = Date.now();
@@ -4200,6 +4208,7 @@ async function checkUpdates() {
   try {
     const res = await fetch('/api/update/check');
     const data = await res.json();
+    currentUpdateData = data;
 
     if (updateCurrentVerText && data.current_version) {
       updateCurrentVerText.textContent = window.t ? window.t('update.currentVer', { ver: data.current_version }, `Текущая версия: v${data.current_version}`) : `Текущая версия: v${data.current_version}`;
@@ -4207,30 +4216,47 @@ async function checkUpdates() {
     if (updateStatusText) updateStatusText.textContent = data.message || (window.t ? window.t('update.readyToCheck') : 'Проверка завершена');
     if (updateResultBox) updateResultBox.classList.remove('hidden');
 
-    if (data.has_update && data.download_url) {
-      pendingUpdateDownloadUrl = data.download_url;
-      pendingUpdateAssetSize = data.asset_size || 0;
+    if (data.has_update && (data.fast_update || data.full_install || data.download_url)) {
       if (updateBadgeStatus) {
         updateBadgeStatus.style.background = '#dcfce7';
         updateBadgeStatus.style.color = '#15803d';
         updateBadgeStatus.style.borderColor = '#86efac';
-        updateBadgeStatus.textContent = window.t ? window.t('update.available', { ver: data.latest_version, asset: data.asset_name || 'EqualizerFD-Craft.exe' }) : `Доступно обновление: v${data.latest_version} (${data.asset_name || 'EqualizerFD-Craft.exe'})`;
+        updateBadgeStatus.textContent = window.t ? window.t('update.available', { ver: data.latest_version, asset: data.fast_update?.asset_name || data.asset_name }) : `Доступно обновление: v${data.latest_version}`;
       }
-      if (btnInstallUpdate) {
-        btnInstallUpdate.classList.remove('hidden');
-        btnInstallUpdate.disabled = false;
-        btnInstallUpdate.textContent = window.t ? window.t('update.btnDownload', null, 'Скачать и обновить') : 'Скачать и обновить';
+
+      if (updateOptionsBox) updateOptionsBox.classList.remove('hidden');
+
+      if (data.fast_update) {
+        if (cardFastUpdate) cardFastUpdate.classList.remove('hidden');
+        if (badgeFastSize) badgeFastSize.textContent = formatBytes(data.fast_update.size);
+        if (fileFastName) fileFastName.textContent = data.fast_update.asset_name;
+        if (btnStartFastUpdate) {
+          btnStartFastUpdate.disabled = false;
+          btnStartFastUpdate.textContent = `Скачать быстрое обновление (${formatBytes(data.fast_update.size)})`;
+        }
+      } else {
+        if (cardFastUpdate) cardFastUpdate.classList.add('hidden');
+      }
+
+      if (data.full_install) {
+        if (cardFullInstall) cardFullInstall.classList.remove('hidden');
+        if (badgeFullSize) badgeFullSize.textContent = formatBytes(data.full_install.size);
+        if (fileFullName) fileFullName.textContent = data.full_install.asset_name;
+        if (btnStartFullInstall) {
+          btnStartFullInstall.disabled = false;
+          btnStartFullInstall.textContent = `Скачать полный установщик (${formatBytes(data.full_install.size)})`;
+        }
+      } else {
+        if (cardFullInstall) cardFullInstall.classList.add('hidden');
       }
     } else {
-      pendingUpdateDownloadUrl = '';
-      pendingUpdateAssetSize = 0;
       if (updateBadgeStatus) {
         updateBadgeStatus.style.background = '#f1f5f9';
         updateBadgeStatus.style.color = '#334155';
         updateBadgeStatus.style.borderColor = '#cbd5e1';
         updateBadgeStatus.textContent = data.message || (window.t ? window.t('update.upToDate', { ver: data.current_version }) : `У вас установлена последняя версия Equalizer FD CRAFT (v${data.current_version})`);
       }
-      if (btnInstallUpdate) btnInstallUpdate.classList.add('hidden');
+      if (updateOptionsBox) updateOptionsBox.classList.add('hidden');
     }
 
     if (updateNotesText) {
@@ -4241,6 +4267,49 @@ async function checkUpdates() {
   } finally {
     btnCheckNowUpdate.disabled = false;
     btnCheckNowUpdate.textContent = window.t ? window.t('update.btnCheckNow', null, 'Проверить сейчас') : 'Проверить сейчас';
+  }
+}
+
+async function startUpdate(option, isFull) {
+  if (!option || !option.download_url) return;
+  if (btnStartFastUpdate) btnStartFastUpdate.disabled = true;
+  if (btnStartFullInstall) btnStartFullInstall.disabled = true;
+
+  if (updateStatusText) {
+    updateStatusText.textContent = isFull ? 'Загрузка полного инсталлятора Inno Setup...' : 'Загрузка быстрого обновления...';
+  }
+
+  if (updateProgressBox) updateProgressBox.classList.remove('hidden');
+  if (updateProgressBar) {
+    updateProgressBar.style.width = '0%';
+    updateProgressBar.style.background = '#2563eb';
+  }
+  if (updateProgressPercent) updateProgressPercent.textContent = '0%';
+  if (updateProgressLabel) updateProgressLabel.textContent = `Подключение к серверу загрузки (${option.asset_name})...`;
+  if (updateProgressBytes) updateProgressBytes.textContent = `0 B / ${formatBytes(option.size)}`;
+  if (updateProgressSpeed) updateProgressSpeed.textContent = 'Подготовка...';
+
+  lastBytesDownloaded = 0;
+  lastSpeedTime = Date.now();
+
+  try {
+    const res = await fetch('/api/update/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: option.download_url,
+        size: option.size,
+        asset_name: option.asset_name,
+        is_installer: option.is_installer,
+        mode: option.mode || (isFull ? 'full' : 'fast')
+      })
+    });
+    const result = await res.json();
+    pollUpdateProgress();
+  } catch (err) {
+    showToast('Ошибка запуска обновления: ' + err.message, true);
+    if (btnStartFastUpdate) btnStartFastUpdate.disabled = false;
+    if (btnStartFullInstall) btnStartFullInstall.disabled = false;
   }
 }
 
@@ -4271,7 +4340,7 @@ async function pollUpdateProgress() {
     }
 
     if (data.status === 'downloading') {
-      if (updateProgressLabel) updateProgressLabel.textContent = window.t ? window.t('update.progressLabel') : 'Скачивание EqualizerFD-Craft.exe...';
+      if (updateProgressLabel) updateProgressLabel.textContent = data.message || 'Скачивание установщика обновления...';
       updatePollTimer = setTimeout(pollUpdateProgress, 120);
     } else if (data.status === 'applying') {
       if (updateProgressBar) {
@@ -4288,17 +4357,15 @@ async function pollUpdateProgress() {
         updateProgressBar.style.background = '#10b981';
       }
       if (updateProgressPercent) updateProgressPercent.textContent = '100%';
-      if (updateProgressLabel) updateProgressLabel.textContent = window.t ? window.t('update.restarting') : 'Обновление завершено! Перезапуск студии...';
-      if (updateProgressSpeed) updateProgressSpeed.textContent = window.t ? window.t('update.restartingSpeed', null, 'Переподключение...') : 'Переподключение...';
-      showToast(window.t ? window.t('toasts.updateRestarting', null, 'Обновление завершено! Перезапуск Equalizer FD CRAFT...') : 'Обновление завершено! Перезапуск Equalizer FD CRAFT...');
+      if (updateProgressLabel) updateProgressLabel.textContent = data.message || 'Запуск программы установки...';
+      if (updateProgressSpeed) updateProgressSpeed.textContent = 'Запуск...';
+      showToast('Запуск программы установки... Приложение будет перезапущено.');
       waitForServerRestart();
     } else if (data.status === 'error') {
       if (updateProgressBar) updateProgressBar.style.background = '#dc2626';
       if (updateProgressLabel) updateProgressLabel.textContent = window.t ? window.t('update.error', { msg: data.error_message || 'Не удалось обновить' }) : ('Ошибка: ' + (data.error_message || 'Не удалось обновить'));
-      if (btnInstallUpdate) {
-        btnInstallUpdate.disabled = false;
-        btnInstallUpdate.textContent = window.t ? window.t('update.btnRetry') : 'Повторить';
-      }
+      if (btnStartFastUpdate) btnStartFastUpdate.disabled = false;
+      if (btnStartFullInstall) btnStartFullInstall.disabled = false;
     } else {
       updatePollTimer = setTimeout(pollUpdateProgress, 150);
     }
@@ -4327,10 +4394,8 @@ function waitForServerRestart() {
       if (attempts >= maxAttempts) {
         clearInterval(checkInterval);
         if (updateProgressLabel) updateProgressLabel.textContent = window.t ? window.t('update.manualRestart', null, 'Перезапустите приложение вручную.') : 'Перезапустите приложение вручную.';
-        if (btnInstallUpdate) {
-          btnInstallUpdate.disabled = false;
-          btnInstallUpdate.textContent = window.t ? window.t('update.btnDownload', null, 'Скачать и обновить') : 'Скачать и обновить';
-        }
+        if (btnStartFastUpdate) btnStartFastUpdate.disabled = false;
+        if (btnStartFullInstall) btnStartFullInstall.disabled = false;
       }
     }
   }, 500);
@@ -4339,38 +4404,27 @@ function waitForServerRestart() {
 if (btnCheckNowUpdate) {
   btnCheckNowUpdate.addEventListener('click', checkUpdates);
 }
-if (btnInstallUpdate) {
-  btnInstallUpdate.addEventListener('click', async () => {
-    if (!pendingUpdateDownloadUrl) return;
-    btnInstallUpdate.disabled = true;
-    btnInstallUpdate.textContent = 'Обновление...';
-    if (updateStatusText) updateStatusText.textContent = 'Загрузка и замена файла EqualizerFD-Craft.exe...';
 
-    if (updateProgressBox) updateProgressBox.classList.remove('hidden');
-    if (updateProgressBar) {
-      updateProgressBar.style.width = '0%';
-      updateProgressBar.style.background = '#2563eb';
+if (btnStartFastUpdate) {
+  btnStartFastUpdate.addEventListener('click', () => {
+    if (currentUpdateData && currentUpdateData.fast_update) {
+      startUpdate(currentUpdateData.fast_update, false);
+    } else if (currentUpdateData && currentUpdateData.download_url) {
+      startUpdate({
+        download_url: currentUpdateData.download_url,
+        size: currentUpdateData.asset_size,
+        asset_name: currentUpdateData.asset_name,
+        is_installer: true,
+        mode: 'fast'
+      }, false);
     }
-    if (updateProgressPercent) updateProgressPercent.textContent = '0%';
-    if (updateProgressLabel) updateProgressLabel.textContent = 'Подключение к серверу загрузки...';
-    if (updateProgressBytes) updateProgressBytes.textContent = `0 B / ${formatBytes(pendingUpdateAssetSize)}`;
-    if (updateProgressSpeed) updateProgressSpeed.textContent = 'Подготовка...';
+  });
+}
 
-    lastBytesDownloaded = 0;
-    lastSpeedTime = Date.now();
-
-    try {
-      const res = await fetch('/api/update/install', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: pendingUpdateDownloadUrl, size: pendingUpdateAssetSize })
-      });
-      const data = await res.json();
-      pollUpdateProgress();
-    } catch (err) {
-      showToast('Ошибка запуска обновления: ' + err.message, true);
-      btnInstallUpdate.disabled = false;
-      btnInstallUpdate.textContent = 'Скачать и обновить';
+if (btnStartFullInstall) {
+  btnStartFullInstall.addEventListener('click', () => {
+    if (currentUpdateData && currentUpdateData.full_install) {
+      startUpdate(currentUpdateData.full_install, true);
     }
   });
 }

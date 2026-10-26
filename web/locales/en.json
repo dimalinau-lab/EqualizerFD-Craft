@@ -355,8 +355,17 @@
     "btnRetry": "Retry",
     "btnClose": "Close",
     "repoNote": "Project repository: github.com/dimalinau-lab/EqualizerFD-Craft (public access, checks automated).",
-    "currentVerPrefix": "Current Version: v0.1.2-BETA",
-    "waiting": "Waiting..."
+    "currentVerPrefix": "Current Version: v0.1.3-BETA",
+    "waiting": "Waiting...",
+    "chooseMethod": "Choose update method:",
+    "fastTitle": "Fast Update (No Plugins)",
+    "fastBadge": "Recommended • ~3 MB",
+    "fastDesc": "Updates Equalizer FD CRAFT binaries, web interface, and system tray. Your presets and installed VST plugins remain untouched.",
+    "btnFast": "Download Fast Update",
+    "fullTitle": "Full Reinstallation",
+    "fullBadge": "Full Installer • ~166 MB",
+    "fullDesc": "Official full Inno Setup installer bundled with all 98 studio VST plugins (ReaPlugs, Blue Cat, Kuassa) and clean setup.",
+    "btnFull": "Download Full Installer"
   },
   "about": {
     "title": "About Equalizer FD CRAFT",

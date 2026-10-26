@@ -611,7 +611,7 @@
 
   <!-- GitHub Auto-Update Dialog (Skill github-desktop-autoupdate) -->
   <div id="updateModal" class="win-modal-overlay hidden">
-    <div class="win-dialog" style="width: 560px;">
+    <div class="win-dialog" style="width: 640px; max-width: 95vw;">
       <div class="dialog-header">
         <span id="lblUpdateTitle" data-i18n="update.dialogTitle">Обновление Equalizer FD CRAFT</span>
         <button class="dialog-close" id="closeUpdateBtn">&times;</button>
@@ -619,17 +619,56 @@
       <div class="dialog-body" style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">
           <div>
-            <div style="font-weight: 600; font-size: 13px;" id="updateCurrentVerText">Текущая версия: v0.1.2-BETA</div>
+            <div style="font-weight: 600; font-size: 13px;" id="updateCurrentVerText">Текущая версия: v0.1.3-BETA</div>
             <div style="font-size: 11px; color: #64748b;" id="updateStatusText" data-i18n="update.readyToCheck">Готов к проверке релизов GitHub</div>
           </div>
           <button class="win-btn" id="btnCheckNowUpdate" style="height: 28px; padding: 0 14px;" data-i18n="update.btnCheckNow">Проверить сейчас</button>
         </div>
 
-        <div id="updateResultBox" class="hidden" style="display: flex; flex-direction: column; gap: 8px;">
-          <div id="updateBadgeStatus" style="padding: 8px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0;"></div>
+        <div id="updateResultBox" class="hidden" style="display: flex; flex-direction: column; gap: 12px;">
+          <div id="updateBadgeStatus" style="padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0;"></div>
+          
           <div>
             <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;" data-i18n="update.releaseNotes">Список изменений (Release Notes):</label>
-            <div id="updateNotesText" style="max-height: 140px; overflow-y: auto; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px 10px; font-size: 11px; white-space: pre-wrap; font-family: monospace;"></div>
+            <div id="updateNotesText" style="max-height: 120px; overflow-y: auto; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; font-size: 11px; white-space: pre-wrap; font-family: monospace;"></div>
+          </div>
+
+          <!-- Update Method Selection Cards -->
+          <div id="updateOptionsBox" style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 11px; font-weight: 600; color: #334155;" data-i18n="update.chooseMethod">Выберите способ установки обновления:</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              
+              <!-- Fast Update Card -->
+              <div id="cardFastUpdate" style="border: 1px solid #93c5fd; background: #f0f7ff; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; transition: all 0.2s ease;">
+                <div>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span style="font-weight: 700; font-size: 12px; color: #1e3a8a;" data-i18n="update.fastTitle">⚡ Быстрое обновление</span>
+                    <span style="font-size: 10px; font-weight: 700; background: #dbeafe; color: #1d4ed8; padding: 2px 6px; border-radius: 4px;" id="badgeFastSize">~3 МБ</span>
+                  </div>
+                  <div style="font-size: 11px; color: #475569; line-height: 1.45;" data-i18n="update.fastDesc">
+                    Обновляет только исполняемые файлы Equalizer FD CRAFT, веб-интерфейс и системный трей. Ваши пресеты и установленные VST-плагины остаются нетронутыми.
+                  </div>
+                  <div style="font-size: 10px; color: #64748b; font-family: monospace; margin-top: 6px;" id="fileFastName">EqualizerFD-Craft-Update-Installer.exe</div>
+                </div>
+                <button class="win-btn primary" id="btnStartFastUpdate" style="width: 100%; height: 32px; font-weight: 600; font-size: 11px;" data-i18n="update.btnFast">Скачать быстрое обновление</button>
+              </div>
+
+              <!-- Full Reinstallation Card -->
+              <div id="cardFullInstall" style="border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; transition: all 0.2s ease;">
+                <div>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span style="font-weight: 700; font-size: 12px; color: #0f172a;" data-i18n="update.fullTitle">📦 Полная переустановка</span>
+                    <span style="font-size: 10px; font-weight: 700; background: #e2e8f0; color: #334155; padding: 2px 6px; border-radius: 4px;" id="badgeFullSize">~166 МБ</span>
+                  </div>
+                  <div style="font-size: 11px; color: #475569; line-height: 1.45;" data-i18n="update.fullDesc">
+                    Официальный полный инсталлятор Inno Setup со всеми 98 студийными VST-плагинами (ReaPlugs, Blue Cat, Kuassa) и чистой переустановкой.
+                  </div>
+                  <div style="font-size: 10px; color: #64748b; font-family: monospace; margin-top: 6px;" id="fileFullName">EqualizerFD-Craft-Setup-v0.1.3-BETA.exe</div>
+                </div>
+                <button class="win-btn" id="btnStartFullInstall" style="width: 100%; height: 32px; font-weight: 600; font-size: 11px;" data-i18n="update.btnFull">Скачать полный установщик</button>
+              </div>
+
+            </div>
           </div>
         </div>
 
@@ -653,7 +692,6 @@
         </div>
       </div>
       <div class="dialog-footer">
-        <button class="win-btn primary hidden" id="btnInstallUpdate" data-i18n="update.btnDownload">Скачать и перезапустить</button>
         <button class="win-btn" id="btnCloseUpdateModal" data-i18n="update.btnClose">Закрыть</button>
       </div>
     </div>

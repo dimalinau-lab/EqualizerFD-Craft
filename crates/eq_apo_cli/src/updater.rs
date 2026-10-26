@@ -30,12 +30,25 @@ pub struct GithubRelease {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UpdateOption {
+    pub mode: String, // "fast" or "full"
+    pub title: String,
+    pub description: String,
+    pub asset_name: String,
+    pub download_url: String,
+    pub size: u64,
+    pub is_installer: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UpdateCheckResponse {
     pub current_version: String,
     pub latest_version: String,
     pub has_update: bool,
     pub release_name: String,
     pub release_notes: String,
+    pub fast_update: Option<UpdateOption>,
+    pub full_install: Option<UpdateOption>,
     pub download_url: String,
     pub asset_name: String,
     pub asset_size: u64,
@@ -125,6 +138,8 @@ pub fn check_for_updates(token_opt: Option<&str>) -> UpdateCheckResponse {
                 has_update: false,
                 release_name: String::new(),
                 release_notes: String::new(),
+                fast_update: None,
+                full_install: None,
                 download_url: String::new(),
                 asset_name: String::new(),
                 asset_size: 0,
@@ -160,6 +175,8 @@ pub fn check_for_updates(token_opt: Option<&str>) -> UpdateCheckResponse {
                 has_update: false,
                 release_name: String::new(),
                 release_notes: String::new(),
+                fast_update: None,
+                full_install: None,
                 download_url: String::new(),
                 asset_name: String::new(),
                 asset_size: 0,
@@ -172,17 +189,53 @@ pub fn check_for_updates(token_opt: Option<&str>) -> UpdateCheckResponse {
     let clean_tag = release.tag_name.trim_start_matches('v').trim();
     let is_newer = is_newer_version(CURRENT_VERSION, clean_tag);
 
-    // Look for .exe asset, prioritizing EqualizerFD-Craft.exe over Setup/Installer
-    let exe_asset = release.assets.iter()
-        .find(|a| a.name.eq_ignore_ascii_case("EqualizerFD-Craft.exe"))
-        .or_else(|| release.assets.iter().find(|a| {
+    // 1. Detect Fast Update Asset (e.g. EqualizerFD-Craft-Update-Installer.exe or update zip)
+    let fast_asset = release.assets.iter().find(|a| {
+        let lower = a.name.to_lowercase();
+        lower.ends_with(".exe") && (lower.contains("update-installer") || lower.contains("update_installer") || lower.contains("mini-setup"))
+    }).or_else(|| {
+        release.assets.iter().find(|a| {
             let lower = a.name.to_lowercase();
-            lower.ends_with(".exe") && !lower.contains("setup") && !lower.contains("installer")
-        }))
-        .or_else(|| release.assets.iter().find(|a| a.name.to_lowercase().ends_with(".exe")));
-    let download_url = exe_asset.map(|a| a.browser_download_url.clone()).unwrap_or_default();
-    let asset_name = exe_asset.map(|a| a.name.clone()).unwrap_or_default();
-    let asset_size = exe_asset.map(|a| a.size).unwrap_or(0);
+            lower.ends_with(".zip") && lower.contains("update")
+        })
+    }).or_else(|| {
+        // Fallback: standalone exe that is not full setup
+        release.assets.iter().find(|a| {
+            let lower = a.name.to_lowercase();
+            lower.ends_with(".exe") && !lower.contains("setup")
+        })
+    });
+
+    // 2. Detect Full Reinstallation Asset (Inno Setup with full plugins, ~165 MB)
+    let full_asset = release.assets.iter().find(|a| {
+        let lower = a.name.to_lowercase();
+        lower.ends_with(".exe") && (lower.contains("setup") || lower.contains("full") || a.size > 50_000_000)
+    });
+
+    let fast_update = fast_asset.map(|a| UpdateOption {
+        mode: "fast".to_string(),
+        title: "Быстрое обновление (без повторного скачивания плагинов)".to_string(),
+        description: "Лёгкий инсталлятор обновления (~3 МБ). Быстро обновляет исполняемые файлы Equalizer FD CRAFT, веб-интерфейс и системный трей, сохраняя ваши настройки и установленные плагины.".to_string(),
+        asset_name: a.name.clone(),
+        download_url: a.browser_download_url.clone(),
+        size: a.size,
+        is_installer: a.name.to_lowercase().ends_with(".exe"),
+    });
+
+    let full_install = full_asset.map(|a| UpdateOption {
+        mode: "full".to_string(),
+        title: "Полная переустановка (все VST плагины)".to_string(),
+        description: "Официальный полный инсталлятор Inno Setup (~166 МБ). Включает все 98 профессиональных студийных VST-плагинов (ReaPlugs, Blue Cat, Kuassa), регистрацию компонентов и чистую переустановку.".to_string(),
+        asset_name: a.name.clone(),
+        download_url: a.browser_download_url.clone(),
+        size: a.size,
+        is_installer: true,
+    });
+
+    let primary_asset = fast_asset.or(full_asset);
+    let download_url = primary_asset.map(|a| a.browser_download_url.clone()).unwrap_or_default();
+    let asset_name = primary_asset.map(|a| a.name.clone()).unwrap_or_default();
+    let asset_size = primary_asset.map(|a| a.size).unwrap_or(0);
 
     UpdateCheckResponse {
         current_version: CURRENT_VERSION.to_string(),
@@ -190,6 +243,8 @@ pub fn check_for_updates(token_opt: Option<&str>) -> UpdateCheckResponse {
         has_update: is_newer,
         release_name: release.name.unwrap_or_else(|| release.tag_name.clone()),
         release_notes: release.body.unwrap_or_default(),
+        fast_update,
+        full_install,
         download_url,
         asset_name,
         asset_size,
@@ -202,11 +257,13 @@ pub fn check_for_updates(token_opt: Option<&str>) -> UpdateCheckResponse {
     }
 }
 
-/// Performs atomic in-place binary swap and restarts application with progress reporting
+/// Downloads update and executes installer or performs in-place binary swap
 pub fn download_and_install_update(
     download_url: &str,
     expected_size: u64,
     token_opt: Option<&str>,
+    asset_name_opt: Option<&str>,
+    mut is_installer: bool,
 ) -> Result<(), String> {
     let current_exe = std::env::current_exe().map_err(|e| {
         let err = format!("Не удалось определить текущий .exe: {}", e);
@@ -220,11 +277,28 @@ pub fn download_and_install_update(
         });
         err
     })?;
-    let temp_exe = current_exe.with_extension("exe.download");
+
+    let asset_name = asset_name_opt.unwrap_or("EqualizerFD-Craft-Update-Installer.exe").trim();
+    let lower_asset = asset_name.to_lowercase();
+    if lower_asset.contains("installer") || lower_asset.contains("setup") || lower_asset.ends_with(".exe") {
+        is_installer = true;
+    }
+
+    let target_file = if is_installer {
+        let safe_name = if asset_name.is_empty() {
+            "EqualizerFD-Craft-Update-Installer.exe"
+        } else {
+            asset_name
+        };
+        std::env::temp_dir().join(safe_name)
+    } else {
+        current_exe.with_extension("exe.download")
+    };
+
     let old_exe = current_exe.with_extension("exe.old");
 
-    if temp_exe.exists() {
-        let _ = fs::remove_file(&temp_exe);
+    if target_file.exists() {
+        let _ = fs::remove_file(&target_file);
     }
 
     set_update_progress(UpdateProgress {
@@ -232,13 +306,13 @@ pub fn download_and_install_update(
         total_bytes: expected_size,
         downloaded_bytes: 0,
         percent: 0.0,
-        message: "Подключение к серверу загрузки...".to_string(),
+        message: format!("Подключение к серверу загрузки ({})...", asset_name),
         error_message: None,
     });
 
     let mut cmd = Command::new("curl.exe");
     cmd.args(["-L", "-s", "-o"]);
-    cmd.arg(&temp_exe);
+    cmd.arg(&target_file);
     cmd.args(["-H", &format!("User-Agent: EqualizerFD-Craft/{}", CURRENT_VERSION)]);
 
     if let Some(token) = token_opt {
@@ -284,7 +358,7 @@ pub fn download_and_install_update(
                 break;
             }
             Ok(None) => {
-                if let Ok(meta) = fs::metadata(&temp_exe) {
+                if let Ok(meta) = fs::metadata(&target_file) {
                     let dl = meta.len();
                     let percent = if expected_size > 0 {
                         ((dl as f64 / expected_size as f64) * 100.0).clamp(0.0, 99.0) as f32
@@ -317,7 +391,7 @@ pub fn download_and_install_update(
         }
     }
 
-    let metadata = fs::metadata(&temp_exe).map_err(|e| {
+    let metadata = fs::metadata(&target_file).map_err(|e| {
         let err = format!("Загруженный файл не найден: {}", e);
         set_update_progress(UpdateProgress {
             status: "error".to_string(),
@@ -331,7 +405,7 @@ pub fn download_and_install_update(
     })?;
 
     if metadata.len() < 100_000 {
-        let _ = fs::remove_file(&temp_exe);
+        let _ = fs::remove_file(&target_file);
         let err = format!("Загруженный файл поврежден или слишком мал ({} байт)", metadata.len());
         set_update_progress(UpdateProgress {
             status: "error".to_string(),
@@ -342,6 +416,35 @@ pub fn download_and_install_update(
             error_message: Some(err.clone()),
         });
         return Err(err);
+    }
+
+    if is_installer {
+        set_update_progress(UpdateProgress {
+            status: "restarting".to_string(),
+            total_bytes: metadata.len(),
+            downloaded_bytes: metadata.len(),
+            percent: 100.0,
+            message: "Запуск программы установки...".to_string(),
+            error_message: None,
+        });
+
+        // Launch installer via Windows ShellExecuteW with "runas" to trigger UAC elevation prompt
+        let path_hstr = windows::core::HSTRING::from(target_file.to_string_lossy().as_ref());
+        let op_hstr = windows::core::HSTRING::from("runas");
+
+        unsafe {
+            windows::Win32::UI::Shell::ShellExecuteW(
+                windows::Win32::Foundation::HWND(std::ptr::null_mut()),
+                &op_hstr,
+                &path_hstr,
+                windows::core::PCWSTR::null(),
+                windows::core::PCWSTR::null(),
+                windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL,
+            );
+        }
+
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        std::process::exit(0);
     }
 
     set_update_progress(UpdateProgress {
@@ -373,8 +476,8 @@ pub fn download_and_install_update(
         err
     })?;
 
-    // 3. Rename .download -> .exe
-    if let Err(e) = fs::rename(&temp_exe, &current_exe) {
+    // 3. Rename target_file -> .exe
+    if let Err(e) = fs::rename(&target_file, &current_exe) {
         let _ = fs::rename(&old_exe, &current_exe);
         let err = format!("Не удалось установить новый исполняемый файл: {}", e);
         set_update_progress(UpdateProgress {
