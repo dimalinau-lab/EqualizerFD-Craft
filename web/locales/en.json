@@ -369,7 +369,7 @@
     "btnRetry": "Retry",
     "btnClose": "Close",
     "repoNote": "Project repository: github.com/dimalinau-lab/EqualizerFD-Craft (public access, checks automated).",
-    "currentVerPrefix": "Current Version: v0.1.4-BETA",
+    "currentVerPrefix": "Current Version: v1.0.0",
     "waiting": "Waiting...",
     "chooseMethod": "Choose update method:",
     "fastTitle": "Fast Update (No Plugins)",

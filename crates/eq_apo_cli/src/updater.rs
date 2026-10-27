@@ -7,7 +7,7 @@ use std::process::Command;
 use serde::{Deserialize, Serialize};
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
-pub const CURRENT_VERSION: &str = "0.1.4-BETA";
+pub const CURRENT_VERSION: &str = "1.0.0";
 pub const REPO_OWNER: &str = "dimalinau-lab";
 pub const REPO_NAME: &str = "EqualizerFD-Craft";
 

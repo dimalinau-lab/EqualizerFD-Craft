@@ -369,7 +369,7 @@
     "btnRetry": "Повторить",
     "btnClose": "Закрыть",
     "repoNote": "Репозиторий проекта: github.com/dimalinau-lab/EqualizerFD-Craft (открытый доступ, проверка выполняется автоматически).",
-    "currentVerPrefix": "Текущая версия: v0.1.4-BETA",
+    "currentVerPrefix": "Текущая версия: v1.0.0",
     "waiting": "Ожидание...",
     "chooseMethod": "Выберите способ установки обновления:",
     "fastTitle": "Быстрое обновление (без плагинов)",
