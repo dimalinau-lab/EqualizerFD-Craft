@@ -5604,7 +5604,7 @@ window.addEventListener('contextmenu', (e) => {
   }
 });
 
-// 3. Block browser developer keys, print, search, and page reload shortcuts
+// 3. Block browser developer keys, print and search shortcuts (allow F5/Ctrl+R for refresh)
 window.addEventListener('keydown', (e) => {
   // Block F12 (DevTools), Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C, Ctrl+U (Page Source)
   if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I', 'J', 'C', 'i', 'j', 'c'].includes(e.key)) || (e.ctrlKey && (e.key === 'u' || e.key === 'U'))) {
@@ -5613,11 +5613,6 @@ window.addEventListener('keydown', (e) => {
   }
   // Block Ctrl+P (Print), Ctrl+F (Find in page), F3, Ctrl+H (History), Ctrl+J (Downloads), Ctrl+O (Browser Open)
   if ((e.ctrlKey && ['p', 'P', 'f', 'F', 'h', 'H', 'j', 'J'].includes(e.key)) || e.key === 'F3') {
-    e.preventDefault();
-    return;
-  }
-  // Block F5 and Ctrl+R (Browser Reload)
-  if (e.key === 'F5' || (e.ctrlKey && (e.key === 'r' || e.key === 'R'))) {
     e.preventDefault();
     return;
   }
