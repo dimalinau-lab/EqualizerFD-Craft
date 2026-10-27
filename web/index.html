@@ -46,7 +46,7 @@
       <div class="menu-dropdown">
         <button id="menuToggleAnalysis"><span data-i18n="menu.toggleAnalysis">Панель анализа АЧХ</span> <span class="shortcut">F8</span></button>
         <button id="menuResetZoom" data-i18n="menu.resetZoom">Сбросить масштаб</button>
-        <button id="menuThemeToggle"><span data-i18n="menu.themeToggle">Тема оформления</span> <span class="shortcut" id="lblMenuThemeShortcut">Студия</span></button>
+        <button id="menuThemeToggle"><span data-i18n="menu.themeToggle">Тема оформления</span> <span class="shortcut" id="lblMenuThemeShortcut">Тёмная</span></button>
         <button id="menuRawText" data-i18n="menu.rawText">Показать код config.txt</button>
       </div>
     </div>
@@ -96,10 +96,10 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       </button>
       <button class="tool-btn" id="tbOpen" data-i18n-title="toolbar.openTitle" title="Открыть файл конфигурации .txt (Ctrl+O)">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       </button>
       <button class="tool-btn" id="tbSave" data-i18n-title="toolbar.saveTitle" title="Сохранить в Equalizer FD CRAFT (Ctrl+S)">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
       </button>
     </div>
 
@@ -126,8 +126,8 @@
 
     <!-- Virtual Cable Real-Time Bridge (Direct WASAPI) -->
     <div id="streamBridgeBox" class="stream-bridge-chip" data-i18n-title="toolbar.streamTitleTooltip" title="Прямой звуковой поток из микрофона в VB-Audio Virtual Cable с минимальной задержкой (~2 мс)">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0369a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-      <span id="lblStreamTitle" data-i18n="toolbar.streamTitle" style="font-weight: 600; color: #0369a1; font-size: 11px;">WASAPI аудиомост:</span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+      <span id="lblStreamTitle" data-i18n="toolbar.streamTitle" style="font-weight: 600; font-size: 11px;">WASAPI аудиомост:</span>
       <button id="btnToggleStream" class="stream-toggle-btn">
         [В ЭФИРЕ]
       </button>
@@ -167,11 +167,11 @@
 
     <!-- Peak Indicator & Theme Switcher -->
     <div class="toolbar-right">
-      <button id="btnThemeToggle" class="theme-toggle-btn" data-i18n-title="toolbar.themeTitle" title="Переключить тему оформления (Тёмная Студия / Светлая)">
+      <button id="btnThemeToggle" class="theme-toggle-btn" data-i18n-title="toolbar.themeTitle" title="Переключить тему оформления (Тёмная / Светлая)">
         <span class="theme-icon" id="themeIcon">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         </span>
-        <span id="lblThemeText">Студия</span>
+        <span id="lblThemeText">Тёмная</span>
       </button>
 
       <div id="clipStatusBox" class="status-indicator-clean ok" data-i18n-title="toolbar.clipStatusTooltip" title="Индикатор перегрузки и пикового уровня громкости">
@@ -238,7 +238,7 @@
             <div class="menu-category" data-cat="vst">
               <span data-i18n="add.catVst">Плагины VST (APO-PLUGINS)</span>
               <div class="sub-menu">
-                <button data-action="open-vst-catalog" style="font-weight: 700; color: #166534;" data-i18n="add.vstCatalog" data-i18n-title="add.vstCatalogTitle" title="Открыть полный иллюстрированный каталог всех 98 VST плагинов">Каталог всех 98 VST плагинов...</button>
+                <button data-action="open-vst-catalog" class="sub-menu-featured" data-i18n="add.vstCatalog" data-i18n-title="add.vstCatalogTitle" title="Открыть полный иллюстрированный каталог всех 98 VST плагинов">Каталог всех 98 VST плагинов...</button>
                 <button data-action="add-vst-reagate" data-i18n="add.vstReagate" data-i18n-title="add.vstReagateTitle" title="ReaGate: профессиональный шумоподавитель, отсекает клавиатуру, дыхание и шум комнаты">ReaGate (Шумоподавитель / Gate)</button>
                 <button data-action="add-vst-reacomp" data-i18n="add.vstReacomp" data-i18n-title="add.vstReacompTitle" title="ReaComp: компрессор для плотности и ровной громкости голоса без перегрузок">ReaComp (Компрессор вокала)</button>
                 <button data-action="add-vst-reafir" data-i18n="add.vstReafir" data-i18n-title="add.vstReafirTitle" title="ReaFIR: адаптивный FFT вычитатель шума без артефактов и металлического призвука">ReaFIR (Спектральное шумоподавление)</button>
@@ -251,8 +251,8 @@
             <div class="menu-category" data-cat="rc505">
               <span data-i18n="add.catRc505">Эффекты Boss RC-505 Mk2</span>
               <div class="sub-menu">
-                <button data-action="open-rc505-catalog" style="font-weight: 700; color: #1e40af; border-bottom: 1px solid #cbd5e1; padding-bottom: 5px; margin-bottom: 4px;" data-i18n="add.rc505Catalog" title="Открыть иллюстрированный каталог всех 50 эффектов Roland BOSS RC-505 Mk2">Каталог всех 50 эффектов BOSS RC-505 Mk2...</button>
-                <div style="font-size: 10px; font-weight: 700; color: #64748b; padding: 4px 16px 2px; text-transform: uppercase; background: #f8fafc;">Вокал и Питч</div>
+                <button data-action="open-rc505-catalog" class="sub-menu-featured" data-i18n="add.rc505Catalog" title="Открыть иллюстрированный каталог всех 50 эффектов Roland BOSS RC-505 Mk2">Каталог всех 50 эффектов BOSS RC-505 Mk2...</button>
+                <div class="menu-sub-header">Вокал и Питч</div>
                 <button data-action="add-rc505-autopitch" data-i18n="add.rc505Autopitch">Auto Pitch (Electric 1 / Хард-тюн)</button>
                 <button data-action="add-rc505-robot" data-i18n="add.rc505Robot">Robot Voice (Робот-голос)</button>
                 <button data-action="add-rc505-vocoder" data-i18n="add.rc505Vocoder">Vocoder / Robot Pitch (Вокодер)</button>
@@ -261,13 +261,13 @@
                 <button data-action="add-rc505-transpose" data-i18n="add.rc505Transpose">Transpose (Сдвиг тональности трека)</button>
                 <button data-action="add-rc505-guitartobass" data-i18n="add.rc505Guitartobass">Guitar to Bass (Суб-октавный бас)</button>
                 <button data-action="add-rc505-slowgear" data-i18n="add.rc505Slowgear">Slow Gear (Скрипичная атака)</button>
-                <div style="font-size: 10px; font-weight: 700; color: #64748b; padding: 4px 16px 2px; text-transform: uppercase; background: #f8fafc;">Ритм и Луп-статтер</div>
+                <div class="menu-sub-header">Ритм и Луп-статтер</div>
                 <button data-action="add-rc505-slicer" data-i18n="add.rc505Slicer">Beat Repeat / Slicer (Нарезчик)</button>
                 <button data-action="add-rc505-beatrepeat" data-i18n="add.rc505Beatrepeat">Beat Repeat & Roll (Статтер-ролл)</button>
                 <button data-action="add-rc505-beatshift" data-i18n="add.rc505Beatshift">Beat Shift (Синкопа и сдвиг долей)</button>
                 <button data-action="add-rc505-scatter" data-i18n="add.rc505Scatter">Granular Beat Scatter (Гранулярный глитч)</button>
                 <button data-action="add-rc505-vinyl" data-i18n="add.rc505Vinyl">Vinyl Flick (Торможение пластинки)</button>
-                <div style="font-size: 10px; font-weight: 700; color: #64748b; padding: 4px 16px 2px; text-transform: uppercase; background: #f8fafc;">Модуляция и Пространство</div>
+                <div class="menu-sub-header">Модуляция и Пространство</div>
                 <button data-action="add-rc505-chorus" data-i18n="add.rc505Chorus">Space Chorus (Пространственный стерео-хорус)</button>
                 <button data-action="add-rc505-flanger" data-i18n="add.rc505Flanger">Jet Flanger (Реактивный флэнжер)</button>
                 <button data-action="add-rc505-phaser" data-i18n="add.rc505Phaser">Multi-Stage Phaser (Фазовращатель)</button>
@@ -276,7 +276,7 @@
                 <button data-action="add-rc505-rotary" data-i18n="add.rc505Rotary">Rotary Speaker (Вращающийся динамик Leslie)</button>
                 <button data-action="add-rc505-autopan" data-i18n="add.rc505Autopan">Auto-Pan (Стерео-маятник)</button>
                 <button data-action="add-rc505-ringmod" data-i18n="add.rc505Ringmod">Ring Modulator (Кольцевой модулятор)</button>
-                <div style="font-size: 10px; font-weight: 700; color: #64748b; padding: 4px 16px 2px; text-transform: uppercase; background: #f8fafc;">Фильтры и DJ</div>
+                <div class="menu-sub-header">Фильтры и DJ</div>
                 <button data-action="add-rc505-isolator" data-i18n="add.rc505Isolator">Isolator / DJ Filter (DJ срез полос)</button>
                 <button data-action="add-rc505-autowah" data-i18n="add.rc505Autowah">Auto-Wah (Динамическая квакушка)</button>
                 <button data-action="add-rc505-lpf" data-i18n="add.rc505Lpf">Filter LPF (24dB Резонансный срез ВЧ)</button>
@@ -285,7 +285,7 @@
                 <button data-action="add-rc505-telephone" data-i18n="add.rc505Telephone">Telephone EQ (Телефонная трубка)</button>
                 <button data-action="add-rc505-lofi" data-i18n="add.rc505Lofi">Lo-Fi Radio (Рация / Bitcrush)</button>
                 <button data-action="add-rc505-synth" data-i18n="add.rc505Synth">Synth (Аналоговый вейв-синтезатор)</button>
-                <div style="font-size: 10px; font-weight: 700; color: #64748b; padding: 4px 16px 2px; text-transform: uppercase; background: #f8fafc;">Дисторшн, Фузз и Преампы</div>
+                <div class="menu-sub-header">Дисторшн, Фузз и Преампы</div>
                 <button data-action="add-rc505-overdrive" data-i18n="add.rc505Overdrive">Warm Blues Overdrive (Блюзовый овердрайв)</button>
                 <button data-action="add-rc505-distortion" data-i18n="add.rc505Distortion">Distortion & Overdrive (Рок-перегруз)</button>
                 <button data-action="add-rc505-fuzz" data-i18n="add.rc505Fuzz">Vintage Fuzz (Германиевый жирный фузз)</button>
@@ -293,18 +293,18 @@
                 <button data-action="add-rc505-octfuzz" data-i18n="add.rc505Octfuzz">Oct Fuzz (Винтажный октавный фузз)</button>
                 <button data-action="add-rc505-crunch" data-i18n="add.rc505Crunch">Plexi Tube Crunch (Британский ламповый кранч)</button>
                 <button data-action="add-rc505-preamp" data-i18n="add.rc505Preamp">Preamp (Ламповое насыщение тракта)</button>
-                <div style="font-size: 10px; font-weight: 700; color: #64748b; padding: 4px 16px 2px; text-transform: uppercase; background: #f8fafc;">Динамика и Гейты</div>
+                <div class="menu-sub-header">Динамика и Гейты</div>
                 <button data-action="add-rc505-compressor" data-i18n="add.rc505Compressor">Studio Compressor (Студийный VCA компрессор)</button>
                 <button data-action="add-rc505-limiter" data-i18n="add.rc505Limiter">Peak Limiter (Пиковый лимитер)</button>
                 <button data-action="add-rc505-noisesuppressor" data-i18n="add.rc505Noisesuppressor">Noise Suppressor (Подавитель шума NS-2)</button>
-                <div style="font-size: 10px; font-weight: 700; color: #64748b; padding: 4px 16px 2px; text-transform: uppercase; background: #f8fafc;">Дилэй и Эхо</div>
+                <div class="menu-sub-header">Дилэй и Эхо</div>
                 <button data-action="add-rc505-delay" data-i18n="add.rc505Delay">Tape & Reverse Delay (Эхо и реверс-дилэй)</button>
                 <button data-action="add-rc505-panningdelay" data-i18n="add.rc505Panningdelay">Panning Delay (Стерео пинг-понг)</button>
                 <button data-action="add-rc505-tapeecho" data-i18n="add.rc505Tapeecho">Space Tape Echo (Roland RE-201 эхо)</button>
                 <button data-action="add-rc505-warpdelay" data-i18n="add.rc505Warpdelay">Warp Delay (Модулированный варп-свип)</button>
                 <button data-action="add-rc505-twistdelay" data-i18n="add.rc505Twistdelay">Twist Delay (Самоосциллирующий разгон)</button>
                 <button data-action="add-rc505-granulardelay" data-i18n="add.rc505Granulardelay">Granular Cloud Delay (Облачный дилэй)</button>
-                <div style="font-size: 10px; font-weight: 700; color: #64748b; padding: 4px 16px 2px; text-transform: uppercase; background: #f8fafc;">Ревербераторы</div>
+                <div class="menu-sub-header">Ревербераторы</div>
                 <button data-action="add-rc505-reverb" data-i18n="add.rc505Reverb">Space Reverb & Shimmer (Студийный ревербератор)</button>
                 <button data-action="add-rc505-roomreverb" data-i18n="add.rc505Roomreverb">Acoustic Room (Акустическая студийная комната)</button>
                 <button data-action="add-rc505-hallreverb" data-i18n="add.rc505Hallreverb">Concert Hall (Большой концертный зал)</button>

@@ -1488,14 +1488,14 @@ function renderAnalysis() {
   const isLight = document.body.classList.contains('theme-light');
 
   // 1. Studio scope background
-  ctx.fillStyle = isLight ? '#f8fafc' : '#0d1117';
+  ctx.fillStyle = isLight ? '#f8fafc' : '#000000';
   ctx.fillRect(0, 0, w, h);
 
   // 2. Frequency Grid (Logarithmic)
   const freqs = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
   ctx.strokeStyle = isLight ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.07)';
   ctx.lineWidth = 1;
-  ctx.fillStyle = isLight ? '#64748b' : '#8b949e';
+  ctx.fillStyle = isLight ? '#64748b' : '#888888';
   ctx.font = '10px "Segoe UI Mono", Consolas, monospace';
 
   freqs.forEach(f => {
@@ -1514,7 +1514,7 @@ function renderAnalysis() {
   dbs.forEach(db => {
     const y = dbToY(db, h);
     ctx.strokeStyle = db === 0 
-      ? (isLight ? '#0284c7' : 'rgba(56, 189, 248, 0.45)') 
+      ? (isLight ? '#0284c7' : 'rgba(255, 255, 255, 0.5)') 
       : (isLight ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)');
     ctx.lineWidth = db === 0 ? 1.5 : 1;
     ctx.beginPath();
@@ -1523,8 +1523,8 @@ function renderAnalysis() {
     ctx.stroke();
 
     ctx.fillStyle = db === 0 
-      ? (isLight ? '#0284c7' : '#38bdf8') 
-      : (isLight ? '#94a3b8' : '#6e7681');
+      ? (isLight ? '#0284c7' : '#ffffff') 
+      : (isLight ? '#94a3b8' : '#666666');
     ctx.fillText(`${db > 0 ? '+' : ''}${db} dB`, 6, y - 3);
   });
 
@@ -1534,12 +1534,12 @@ function renderAnalysis() {
     ctx.beginPath();
     const rtaCount = _rtaBins.length;
     const rtaGradient = ctx.createLinearGradient(0, h, 0, 0);
-    rtaGradient.addColorStop(0, isLight ? 'rgba(2, 132, 199, 0.02)' : 'rgba(56, 189, 248, 0.03)');
-    rtaGradient.addColorStop(0.6, isLight ? 'rgba(2, 132, 199, 0.12)' : 'rgba(56, 189, 248, 0.18)');
-    rtaGradient.addColorStop(1, isLight ? 'rgba(14, 165, 233, 0.28)' : 'rgba(0, 210, 255, 0.35)');
+    rtaGradient.addColorStop(0, isLight ? 'rgba(2, 132, 199, 0.02)' : 'rgba(255, 255, 255, 0.02)');
+    rtaGradient.addColorStop(0.6, isLight ? 'rgba(2, 132, 199, 0.12)' : 'rgba(255, 255, 255, 0.12)');
+    rtaGradient.addColorStop(1, isLight ? 'rgba(14, 165, 233, 0.28)' : 'rgba(255, 255, 255, 0.25)');
 
     ctx.fillStyle = rtaGradient;
-    ctx.strokeStyle = isLight ? 'rgba(2, 132, 199, 0.4)' : 'rgba(56, 189, 248, 0.6)';
+    ctx.strokeStyle = isLight ? 'rgba(2, 132, 199, 0.4)' : 'rgba(255, 255, 255, 0.45)';
     ctx.lineWidth = 1.2;
 
     ctx.moveTo(0, h);
@@ -1567,10 +1567,10 @@ function renderAnalysis() {
   let peakFreq = 100;
 
   ctx.save();
-  ctx.strokeStyle = isLight ? '#0284c7' : '#00d2ff';
+  ctx.strokeStyle = isLight ? '#0284c7' : '#ffffff';
   ctx.lineWidth = 2.4;
-  ctx.shadowColor = isLight ? 'rgba(2, 132, 199, 0.3)' : 'rgba(0, 210, 255, 0.5)';
-  ctx.shadowBlur = 6;
+  ctx.shadowColor = isLight ? 'rgba(2, 132, 199, 0.3)' : 'rgba(255, 255, 255, 0.35)';
+  ctx.shadowBlur = 5;
   ctx.beginPath();
 
   for (let x = 0; x <= w; x += 2) {
@@ -1641,20 +1641,24 @@ function renderAnalysis() {
         if (isDragging || isHovered) {
           ctx.beginPath();
           ctx.arc(x, y, radius + 7, 0, Math.PI * 2);
-          ctx.fillStyle = isDragging ? 'rgba(0, 210, 255, 0.35)' : 'rgba(56, 189, 248, 0.2)';
+          ctx.fillStyle = isLight 
+            ? (isDragging ? 'rgba(2, 132, 199, 0.35)' : 'rgba(2, 132, 199, 0.2)') 
+            : (isDragging ? 'rgba(255, 255, 255, 0.35)' : 'rgba(255, 255, 255, 0.2)');
           ctx.fill();
         }
 
-        // Filter Type Color Accent
-        let nodeColor = '#00d2ff';
-        if (flt.type === 'HP' || flt.type === 'LP') nodeColor = '#22c55e';
-        else if (flt.type === 'HS' || flt.type === 'LS') nodeColor = '#a855f7';
-        else if (flt.type === 'NO') nodeColor = '#ef4444';
+        // Filter Type Color Accent (Pure white in dark monochrome theme)
+        let nodeColor = isLight ? '#0284c7' : '#ffffff';
+        if (isLight) {
+          if (flt.type === 'HP' || flt.type === 'LP') nodeColor = '#16a34a';
+          else if (flt.type === 'HS' || flt.type === 'LS') nodeColor = '#7c3aed';
+          else if (flt.type === 'NO') nodeColor = '#dc2626';
+        }
 
         // Outer Ring
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = isLight ? '#ffffff' : '#161b22';
+        ctx.fillStyle = isLight ? '#ffffff' : '#000000';
         ctx.strokeStyle = nodeColor;
         ctx.lineWidth = isDragging ? 3 : 2;
         ctx.fill();
@@ -1667,7 +1671,7 @@ function renderAnalysis() {
         ctx.fill();
 
         // Node Badge Label
-        ctx.fillStyle = isLight ? '#0f172a' : '#f0f6fc';
+        ctx.fillStyle = isLight ? '#0f172a' : '#ffffff';
         ctx.font = 'bold 10px "Segoe UI Mono", Consolas, monospace';
         ctx.fillText(`P${filterIndex}`, x - 7, y - (radius + 5));
 
@@ -1928,13 +1932,17 @@ function updateThemeUI(isLight) {
   const lblShortcut = document.getElementById('lblMenuThemeShortcut');
   const themeIcon = document.getElementById('themeIcon');
 
-  if (lblText) lblText.textContent = isLight ? (window.t ? window.t('toolbar.themeLight', null, 'Светлая') : 'Светлая') : (window.t ? window.t('toolbar.themeStudio', null, 'Студия') : 'Студия');
-  if (lblShortcut) lblShortcut.textContent = isLight ? 'Светлая' : 'Студия';
+  const textVal = isLight
+    ? (window.t ? window.t('toolbar.themeLight', null, 'Светлая') : 'Светлая')
+    : (window.t ? window.t('toolbar.themeStudio', null, 'Тёмная') : 'Тёмная');
+
+  if (lblText) lblText.textContent = textVal;
+  if (lblShortcut) lblShortcut.textContent = textVal;
 
   if (themeIcon) {
     themeIcon.innerHTML = isLight
-      ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`
-      : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+      ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
+      : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
   }
 }
 
@@ -1946,11 +1954,11 @@ function toggleTheme() {
     localStorage.setItem('resona_theme', 'light');
   } else {
     document.body.classList.remove('theme-light');
-    localStorage.setItem('resona_theme', 'studio');
+    localStorage.setItem('resona_theme', 'dark');
   }
   updateThemeUI(newIsLight);
   renderAnalysis();
-  showToast(newIsLight ? 'Включена светлая тема Fluent' : 'Включена тёмная тема Studio Pro');
+  showToast(newIsLight ? 'Включена светлая тема' : 'Включена тёмная тема (Монохром)');
 }
 
 // --- Sidetone (Headphone Direct Monitor) Controller ---
@@ -1958,15 +1966,15 @@ function toggleSidetone() {
   window.isSidetoneActive = !window.isSidetoneActive;
   const btn = document.getElementById('btnToggleSidetone');
   if (btn) {
-    if (window.isSidetoneActive) {
-      btn.textContent = '[В ЭФИРЕ]';
-      btn.style.background = '#22c55e';
-    } else {
-      btn.textContent = '[ВЫКЛ]';
-      btn.style.background = '#7c3aed';
-    }
+    btn.classList.toggle('active', window.isSidetoneActive);
+    btn.textContent = window.isSidetoneActive
+      ? (window.t ? window.t('toolbar.sidetoneLive', null, '[В ЭФИРЕ]') : '[В ЭФИРЕ]')
+      : (window.t ? window.t('toolbar.sidetoneOff', null, '[ВЫКЛ]') : '[ВЫКЛ]');
+    btn.style.background = '';
   }
-  showToast(window.isSidetoneActive ? 'Мониторинг микрофона в наушники: Включен' : 'Мониторинг микрофона в наушники: Выключен');
+  showToast(window.isSidetoneActive
+    ? (window.t ? window.t('toasts.sidetoneOn', null, 'Мониторинг микрофона в наушники: Включен') : 'Мониторинг микрофона в наушники: Включен')
+    : (window.t ? window.t('toasts.sidetoneOff', null, 'Мониторинг микрофона в наушники: Выключен') : 'Мониторинг микрофона в наушники: Выключен'));
 }
 
 // --- RTA Spectrum Toggle Controller ---
@@ -5407,20 +5415,19 @@ async function checkStreamStatus() {
       }
       const btn = document.getElementById('btnToggleStream');
       const box = document.getElementById('streamBridgeBox');
-      if (btn && box) {
         btn.dataset.active = data.active ? 'true' : 'false';
-        const isEn = window.I18N && window.I18N.lang === 'en';
         if (data.active) {
+          btn.classList.add('active');
+          box.classList.add('active');
           btn.textContent = window.t ? window.t('toolbar.streamLive', null, '[В ЭФИРЕ]') : '[В ЭФИРЕ]';
-          btn.style.background = '#16a34a';
-          box.style.background = '#dcfce7';
-          box.style.borderColor = '#86efac';
         } else {
+          btn.classList.remove('active');
+          box.classList.remove('active');
           btn.textContent = window.t ? window.t('toolbar.streamPaused', null, '[ОСТАНОВЛЕН]') : '[ОСТАНОВЛЕН]';
-          btn.style.background = '#64748b';
-          box.style.background = '#f1f5f9';
-          box.style.borderColor = '#cbd5e1';
         }
+        btn.style.background = '';
+        box.style.background = '';
+        box.style.borderColor = '';
       }
     }
 
@@ -5579,6 +5586,7 @@ if (btnOpenVbCableControlPanel) {
 window.showToast = showToast;
 
 window.addEventListener('languageChanged', (e) => {
+  updateThemeUI(document.body.classList.contains('theme-light'));
   renderTabs();
   renderBlocks();
   renderAnalysis();
