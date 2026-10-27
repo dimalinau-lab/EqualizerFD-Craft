@@ -1485,18 +1485,18 @@ function renderAnalysis() {
 
   ctx.clearRect(0, 0, w, h);
 
-  const isLight = document.body.classList.contains('theme-light');
+  const isDark = document.body.classList.contains('theme-dark');
 
   // 1. Studio scope background
-  ctx.fillStyle = isLight ? '#f8fafc' : '#000000';
+  ctx.fillStyle = isDark ? '#000000' : '#14171a';
   ctx.fillRect(0, 0, w, h);
 
   // 2. Frequency Grid (Logarithmic)
   const freqs = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
-  ctx.strokeStyle = isLight ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.07)';
+  ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.08)' : '#2d333b';
   ctx.lineWidth = 1;
-  ctx.fillStyle = isLight ? '#64748b' : '#888888';
-  ctx.font = '10px "Segoe UI Mono", Consolas, monospace';
+  ctx.fillStyle = isDark ? '#888888' : '#9ca3af';
+  ctx.font = '10px "Segoe UI", Tahoma, sans-serif';
 
   freqs.forEach(f => {
     const x = fToX(f, w);
@@ -1514,17 +1514,17 @@ function renderAnalysis() {
   dbs.forEach(db => {
     const y = dbToY(db, h);
     ctx.strokeStyle = db === 0 
-      ? (isLight ? '#0284c7' : 'rgba(255, 255, 255, 0.5)') 
-      : (isLight ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)');
-    ctx.lineWidth = db === 0 ? 1.5 : 1;
+      ? (isDark ? 'rgba(255, 255, 255, 0.6)' : '#0284c7') 
+      : (isDark ? 'rgba(255, 255, 255, 0.05)' : '#262c34');
+    ctx.lineWidth = db === 0 ? 1.8 : 1;
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(w, y);
     ctx.stroke();
 
     ctx.fillStyle = db === 0 
-      ? (isLight ? '#0284c7' : '#ffffff') 
-      : (isLight ? '#94a3b8' : '#666666');
+      ? (isDark ? '#ffffff' : '#38bdf8') 
+      : (isDark ? '#666666' : '#9ca3af');
     ctx.fillText(`${db > 0 ? '+' : ''}${db} dB`, 6, y - 3);
   });
 
@@ -1534,12 +1534,19 @@ function renderAnalysis() {
     ctx.beginPath();
     const rtaCount = _rtaBins.length;
     const rtaGradient = ctx.createLinearGradient(0, h, 0, 0);
-    rtaGradient.addColorStop(0, isLight ? 'rgba(2, 132, 199, 0.02)' : 'rgba(255, 255, 255, 0.02)');
-    rtaGradient.addColorStop(0.6, isLight ? 'rgba(2, 132, 199, 0.12)' : 'rgba(255, 255, 255, 0.12)');
-    rtaGradient.addColorStop(1, isLight ? 'rgba(14, 165, 233, 0.28)' : 'rgba(255, 255, 255, 0.25)');
-
-    ctx.fillStyle = rtaGradient;
-    ctx.strokeStyle = isLight ? 'rgba(2, 132, 199, 0.4)' : 'rgba(255, 255, 255, 0.45)';
+    if (isDark) {
+      rtaGradient.addColorStop(0, 'rgba(255, 255, 255, 0.02)');
+      rtaGradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.12)');
+      rtaGradient.addColorStop(1, 'rgba(255, 255, 255, 0.25)');
+      ctx.fillStyle = rtaGradient;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    } else {
+      rtaGradient.addColorStop(0, 'rgba(2, 132, 199, 0.02)');
+      rtaGradient.addColorStop(0.6, 'rgba(2, 132, 199, 0.14)');
+      rtaGradient.addColorStop(1, 'rgba(0, 210, 255, 0.32)');
+      ctx.fillStyle = rtaGradient;
+      ctx.strokeStyle = 'rgba(0, 210, 255, 0.6)';
+    }
     ctx.lineWidth = 1.2;
 
     ctx.moveTo(0, h);
@@ -1567,10 +1574,15 @@ function renderAnalysis() {
   let peakFreq = 100;
 
   ctx.save();
-  ctx.strokeStyle = isLight ? '#0284c7' : '#ffffff';
-  ctx.lineWidth = 2.4;
-  ctx.shadowColor = isLight ? 'rgba(2, 132, 199, 0.3)' : 'rgba(255, 255, 255, 0.35)';
-  ctx.shadowBlur = 5;
+  ctx.strokeStyle = isDark ? '#ffffff' : '#00d2ff';
+  ctx.lineWidth = 2.0;
+  if (isDark) {
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.35)';
+    ctx.shadowBlur = 5;
+  } else {
+    ctx.shadowColor = 'rgba(0, 210, 255, 0.4)';
+    ctx.shadowBlur = 6;
+  }
   ctx.beginPath();
 
   for (let x = 0; x <= w; x += 2) {
@@ -1641,24 +1653,24 @@ function renderAnalysis() {
         if (isDragging || isHovered) {
           ctx.beginPath();
           ctx.arc(x, y, radius + 7, 0, Math.PI * 2);
-          ctx.fillStyle = isLight 
-            ? (isDragging ? 'rgba(2, 132, 199, 0.35)' : 'rgba(2, 132, 199, 0.2)') 
-            : (isDragging ? 'rgba(255, 255, 255, 0.35)' : 'rgba(255, 255, 255, 0.2)');
+          ctx.fillStyle = isDark
+            ? (isDragging ? 'rgba(255, 255, 255, 0.35)' : 'rgba(255, 255, 255, 0.2)')
+            : (isDragging ? 'rgba(0, 210, 255, 0.35)' : 'rgba(56, 189, 248, 0.2)');
           ctx.fill();
         }
 
-        // Filter Type Color Accent (Pure white in dark monochrome theme)
-        let nodeColor = isLight ? '#0284c7' : '#ffffff';
-        if (isLight) {
-          if (flt.type === 'HP' || flt.type === 'LP') nodeColor = '#16a34a';
-          else if (flt.type === 'HS' || flt.type === 'LS') nodeColor = '#7c3aed';
-          else if (flt.type === 'NO') nodeColor = '#dc2626';
+        // Filter Type Color Accent
+        let nodeColor = isDark ? '#ffffff' : '#0078d7';
+        if (!isDark) {
+          if (flt.type === 'HP' || flt.type === 'LP') nodeColor = '#22c55e';
+          else if (flt.type === 'HS' || flt.type === 'LS') nodeColor = '#a855f7';
+          else if (flt.type === 'NO') nodeColor = '#ef4444';
         }
 
         // Outer Ring
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = isLight ? '#ffffff' : '#000000';
+        ctx.fillStyle = isDark ? '#000000' : '#ffffff';
         ctx.strokeStyle = nodeColor;
         ctx.lineWidth = isDragging ? 3 : 2;
         ctx.fill();
@@ -1671,7 +1683,7 @@ function renderAnalysis() {
         ctx.fill();
 
         // Node Badge Label
-        ctx.fillStyle = isLight ? '#0f172a' : '#ffffff';
+        ctx.fillStyle = isDark ? '#ffffff' : '#f0f6fc';
         ctx.font = 'bold 10px "Segoe UI Mono", Consolas, monospace';
         ctx.fillText(`P${filterIndex}`, x - 7, y - (radius + 5));
 
@@ -1915,16 +1927,18 @@ if (canvas) {
   });
 }
 
-// --- Theme Switcher Manager (Studio Dark <-> Clean Light) ---
+// --- Theme Switcher Manager (Classic White <-> Studio Dark) ---
 function initTheme() {
-  const savedTheme = localStorage.getItem('resona_theme') || 'studio';
-  const isLight = savedTheme === 'light';
-  if (isLight) {
-    document.body.classList.add('theme-light');
-  } else {
+  const savedTheme = localStorage.getItem('resona_theme') || 'light';
+  const isDark = savedTheme === 'dark';
+  if (isDark) {
+    document.body.classList.add('theme-dark');
     document.body.classList.remove('theme-light');
+  } else {
+    document.body.classList.remove('theme-dark');
+    document.body.classList.add('theme-light');
   }
-  updateThemeUI(isLight);
+  updateThemeUI(!isDark);
 }
 
 function updateThemeUI(isLight) {
@@ -1947,18 +1961,20 @@ function updateThemeUI(isLight) {
 }
 
 function toggleTheme() {
-  const isCurrentlyLight = document.body.classList.contains('theme-light');
-  const newIsLight = !isCurrentlyLight;
-  if (newIsLight) {
-    document.body.classList.add('theme-light');
-    localStorage.setItem('resona_theme', 'light');
-  } else {
+  const isCurrentlyDark = document.body.classList.contains('theme-dark');
+  const newIsDark = !isCurrentlyDark;
+  if (newIsDark) {
+    document.body.classList.add('theme-dark');
     document.body.classList.remove('theme-light');
     localStorage.setItem('resona_theme', 'dark');
+  } else {
+    document.body.classList.remove('theme-dark');
+    document.body.classList.add('theme-light');
+    localStorage.setItem('resona_theme', 'light');
   }
-  updateThemeUI(newIsLight);
+  updateThemeUI(!newIsDark);
   renderAnalysis();
-  showToast(newIsLight ? 'Включена светлая тема' : 'Включена тёмная тема (Монохром)');
+  showToast(newIsDark ? 'Включена тёмная тема (Монохром)' : 'Включена классическая светлая тема');
 }
 
 // --- Sidetone (Headphone Direct Monitor) Controller ---
