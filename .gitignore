@@ -25,7 +25,6 @@ target/
 
 # Whitelist root deliverables & bundled driver tools
 !/EqualizerFD-Craft.exe
-!/EqualizerTray.exe
 !/ResonaAPO.dll
 !/EqualizerFD-Craft.ico
 !tools/vbcable/**
@@ -68,6 +67,9 @@ scratch/
 browser/
 test_*.ps1
 test_*.bat
+installer.iss
+installer_update.iss
+*.iss
 
 # --- Agent Tasks & Internal Storage ---
 .agents/
