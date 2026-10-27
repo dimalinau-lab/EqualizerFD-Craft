@@ -70,7 +70,7 @@ if (-not $release) {
         name = $ReleaseName
         body = $releaseBody
         draft = $false
-        prerelease = $true
+        prerelease = $false
     } | ConvertTo-Json -Depth 5
 
     $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases" -Headers $headers -Method Post -Body $createPayload -ContentType "application/json; charset=utf-8"
@@ -80,7 +80,7 @@ if (-not $release) {
     $updatePayload = @{
         name = $ReleaseName
         body = $releaseBody
-        prerelease = $true
+        prerelease = $false
     } | ConvertTo-Json -Depth 5
     $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/$($release.id)" -Headers $headers -Method Patch -Body $updatePayload -ContentType "application/json; charset=utf-8"
 }
