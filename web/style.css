@@ -1002,9 +1002,14 @@ body.theme-light .btn-icon-sm:hover {
   line-height: 1;
 }
 
+.window-controls {
+  display: none !important;
+}
+
 .add-menu-popup {
   position: absolute;
-  bottom: calc(100% + 6px);
+  top: calc(100% + 6px);
+  bottom: auto;
   left: 0;
   background-color: var(--bg-dropdown);
   border: 1px solid var(--border-dropdown);
@@ -1014,6 +1019,16 @@ body.theme-light .btn-icon-sm:hover {
   z-index: 1000;
   padding: 4px 0;
   overscroll-behavior: contain;
+}
+
+.add-menu-popup.open-down {
+  top: calc(100% + 6px);
+  bottom: auto;
+}
+
+.add-menu-popup.open-up {
+  bottom: calc(100% + 6px);
+  top: auto;
 }
 
 .menu-category {
@@ -1037,11 +1052,22 @@ body.theme-light .btn-icon-sm:hover {
   font-size: 11px;
 }
 
+/* Diagonal bridge to prevent mouse cursor breaking submenu hover */
+.menu-category::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -14px;
+  width: 14px;
+  height: 100%;
+}
+
 .sub-menu {
   display: none;
   position: absolute;
   left: calc(100% + 2px);
-  bottom: -4px;
+  top: 0;
+  bottom: auto;
   background-color: var(--bg-dropdown);
   border: 1px solid var(--border-dropdown);
   box-shadow: var(--shadow-dropdown);
@@ -1052,6 +1078,11 @@ body.theme-light .btn-icon-sm:hover {
   overscroll-behavior: contain;
   padding: 4px 0;
   z-index: 1001;
+}
+
+.add-menu-popup.open-up .sub-menu {
+  bottom: 0;
+  top: auto;
 }
 
 .menu-category:hover .sub-menu {

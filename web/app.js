@@ -3467,11 +3467,16 @@ function updateAll(recordHistory = true) {
 addBlockBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   const rect = addBlockBtn.getBoundingClientRect();
-  const spaceBelow = window.innerHeight - rect.bottom - 210; // 210px analysis panel
-  if (spaceBelow < 260) {
-    addMenuDropdown.classList.remove('open-down');
-  } else {
+  const panelH = (analysisPanel && !analysisPanel.classList.contains('collapsed')) ? 220 : 30;
+  const spaceBelow = window.innerHeight - rect.bottom - panelH;
+  const spaceAbove = rect.top - 80; // 80px toolbar + menubar
+
+  if (spaceBelow >= 180 || spaceBelow >= spaceAbove) {
+    addMenuDropdown.classList.remove('open-up');
     addMenuDropdown.classList.add('open-down');
+  } else {
+    addMenuDropdown.classList.remove('open-down');
+    addMenuDropdown.classList.add('open-up');
   }
   addMenuDropdown.classList.toggle('hidden');
 });
