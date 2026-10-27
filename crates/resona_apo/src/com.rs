@@ -425,6 +425,9 @@ unsafe extern "system" fn rt_apo_process(
                     let sm_mut = &mut *shm.ptr;
                     sm_mut.input_peak_db = in_pk;
                     sm_mut.output_peak_db = out_pk;
+                    sm_mut.speech_prob = dsp.rnnoise.speech_prob;
+                    sm_mut.rnnoise_enabled = if dsp.rnnoise.enabled { 1 } else { 0 };
+                    sm_mut.rnnoise_strength = dsp.rnnoise.strength;
                     sm_mut.heartbeat = sm_mut.heartbeat.wrapping_add(1);
                 }
             }

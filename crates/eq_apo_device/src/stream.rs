@@ -484,6 +484,9 @@ fn run_pipeline_session(
                         if !shm.ptr.is_null() {
                             (*shm.ptr).input_peak_db = in_pk;
                             (*shm.ptr).output_peak_db = out_pk;
+                            (*shm.ptr).speech_prob = dsp.rnnoise.speech_prob;
+                            (*shm.ptr).rnnoise_enabled = if dsp.rnnoise.enabled { 1 } else { 0 };
+                            (*shm.ptr).rnnoise_strength = dsp.rnnoise.strength;
                             (*shm.ptr).heartbeat = (*shm.ptr).heartbeat.wrapping_add(1);
                         }
                     }

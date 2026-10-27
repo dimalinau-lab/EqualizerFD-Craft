@@ -129,6 +129,109 @@ struct BiquadFilterSlot {
     enabled: bool,
 }
 
+pub struct RnNoiseChannel {
+    state: Box<nnnoiseless::DenoiseState<'static>>,
+    in_fifo: Vec<f32>,
+    out_fifo: std::collections::VecDeque<f32>,
+}
+
+impl RnNoiseChannel {
+    pub fn new() -> Self {
+        let mut out_fifo = std::collections::VecDeque::with_capacity(1024);
+        for _ in 0..480 {
+            out_fifo.push_back(0.0);
+        }
+        Self {
+            state: nnnoiseless::DenoiseState::new(),
+            in_fifo: Vec::with_capacity(1024),
+            out_fifo,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.state = nnnoiseless::DenoiseState::new();
+        self.in_fifo.clear();
+        self.out_fifo.clear();
+        for _ in 0..480 {
+            self.out_fifo.push_back(0.0);
+        }
+    }
+}
+
+pub struct RnNoiseProcessor {
+    pub enabled: bool,
+    pub strength: f32,
+    channels: Vec<RnNoiseChannel>,
+    pub speech_prob: f32,
+    scratch_in: [f32; 480],
+    scratch_out: [f32; 480],
+}
+
+impl RnNoiseProcessor {
+    pub fn new(num_channels: usize) -> Self {
+        let count = num_channels.max(1);
+        let mut chs = Vec::with_capacity(count);
+        for _ in 0..count {
+            chs.push(RnNoiseChannel::new());
+        }
+        Self {
+            enabled: false,
+            strength: 1.0,
+            channels: chs,
+            speech_prob: 0.0,
+            scratch_in: [0.0; 480],
+            scratch_out: [0.0; 480],
+        }
+    }
+
+    pub fn process_interleaved(&mut self, samples: &mut [f32], channels_count: usize) {
+        if !self.enabled || samples.is_empty() {
+            return;
+        }
+
+        let ch_cnt = channels_count.min(self.channels.len());
+        if ch_cnt == 0 {
+            return;
+        }
+
+        let total_frames = samples.len() / ch_cnt;
+        let strength = self.strength.clamp(0.0, 1.0);
+
+        for c in 0..ch_cnt {
+            let ch_data = &mut self.channels[c];
+            for frame in 0..total_frames {
+                ch_data.in_fifo.push(samples[frame * ch_cnt + c]);
+            }
+
+            while ch_data.in_fifo.len() >= 480 {
+                for i in 0..480 {
+                    self.scratch_in[i] = (ch_data.in_fifo[i] * 32768.0).clamp(-32768.0, 32767.0);
+                }
+
+                let prob = ch_data.state.process_frame(&mut self.scratch_out, &self.scratch_in);
+                if c == 0 {
+                    self.speech_prob = prob;
+                }
+
+                for i in 0..480 {
+                    let wet = (self.scratch_out[i] / 32768.0).clamp(-1.0, 1.0);
+                    let dry = ch_data.in_fifo[i];
+                    let mixed = dry * (1.0 - strength) + wet * strength;
+                    ch_data.out_fifo.push_back(mixed);
+                }
+
+                ch_data.in_fifo.drain(0..480);
+            }
+
+            for frame in 0..total_frames {
+                if let Some(val) = ch_data.out_fifo.pop_front() {
+                    samples[frame * ch_cnt + c] = val;
+                }
+            }
+        }
+    }
+}
+
 use crate::vst_host::VstPluginInstance;
 
 pub struct ResonaDspEngine {
@@ -136,6 +239,7 @@ pub struct ResonaDspEngine {
     sample_rate: f32,
     last_synced_version: u32,
     pub vst_plugins: Vec<VstPluginInstance>,
+    pub rnnoise: RnNoiseProcessor,
 }
 
 impl ResonaDspEngine {
@@ -160,6 +264,7 @@ impl ResonaDspEngine {
             sample_rate,
             last_synced_version: 0,
             vst_plugins: Vec::new(),
+            rnnoise: RnNoiseProcessor::new(num_channels),
         }
     }
 
@@ -219,6 +324,7 @@ impl ResonaDspEngine {
 
             let mut boss_effects = Vec::new();
             let mut vst_configs = Vec::new();
+            let mut rnnoise_opt: Option<(bool, f32)> = None;
 
             for directive in &config.directives {
                 match directive {
@@ -258,6 +364,9 @@ impl ResonaDspEngine {
                     }
                     eq_apo_core::ConfigDirective::VSTPlugin { library, vst_id, params_json, is_enabled, .. } => {
                         vst_configs.push((library.clone(), vst_id.clone(), params_json.clone(), *is_enabled));
+                    }
+                    eq_apo_core::ConfigDirective::RNNoise { is_enabled, strength, .. } => {
+                        rnnoise_opt = Some((*is_enabled, *strength));
                     }
                     _ => {}
                 }
@@ -322,6 +431,18 @@ impl ResonaDspEngine {
                 updated_vst.push(instance);
             }
             self.vst_plugins = updated_vst;
+
+            if let Some((rn_enabled, rn_strength)) = rnnoise_opt {
+                if !self.rnnoise.enabled && rn_enabled {
+                    for ch in &mut self.rnnoise.channels {
+                        ch.reset();
+                    }
+                }
+                self.rnnoise.enabled = rn_enabled;
+                self.rnnoise.strength = rn_strength;
+            } else {
+                self.rnnoise.enabled = false;
+            }
         }
     }
 
@@ -341,6 +462,9 @@ impl ResonaDspEngine {
         let mut out_peak_sq = 0.0f32;
 
         let total_frames = samples.len() / ch_cnt;
+
+        // Stage 0: AI Neural Noise Suppression (RNNoise)
+        self.rnnoise.process_interleaved(samples, ch_cnt);
 
         // Stage 1: Preamp, Biquad Filters, Graphic EQ, Boss RC-505
         for frame in 0..total_frames {
@@ -415,4 +539,35 @@ fn resolve_vst_path(lib: &str) -> String {
         }
     }
     clean
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rnnoise_processor_execution() {
+        let mut proc = RnNoiseProcessor::new(2);
+        assert!(!proc.enabled);
+
+        proc.enabled = true;
+        proc.strength = 1.0;
+
+        // Create 2 channels of 960 frames (20 ms at 48kHz, exactly two 480-sample RNNoise frames)
+        let num_frames = 960;
+        let num_channels = 2;
+        let mut samples = vec![0.0f32; num_frames * num_channels];
+
+        // Fill with low-level random/sine noise
+        for (i, s) in samples.iter_mut().enumerate() {
+            let f = (i / 2) as f32;
+            *s = (f * 0.05).sin() * 0.05;
+        }
+
+        let orig_len = samples.len();
+        proc.process_interleaved(&mut samples, num_channels);
+
+        assert_eq!(samples.len(), orig_len);
+        assert!(proc.speech_prob >= 0.0 && proc.speech_prob <= 1.0);
+    }
 }

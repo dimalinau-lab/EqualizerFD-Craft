@@ -39,6 +39,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_one_f32() -> f32 {
+    1.0
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ConfigDirective {
     Preamp {
@@ -83,6 +87,13 @@ pub enum ConfigDirective {
         channels: Vec<ChannelId>,
         #[serde(default = "default_true")]
         is_enabled: bool,
+    },
+    RNNoise {
+        #[serde(default = "default_true")]
+        is_enabled: bool,
+        #[serde(default = "default_one_f32")]
+        strength: f32,
+        channels: Vec<ChannelId>,
     },
     Comment(String),
 }
@@ -253,6 +264,27 @@ impl ConfigFile {
                     effect_name: body.trim().to_string(),
                     channels: current_channels.clone(),
                     is_enabled: !is_explicit_disabled,
+                });
+            } else if cmd_name == "RNNOISE" || cmd_name == "AI_NOISE" || cmd_name == "AIDENOISE" {
+                let mut enabled = !is_explicit_disabled;
+                let mut strength = 1.0f32;
+                for p in body.split_whitespace() {
+                    let p_clean = p.trim().trim_end_matches('%');
+                    if p.eq_ignore_ascii_case("OFF") || p == "0" {
+                        enabled = false;
+                    } else if p.eq_ignore_ascii_case("ON") || p == "1" {
+                        enabled = true;
+                    } else if let Ok(val) = p_clean.parse::<f32>() {
+                        strength = if val > 1.0 { (val / 100.0).clamp(0.0, 1.0) } else { val.clamp(0.0, 1.0) };
+                    }
+                }
+                if is_explicit_disabled {
+                    enabled = false;
+                }
+                directives.push(ConfigDirective::RNNoise {
+                    is_enabled: enabled,
+                    strength,
+                    channels: current_channels.clone(),
                 });
             }
         }

@@ -716,6 +716,75 @@ body.desktop-app {
   border-left-color: #2563eb;
 }
 
+.plugin-desc-banner.rnnoise-desc {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  border-left-color: #2563eb;
+}
+
+.rnnoise-desc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+  font-weight: 700;
+}
+
+.rnnoise-desc-sub {
+  font-size: 11px;
+  color: #475569;
+}
+
+.rnnoise-vad-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  font-family: Consolas, monospace;
+  transition: all 150ms ease;
+}
+
+.rnnoise-vad-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.rnnoise-vad-indicator.idle-voice {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+
+.rnnoise-vad-indicator.idle-voice .rnnoise-vad-dot {
+  background: #94a3b8;
+}
+
+.rnnoise-vad-indicator.active-voice {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #6ee7b7;
+}
+
+.rnnoise-vad-indicator.active-voice .rnnoise-vad-dot {
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.rnnoise-vad-indicator.disabled-voice {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.rnnoise-vad-indicator.disabled-voice .rnnoise-vad-dot {
+  background: #ef4444;
+}
+
 .param-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -2031,3 +2100,47 @@ body.theme-dark .toast-notification {
   color: #ffffff;
   border: 1px solid #ffffff;
 }
+
+body.theme-dark .plugin-desc-banner.rnnoise-desc {
+  background: #0d0d0d;
+  border-color: #262626;
+  border-left-color: #ffffff;
+  color: #ffffff;
+}
+
+body.theme-dark .rnnoise-desc-sub {
+  color: #a3a3a3;
+}
+
+body.theme-dark .rnnoise-vad-indicator.idle-voice {
+  background: #171717;
+  color: #a3a3a3;
+  border-color: #333333;
+}
+
+body.theme-dark .rnnoise-vad-indicator.idle-voice .rnnoise-vad-dot {
+  background: #525252;
+}
+
+body.theme-dark .rnnoise-vad-indicator.active-voice {
+  background: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+  font-weight: 700;
+}
+
+body.theme-dark .rnnoise-vad-indicator.active-voice .rnnoise-vad-dot {
+  background: #000000;
+  box-shadow: none;
+}
+
+body.theme-dark .rnnoise-vad-indicator.disabled-voice {
+  background: #171717;
+  color: #737373;
+  border-color: #262626;
+}
+
+body.theme-dark .rnnoise-vad-indicator.disabled-voice .rnnoise-vad-dot {
+  background: #404040;
+}
+

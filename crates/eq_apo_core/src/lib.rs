@@ -75,4 +75,37 @@ mod tests {
         let curve = pipeline.generate_response_curve(100, 20.0, 20000.0);
         assert_eq!(curve.len(), 100);
     }
+
+    #[test]
+    fn test_rnnoise_parsing() {
+        let text = r#"
+            # RNNoise test
+            RNNoise: ON 85%
+            # [Disabled] RNNoise: ON 100%
+            AI_NOISE: OFF 50%
+        "#;
+        let config = ConfigFile::parse(text, 48000.0).expect("Failed to parse RNNoise config");
+        assert_eq!(config.directives.len(), 4);
+        match &config.directives[1] {
+            ConfigDirective::RNNoise { is_enabled, strength, .. } => {
+                assert_eq!(*is_enabled, true);
+                assert!((*strength - 0.85).abs() < 1e-4);
+            }
+            _ => panic!("Expected RNNoise directive"),
+        }
+        match &config.directives[2] {
+            ConfigDirective::RNNoise { is_enabled, strength, .. } => {
+                assert_eq!(*is_enabled, false);
+                assert!((*strength - 1.0).abs() < 1e-4);
+            }
+            _ => panic!("Expected disabled RNNoise directive"),
+        }
+        match &config.directives[3] {
+            ConfigDirective::RNNoise { is_enabled, strength, .. } => {
+                assert_eq!(*is_enabled, false);
+                assert!((*strength - 0.5).abs() < 1e-4);
+            }
+            _ => panic!("Expected AI_NOISE directive"),
+        }
+    }
 }

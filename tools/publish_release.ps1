@@ -1,7 +1,7 @@
-# Publish release v0.1.3-BETA to GitHub
+# Publish release v0.1.4-BETA to GitHub
 param (
-    [string]$TagName = "v0.1.3-BETA",
-    [string]$ReleaseName = "Equalizer FD CRAFT v0.1.3-BETA"
+    [string]$TagName = "v0.1.4-BETA",
+    [string]$ReleaseName = "Equalizer FD CRAFT v0.1.4-BETA"
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,33 +33,30 @@ try {
 }
 
 $releaseBody = @"
-# Equalizer FD CRAFT v0.1.3-BETA
+# Equalizer FD CRAFT v0.1.4-BETA
 
-## 🎛️ Полный набор эффектов Roland BOSS RC-505 Mk2 (50 эффектов)
-- Реализованы все **50 аудио-эффектов** знаменитой луп-станции BOSS RC-505 Mk2:
-  - **DYNAMICS/FILTER (10)**: LPF, HPF, BPF, COMB FILTER, TRACK EQ, ISOLATOR, VOCODER, REVERSE, RING MOD, COMPRESSOR
-  - **PITCH/MODULATION (10)**: PITCH BEND, HARMONIST, AUTO VOCODER, CHORUS, FLANGER, PHASER, TREMOLO, PAN, VIBRATO, OCTAVE
-  - **DISTORTION/WARMTH (10)**: OVERDRIVE, DISTORTION, FUZZ, AMP SIM, BIT CRUSH, SATURATION, CRUNCH, TUBE DRIVE, OCTA FUZZ, RADIO
-  - **DELAY/ECHO (10)**: TAPE ECHO, DIGITAL DELAY, PAN DELAY, REVERSE DELAY, DUCK DELAY, WARP, DUB ECHO, TIME WARP, SLICER, REPEAT THIN
-  - **REVERB/SPECIAL (10)**: ROOM, HALL, PLATE, SPRING, SHIMMER, VINYL LO-FI, LOOPER GRAIN, BEAT REPEAT, FREEZE, MORPHING FILTER
-- Интерактивное модальное окно каталога с мгновенным переключением и регулировкой параметров в реальном времени.
+## 🤖 Нейросетевое AI-шумоподавление RNNoise (Deep Learning Audio)
+- **Рекуррентная нейросеть GRU (RNNoise)**: глубокое подавление фонового шума помещения, шума кулеров, щелчков механической клавиатуры и кликов мыши в реальном времени.
+- **Чистый безопасный Rust**: интеграция через `nnnoiseless` без сторонних нестабильных C/C++ DLL библиотек.
+- **Stage 0 обработка**: шумоподавление работает до параметрического эквалайзера и VST, сохраняя максимальную разборчивость и естественность голоса.
+- **Стабильный 10 мс Ring-буфер FIFO**: предзаполнение 480 сэмплами при 48 кГц исключает аудио-джиттер и опустошение аудиобуфера.
+- **Реалтайм Voice Activity Detection (VAD)**: динамическое определение вероятности человеческой речи (`speech_prob`) с живым индикатором в карточке эффекта (`VAD: Голос (xx%)` / `VAD: Шумоподавление`).
+- **Интерактивное управление**: карточка блока в рэке эффектов с кнопкой питания, ползунком силы подавления (0–100%) и быстрыми пресетами (50% Мягкий, 85% Оптимальный, 100% Максимальный).
+- **Синтаксис директив**: поддержка директив `RNNoise: ON 100%`, `AI_NOISE: ON 85%` и `# [Disabled] RNNoise: ON` в файлах конфигурации.
 
-## 🎨 Новый минималистичный 4K интерфейс и иконка
-- Новая ультра-четкая 4K монохромная векторная иконка для всех масштабов Windows (100%, 125%, 150%, 200%, 400%).
-- Исправлено отображение иконки в превью миниатюры панели задач Windows (`SetClassLongPtrW` + сброс кеша фавиконов WebView2/Edge).
-
-## 🪟 Надежный системный трей Windows
-- Полная реставрация системного трея: надежное разворачивание окна из свернутого состояния с захватом фокуса Win32.
-- Управление мостом WASAPI, запуск с правами администратора без вылета UAC, корректный выход из приложения.
+## 🎨 Темы оформления и исправления
+- Исправлена светлая и минималистичная монохромная черная/белая темная тема (`.theme-dark`).
+- Полная поддержка горячих клавиш F5 / Ctrl+R для мгновенного обновления конфигурации без сброса интерфейса.
+- Обновлен встроенный авто-апдейтер до версии v0.1.4-BETA.
 
 ## 📦 Варианты установки и скачивания
-1. **`EqualizerFD-Craft-Setup-v0.1.3-BETA.exe`** (165.68 MB):
+1. **`EqualizerFD-Craft-Setup-v0.1.4-BETA.exe`** (~166 MB):
    - **Полный офлайн установщик Inno Setup** со всеми встроенными **98 профессиональными 64-битными VST плагинами** (ReaPlugs, Blue Cat, Kuassa и др.).
-2. **`EqualizerFD-Craft-Update-Installer.exe`** (3.10 MB):
+2. **`EqualizerFD-Craft-Update-Installer.exe`** (~3.4 MB):
    - **Быстрое обновление (рекомендуется)**: легкий установщик Inno Setup. Обновляет исполняемые файлы программы, системный трей и веб-интерфейс, сохраняя все ваши пресеты и плагины.
-3. **`EqualizerFD-Craft-Update.zip`** (1.85 MB):
+3. **`EqualizerFD-Craft-Update.zip`** (~2.8 MB):
    - **Быстрое обновление (ZIP-архив)** без повторного скачивания плагинов.
-4. **`EqualizerFD-Craft-v0.1.3-BETA-Portable.zip`** (3.20 MB):
+4. **`EqualizerFD-Craft-v0.1.4-BETA-Portable.zip`** (~4.1 MB):
    - Портативная версия без инсталляции.
 "@
 
@@ -92,10 +89,10 @@ Write-Host ">>> [3/5] Listing existing assets in release..."
 $existingAssets = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/$releaseId/assets" -Headers $headers -Method Get
 
 $filesToUpload = @(
-    @{ Name = "EqualizerFD-Craft-Setup-v0.1.3-BETA.exe"; Path = "dist\EqualizerFD-Craft-Setup-v0.1.3-BETA.exe"; ContentType = "application/vnd.microsoft.portable-executable" },
+    @{ Name = "EqualizerFD-Craft-Setup-v0.1.4-BETA.exe"; Path = "dist\EqualizerFD-Craft-Setup-v0.1.4-BETA.exe"; ContentType = "application/vnd.microsoft.portable-executable" },
     @{ Name = "EqualizerFD-Craft-Update-Installer.exe"; Path = "dist\EqualizerFD-Craft-Update-Installer.exe"; ContentType = "application/vnd.microsoft.portable-executable" },
     @{ Name = "EqualizerFD-Craft-Update.zip"; Path = "dist\EqualizerFD-Craft-Update.zip"; ContentType = "application/zip" },
-    @{ Name = "EqualizerFD-Craft-v0.1.3-BETA-Portable.zip"; Path = "dist\EqualizerFD-Craft-v0.1.3-BETA-Portable.zip"; ContentType = "application/zip" }
+    @{ Name = "EqualizerFD-Craft-v0.1.4-BETA-Portable.zip"; Path = "dist\EqualizerFD-Craft-v0.1.4-BETA-Portable.zip"; ContentType = "application/zip" }
 )
 
 Write-Host ">>> [4/5] Uploading release assets..."

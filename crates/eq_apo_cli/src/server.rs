@@ -350,6 +350,9 @@ fn handle_client(mut stream: TcpStream) {
                     "in_peak_db": -96.0,
                     "out_peak_db": -96.0,
                     "preamp_gain_db": 0.0,
+                    "speech_prob": 0.0,
+                    "rnnoise_enabled": false,
+                    "rnnoise_strength": 1.0,
                 });
 
                 if let Ok(handle) = resona_apo::SharedMemoryHandle::create_or_open() {
@@ -363,6 +366,9 @@ fn handle_client(mut stream: TcpStream) {
                             "preamp_gain_db": sm.preamp_gain_db,
                             "sample_rate": sm.sample_rate,
                             "channels": sm.channels,
+                            "speech_prob": sm.speech_prob,
+                            "rnnoise_enabled": sm.rnnoise_enabled != 0,
+                            "rnnoise_strength": sm.rnnoise_strength,
                         });
                     }
                 }

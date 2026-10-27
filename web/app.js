@@ -1200,6 +1200,16 @@ function createRc505Block(effectId) {
   };
 }
 
+function createRnnoiseBlock(strength = 1.0) {
+  return {
+    id: nextId(),
+    kind: 'rnnoise',
+    title: 'AI Шумоподавление (RNNoise)',
+    enabled: true,
+    strength: Math.min(1.0, Math.max(0.0, strength))
+  };
+}
+
 const state = {
   instantMode: localStorage.getItem('resona_instant_mode') !== 'false',
   activeTabId: (savedTabs && savedActiveTabId && savedTabs.some(t => t.id === savedActiveTabId)) ? savedActiveTabId : ((savedTabs && savedTabs[0]) ? savedTabs[0].id : 'tab_config'),
@@ -2139,6 +2149,7 @@ function getBlockLocalizedTitle(block) {
     case 'include': return window.t('blocks.include.title', null, window.t('add.include', null, block.title));
     case 'vst': return getVstLocalizedMeta(block.vstId, block.library).title;
     case 'rc505': return getRc505LocalizedMeta(block.effectId).title;
+    case 'rnnoise': return window.t ? window.t('add.rnnoise', null, block.title) : block.title;
     case 'delay': return window.t('add.delay', null, block.title);
     case 'copy': return window.t('add.copy', null, block.title);
     default: return block.title;
@@ -2472,6 +2483,42 @@ function renderBlocks(targetScrollBlockId = null) {
       }
 
       content.innerHTML = rhtml;
+    } else if (block.kind === 'rnnoise') {
+      const curPct = Math.round((block.strength !== undefined ? block.strength : 1.0) * 100);
+      const purposeTxt = window.t ? window.t('add.rnnoiseTitle', null, 'RNNoise: нейросетевое шумоподавление в реальном времени') : 'RNNoise: нейросетевое шумоподавление в реальном времени';
+      const strengthLbl = window.t ? window.t('blocks.rnnoise.strength', null, 'Сила шумоподавления (Смешивание):') : 'Сила шумоподавления (Смешивание):';
+      const presetsLbl = window.t ? window.t('blocks.rnnoise.presets', null, 'Быстрые пресеты:') : 'Быстрые пресеты:';
+
+      let ahtml = `
+        <div class="plugin-desc-banner rnnoise-desc">
+          <div class="rnnoise-desc-header">
+            <span class="rnnoise-title-text">🤖 Deep Learning RNNoise (GRU Neural Network)</span>
+            <span class="rnnoise-vad-indicator idle-voice" id="rnnoiseVad_${block.id}">
+              <span class="rnnoise-vad-dot"></span> VAD: Ожидание речи
+            </span>
+          </div>
+          <div class="rnnoise-desc-sub">${purposeTxt}</div>
+        </div>
+        <div class="param-grid" style="margin-top: 10px;">
+          <div class="param-item" style="grid-column: 1 / -1;">
+            <div class="param-item-header">
+              <span class="param-name">${strengthLbl}</span>
+              <span class="param-val-badge" id="badge_rnnoise_${block.id}">${curPct}%</span>
+            </div>
+            <div class="param-slider-row" style="display: flex; gap: 10px; align-items: center;">
+              <input type="range" class="param-slider rnnoise-slider" min="0" max="100" step="1" value="${curPct}" data-block-id="${block.id}" style="flex: 1;">
+              <input type="number" class="win-input rnnoise-input" min="0" max="100" step="1" value="${curPct}" data-block-id="${block.id}" style="width: 60px; text-align: center; height: 26px;">
+            </div>
+          </div>
+        </div>
+        <div class="preset-pills-row" style="margin-top: 8px;">
+          <span class="preset-pill-label">${presetsLbl}</span>
+          <button class="pill-btn rnnoise-preset-pill" data-block-id="${block.id}" data-pct="50">50% (Мягкий)</button>
+          <button class="pill-btn rnnoise-preset-pill" data-block-id="${block.id}" data-pct="85">85% (Оптимальный)</button>
+          <button class="pill-btn rnnoise-preset-pill" data-block-id="${block.id}" data-pct="100">100% (Максимальный)</button>
+        </div>
+      `;
+      content.innerHTML = ahtml;
     }
 
     card.appendChild(content);
@@ -2857,6 +2904,57 @@ function attachBlockEvents() {
         renderBlocks();
         updateAll();
         showToast(`Пресет BOSS RC-505 "${pr.name}" применен`);
+      }
+    });
+  });
+
+  // 12b. RNNoise Sliders, Inputs & Presets
+  document.querySelectorAll('.rnnoise-slider').forEach(slider => {
+    slider.addEventListener('input', (e) => {
+      const bId = slider.dataset.blockId;
+      const blk = tab.blocks.find(x => String(x.id) === String(bId));
+      if (blk) {
+        const val = parseInt(e.target.value, 10);
+        blk.strength = val / 100.0;
+        const badge = document.getElementById(`badge_rnnoise_${bId}`);
+        if (badge) badge.textContent = `${val}%`;
+        const numInp = document.querySelector(`.rnnoise-input[data-block-id="${bId}"]`);
+        if (numInp) numInp.value = val;
+        updateAll();
+      }
+    });
+  });
+
+  document.querySelectorAll('.rnnoise-input').forEach(inp => {
+    inp.addEventListener('change', (e) => {
+      const bId = inp.dataset.blockId;
+      const blk = tab.blocks.find(x => String(x.id) === String(bId));
+      if (blk) {
+        let val = parseInt(e.target.value, 10);
+        if (isNaN(val)) val = 100;
+        val = Math.min(100, Math.max(0, val));
+        blk.strength = val / 100.0;
+        inp.value = val;
+        const badge = document.getElementById(`badge_rnnoise_${bId}`);
+        if (badge) badge.textContent = `${val}%`;
+        const slider = document.querySelector(`.rnnoise-slider[data-block-id="${bId}"]`);
+        if (slider) slider.value = val;
+        updateAll();
+      }
+    });
+  });
+
+  document.querySelectorAll('.rnnoise-preset-pill').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const bId = btn.dataset.blockId;
+      const pct = parseInt(btn.dataset.pct, 10);
+      const blk = tab.blocks.find(x => String(x.id) === String(bId));
+      if (blk && !isNaN(pct)) {
+        blk.strength = pct / 100.0;
+        renderBlocks();
+        updateAll();
+        showToast(`RNNoise: установлен уровень ${pct}%`);
       }
     });
   });
@@ -3267,6 +3365,27 @@ function parseConfigIntoState(text, targetTab = null) {
       continue;
     }
 
+    const rnnoiseMatch = line.match(/^(?:RNNoise|AI_NOISE|AIDENOISE):\s*(ON|OFF)?\s*(\d+(?:\.\d+)?%?)?/i);
+    if (rnnoiseMatch) {
+      currentParametric = null;
+      const isDirectiveEnabled = rnnoiseMatch[1] ? rnnoiseMatch[1].toUpperCase() !== 'OFF' : true;
+      let strength = 1.0;
+      if (rnnoiseMatch[2]) {
+        let val = parseFloat(rnnoiseMatch[2].replace('%', ''));
+        if (!isNaN(val)) {
+          strength = val > 1.0 ? val / 100.0 : val;
+        }
+      }
+      newBlocks.push({
+        id: nextId(),
+        kind: 'rnnoise',
+        title: 'AI Шумоподавление (RNNoise)',
+        enabled: !isExplicitDisabled && isDirectiveEnabled,
+        strength: Math.min(1.0, Math.max(0.0, strength))
+      });
+      continue;
+    }
+
     const fltMatch = line.match(/^Filter(?:\s*\d+)?:\s*(ON|OFF)?\s*([A-Za-z]+)\s+Fc\s+(\d+(?:\.\d+)?)\s*Hz\s+Gain\s*([+-]?\d+(?:\.\d+)?)\s*dB(?:\s+Q\s+(\d+(?:\.\d+)?))?/i);
     if (fltMatch) {
       const filterOn = fltMatch[1] ? fltMatch[1].toUpperCase() !== 'OFF' : true;
@@ -3426,6 +3545,10 @@ function generateConfig() {
     } else if (b.kind === 'rc505') {
       text += `# [BossRC505: ${b.effectId}] Params: ${JSON.stringify(b.params || {})}\n`;
       text += `${prefix}BossRC505: Effect "${RC505_CATALOG[b.effectId]?.title || b.title}" Params "${encodeURIComponent(JSON.stringify(b.params || {}))}"\n\n`;
+    } else if (b.kind === 'rnnoise') {
+      const pct = Math.round((b.strength !== undefined ? b.strength : 1.0) * 100);
+      text += `# [RNNoise] Strength: ${pct}%\n`;
+      text += `${prefix}RNNoise: ${b.enabled ? 'ON' : 'OFF'} ${pct}%\n\n`;
     } else if (b.kind === 'parametric') {
       b.filters.forEach(f => {
         text += `${prefix}Filter: ${f.enabled ? 'ON' : 'OFF'} ${f.type} Fc ${Math.round(f.fc)} Hz Gain ${f.gain >= 0 ? '+' : ''}${f.gain.toFixed(2)} dB Q ${f.q.toFixed(4)}\n`;
@@ -3604,6 +3727,9 @@ document.querySelectorAll('.sub-menu button').forEach(btn => {
     } else if (action === 'open-rc505-catalog') {
       openRc505CatalogModal();
       return;
+    } else if (action === 'add-rnnoise') {
+      tab.blocks.push(createRnnoiseBlock(1.0));
+      showToast(window.t ? window.t('add.rnnoiseAdded', null, 'Добавлено AI шумоподавление (RNNoise)') : 'Добавлено AI шумоподавление (RNNoise)');
     } else if (action && action.startsWith('add-rc505-')) {
       const effKey = action.replace('add-rc505-', '');
       if (RC505_CATALOG[effKey]) {
@@ -5467,6 +5593,25 @@ async function checkStreamStatus() {
             ? window.t('toolbar.liveSignal', { peak: outPk.toFixed(1), gain: liveData.preamp_gain_db.toFixed(1) }, `Сигнал: ${outPk.toFixed(1)} dB (Усиление: +${liveData.preamp_gain_db.toFixed(1)} dB)`)
             : `Сигнал: ${outPk.toFixed(1)} dB (Усиление: +${liveData.preamp_gain_db.toFixed(1)} dB)`;
         }
+      }
+
+      if (liveData.rnnoise_enabled) {
+        const vadProb = Math.round((liveData.speech_prob || 0.0) * 100);
+        const isVoice = (liveData.speech_prob || 0.0) >= 0.45;
+        document.querySelectorAll('.rnnoise-vad-indicator').forEach(el => {
+          if (isVoice) {
+            el.className = 'rnnoise-vad-indicator active-voice';
+            el.innerHTML = `<span class="rnnoise-vad-dot"></span> VAD: Голос (${vadProb}%)`;
+          } else {
+            el.className = 'rnnoise-vad-indicator idle-voice';
+            el.innerHTML = `<span class="rnnoise-vad-dot"></span> VAD: Шумоподавление (${vadProb}%)`;
+          }
+        });
+      } else {
+        document.querySelectorAll('.rnnoise-vad-indicator').forEach(el => {
+          el.className = 'rnnoise-vad-indicator disabled-voice';
+          el.innerHTML = `<span class="rnnoise-vad-dot"></span> VAD: Выключен`;
+        });
       }
     }
   } catch (e) {}

@@ -46,6 +46,9 @@ pub struct ResonaSharedMemory {
     pub heartbeat: u64,
     pub sample_rate: u32,
     pub channels: u32,
+    pub speech_prob: f32,
+    pub rnnoise_enabled: u32,
+    pub rnnoise_strength: f32,
     pub config_len: u32,
     pub config_bytes: [u8; 8192],
 }
@@ -65,6 +68,9 @@ impl Default for ResonaSharedMemory {
             heartbeat: 0,
             sample_rate: 48000,
             channels: 2,
+            speech_prob: 0.0,
+            rnnoise_enabled: 0,
+            rnnoise_strength: 1.0,
             config_len: 0,
             config_bytes: [0u8; 8192],
         }
