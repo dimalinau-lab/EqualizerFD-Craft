@@ -1618,8 +1618,8 @@ function renderAnalysis() {
     ctx.restore();
   }
 
-  // 4b. FabFilter-Style Individual Filter Bandwidth Underlay (on hover/drag)
-  const activeFocus = window.activeDragNode || window.hoveredNode;
+  // 4b. FabFilter-Style Individual Filter Bandwidth Underlay (on hover/drag/select)
+  const activeFocus = window.activeDragNode || window.selectedNode || window.hoveredNode;
   if (activeFocus && activeFocus.filter && activeFocus.filter.enabled) {
     const focusFlt = activeFocus.filter;
     ctx.save();
@@ -1718,7 +1718,8 @@ function renderAnalysis() {
 
         const isHovered = window.hoveredNode && window.hoveredNode.filter.id === flt.id;
         const isDragging = window.activeDragNode && window.activeDragNode.filter.id === flt.id;
-        const radius = isDragging ? 9 : (isHovered ? 8 : 6.5);
+        const isSelected = window.selectedNode && window.selectedNode.filter.id === flt.id;
+        const radius = isDragging ? 9.5 : (isSelected ? 9 : (isHovered ? 8 : 6.5));
 
         // Store interactive hit-test record
         window.interactiveNodes.push({
@@ -1733,12 +1734,12 @@ function renderAnalysis() {
         ctx.save();
 
         // Node Glow Halo
-        if (isDragging || isHovered) {
+        if (isDragging || isHovered || isSelected) {
           ctx.beginPath();
           ctx.arc(x, y, radius + 8, 0, Math.PI * 2);
           ctx.fillStyle = isDark
-            ? (isDragging ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.22)')
-            : (isDragging ? 'rgba(0, 210, 255, 0.4)' : 'rgba(56, 189, 248, 0.22)');
+            ? (isDragging ? 'rgba(255, 255, 255, 0.45)' : (isSelected ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.2)'))
+            : (isDragging ? 'rgba(0, 210, 255, 0.45)' : (isSelected ? 'rgba(0, 210, 255, 0.3)' : 'rgba(56, 189, 248, 0.2)'));
           ctx.fill();
         }
 
@@ -1887,7 +1888,9 @@ function findNodeAtCoord(x, y) {
   return null;
 }
 
-function renderCurveTooltip(hitNode, clientX, clientY) {
+window.selectedNode = null;
+
+function renderCurveTooltip(hitNode) {
   if (!curveTooltip || !hitNode) return;
   const flt = hitNode.filter;
   const f = flt.fc;
@@ -1906,9 +1909,9 @@ function renderCurveTooltip(hitNode, clientX, clientY) {
       <span>Q: <strong>${flt.q.toFixed(2)}</strong></span>
     </div>
     <div class="tooltip-actions">
-      <button class="tooltip-btn" data-act="bypass">${flt.enabled ? '⚡ Bypass' : '⚡ Вкл'}</button>
-      <button class="tooltip-btn" data-act="invert">⇄ Инверт</button>
-      <button class="tooltip-btn" data-act="delete">🗑 Удалить</button>
+      <button class="tooltip-btn" data-act="bypass">${flt.enabled ? 'Bypass' : 'Вкл'}</button>
+      <button class="tooltip-btn" data-act="invert">Инверт</button>
+      <button class="tooltip-btn" data-act="delete">Удалить</button>
     </div>
     <div class="tooltip-type-selector">
       <button class="tooltip-type-btn ${flt.type === 'PK' ? 'active' : ''}" data-type="PK">PK</button>
@@ -1922,24 +1925,33 @@ function renderCurveTooltip(hitNode, clientX, clientY) {
 
   const w = canvas.width || 1280;
   const h = canvas.height || 230;
-  const rect = canvas.getBoundingClientRect();
-  const localX = (clientX !== undefined) ? (clientX - rect.left) : hitNode.x;
-  const localY = (clientY !== undefined) ? (clientY - rect.top) : hitNode.y;
 
-  const ttLeft = Math.min(w - 185, Math.max(10, localX + 16));
-  const ttTop = Math.min(h - 100, Math.max(10, localY - 40));
-  curveTooltip.style.left = `${ttLeft}px`;
-  curveTooltip.style.top = `${ttTop}px`;
+  // Anchor reliably right next to node
+  let ttLeft = hitNode.x + 14;
+  if (ttLeft + 185 > w) {
+    ttLeft = hitNode.x - 195;
+  }
+  ttLeft = Math.max(10, Math.min(w - 190, ttLeft));
+
+  let ttTop = hitNode.y - 42;
+  if (ttTop < 10) ttTop = 10;
+  if (ttTop + 115 > h) ttTop = h - 120;
+
+  curveTooltip.style.left = `${Math.round(ttLeft)}px`;
+  curveTooltip.style.top = `${Math.round(ttTop)}px`;
   curveTooltip.classList.remove('hidden');
 }
 
 if (curveTooltip) {
+  // Prevent clicks inside tooltip from bubbling or deselecting
+  curveTooltip.addEventListener('mousedown', (e) => e.stopPropagation());
+
   curveTooltip.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
     e.stopPropagation();
 
-    const activeNode = window.activeDragNode || window.hoveredNode;
+    const activeNode = window.selectedNode || window.activeDragNode || window.hoveredNode;
     if (!activeNode) return;
     const flt = activeNode.filter;
 
@@ -1964,6 +1976,7 @@ if (curveTooltip) {
       const block = activeNode.block;
       block.filters = block.filters.filter(f => f.id !== flt.id);
       window.activeDragNode = null;
+      window.selectedNode = null;
       window.hoveredNode = null;
       curveTooltip.classList.add('hidden');
       renderBlocks();
@@ -1982,6 +1995,17 @@ if (curveTooltip) {
   });
 }
 
+// Global click-outside to deselect pinned node
+document.addEventListener('mousedown', (e) => {
+  if (canvas && (e.target === canvas || canvas.contains(e.target))) return;
+  if (curveTooltip && (e.target === curveTooltip || curveTooltip.contains(e.target))) return;
+  if (window.selectedNode) {
+    window.selectedNode = null;
+    if (curveTooltip) curveTooltip.classList.add('hidden');
+    renderAnalysis();
+  }
+});
+
 if (canvas) {
   canvas.addEventListener('mousedown', (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -1991,10 +2015,19 @@ if (canvas) {
     const hit = findNodeAtCoord(x, y);
     if (hit) {
       pushHistory();
+      window.selectedNode = hit; // Pin card open on click
       window.activeDragNode = hit;
       canvas.style.cursor = 'grabbing';
-      renderCurveTooltip(hit, e.clientX, e.clientY);
+      renderCurveTooltip(hit);
+      renderAnalysis();
       e.preventDefault();
+    } else {
+      // Clicked outside any node -> deselect and close card
+      window.selectedNode = null;
+      if (curveTooltip && !curveTooltip.matches(':hover')) {
+        curveTooltip.classList.add('hidden');
+      }
+      renderAnalysis();
     }
   });
 
@@ -2029,7 +2062,7 @@ if (canvas) {
       }
 
       renderAnalysis();
-      renderCurveTooltip(window.activeDragNode, e.clientX, e.clientY);
+      renderCurveTooltip(window.activeDragNode);
       debouncedRealtimeSave();
     } else {
       const hit = findNodeAtCoord(x, y);
@@ -2040,10 +2073,11 @@ if (canvas) {
 
       if (hit) {
         canvas.style.cursor = 'grab';
-        renderCurveTooltip(hit, e.clientX, e.clientY);
+        renderCurveTooltip(hit);
       } else {
         canvas.style.cursor = 'crosshair';
-        if (curveTooltip && !curveTooltip.matches(':hover')) {
+        // Only hide if node is NOT pinned by click and tooltip is not hovered
+        if (!window.selectedNode && curveTooltip && !curveTooltip.matches(':hover')) {
           curveTooltip.classList.add('hidden');
         }
       }
@@ -2054,7 +2088,7 @@ if (canvas) {
     if (window.activeDragNode) {
       window.activeDragNode = null;
       canvas.style.cursor = window.hoveredNode ? 'grab' : 'crosshair';
-      if (!window.hoveredNode && curveTooltip && !curveTooltip.matches(':hover')) {
+      if (!window.selectedNode && !window.hoveredNode && curveTooltip && !curveTooltip.matches(':hover')) {
         curveTooltip.classList.add('hidden');
       }
       saveTabsState();
