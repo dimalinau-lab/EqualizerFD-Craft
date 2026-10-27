@@ -353,6 +353,7 @@ fn handle_client(mut stream: TcpStream) {
                     "speech_prob": 0.0,
                     "rnnoise_enabled": false,
                     "rnnoise_strength": 1.0,
+                    "spectrum": vec![0.0f32; 32],
                 });
 
                 if let Ok(handle) = resona_apo::SharedMemoryHandle::create_or_open() {
@@ -369,6 +370,7 @@ fn handle_client(mut stream: TcpStream) {
                             "speech_prob": sm.speech_prob,
                             "rnnoise_enabled": sm.rnnoise_enabled != 0,
                             "rnnoise_strength": sm.rnnoise_strength,
+                            "spectrum": &sm.spectrum_bins[..],
                         });
                     }
                 }

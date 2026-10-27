@@ -49,6 +49,7 @@ pub struct ResonaSharedMemory {
     pub speech_prob: f32,
     pub rnnoise_enabled: u32,
     pub rnnoise_strength: f32,
+    pub spectrum_bins: [f32; 32],
     pub config_len: u32,
     pub config_bytes: [u8; 8192],
 }
@@ -71,6 +72,7 @@ impl Default for ResonaSharedMemory {
             speech_prob: 0.0,
             rnnoise_enabled: 0,
             rnnoise_strength: 1.0,
+            spectrum_bins: [0.0; 32],
             config_len: 0,
             config_bytes: [0u8; 8192],
         }

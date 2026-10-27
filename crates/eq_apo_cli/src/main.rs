@@ -31,6 +31,14 @@ fn main() {
 
     let command = &args[1];
     match command.as_str() {
+        "server" => {
+            let port = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(APP_PORT);
+            let _ = server::start_embedded_server(port);
+            println!("Server running on http://127.0.0.1:{}", port);
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(3600));
+            }
+        }
         "stream" => {
             let cap_kw = args.get(2).map(|s| s.as_str()).unwrap_or("fifine");
             let ren_kw = args.get(3).map(|s| s.as_str()).unwrap_or("VB-Audio");

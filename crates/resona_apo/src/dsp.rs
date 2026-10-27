@@ -234,12 +234,20 @@ impl RnNoiseProcessor {
 
 use crate::vst_host::VstPluginInstance;
 
+pub const RTA_FREQUENCIES_32: [f32; 32] = [
+    20.0, 25.0, 31.5, 40.0, 50.0, 63.0, 80.0, 100.0,
+    125.0, 160.0, 200.0, 250.0, 315.0, 400.0, 500.0, 630.0,
+    800.0, 1000.0, 1250.0, 1600.0, 2000.0, 2500.0, 3150.0, 4000.0,
+    5000.0, 6300.0, 8000.0, 10000.0, 12500.0, 16000.0, 18000.0, 20000.0,
+];
+
 pub struct ResonaDspEngine {
     channels: Vec<ChannelDsp>,
     sample_rate: f32,
     last_synced_version: u32,
     pub vst_plugins: Vec<VstPluginInstance>,
     pub rnnoise: RnNoiseProcessor,
+    pub spectrum_bins: [f32; 32],
 }
 
 impl ResonaDspEngine {
@@ -265,6 +273,7 @@ impl ResonaDspEngine {
             last_synced_version: 0,
             vst_plugins: Vec::new(),
             rnnoise: RnNoiseProcessor::new(num_channels),
+            spectrum_bins: [0.0; 32],
         }
     }
 
@@ -516,6 +525,51 @@ impl ResonaDspEngine {
 
         let in_peak_db = if in_peak_sq > 1e-9 { 10.0 * in_peak_sq.log10() } else { -96.0 };
         let out_peak_db = if out_peak_sq > 1e-9 { 10.0 * out_peak_sq.log10() } else { -96.0 };
+
+        // 32-Band Logarithmic Audio Spectrum Energy (Goertzel)
+        let step = (total_frames / 256).max(1);
+        let n_samples = (total_frames / step).min(256);
+        if n_samples >= 16 {
+            let n_f32 = n_samples as f32;
+            let norm_factor = 4.0 / (n_f32 * n_f32);
+            for (i, &f_hz) in RTA_FREQUENCIES_32.iter().enumerate() {
+                if f_hz >= self.sample_rate * 0.49 {
+                    self.spectrum_bins[i] = 0.0;
+                    continue;
+                }
+                let k = (n_f32 * f_hz / self.sample_rate).round();
+                let omega = 2.0 * std::f32::consts::PI * k / n_f32;
+                let coeff = 2.0 * omega.cos();
+
+                let mut s0;
+                let mut s1 = 0.0f32;
+                let mut s2 = 0.0f32;
+
+                for frame_idx in (0..total_frames).step_by(step).take(n_samples) {
+                    let base = frame_idx * ch_cnt;
+                    let mono_sample = if ch_cnt == 1 {
+                        samples[base]
+                    } else {
+                        (samples[base] + samples[base + 1]) * 0.5
+                    };
+                    s0 = mono_sample + coeff * s1 - s2;
+                    s2 = s1;
+                    s1 = s0;
+                }
+
+                let power = (s1 * s1 + s2 * s2 - coeff * s1 * s2).max(0.0);
+                let rms_sq = (power * norm_factor).max(1e-10);
+                let db = 10.0 * rms_sq.log10();
+                // Map -70 dB..0 dB to 0.0..1.0
+                let target_norm = ((db + 70.0) / 70.0).clamp(0.0, 1.0);
+
+                if target_norm > self.spectrum_bins[i] {
+                    self.spectrum_bins[i] = self.spectrum_bins[i] * 0.35 + target_norm * 0.65;
+                } else {
+                    self.spectrum_bins[i] = self.spectrum_bins[i] * 0.88 + target_norm * 0.12;
+                }
+            }
+        }
 
         (in_peak_db, out_peak_db)
     }

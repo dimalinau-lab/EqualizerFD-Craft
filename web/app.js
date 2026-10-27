@@ -1484,8 +1484,15 @@ window.hoveredNode = null;
 window.isRtaActive = true;
 window.isSidetoneActive = false;
 let _rtaFrameId = null;
-let _rtaBins = new Float32Array(64);
-let _rtaPeakBins = new Float32Array(64);
+const RTA_FREQS_32 = [
+  20, 25, 31.5, 40, 50, 63, 80, 100,
+  125, 160, 200, 250, 315, 400, 500, 630,
+  800, 1000, 1250, 1600, 2000, 2500, 3150, 4000,
+  5000, 6300, 8000, 10000, 12500, 16000, 18000, 20000
+];
+let _rtaBins = new Float32Array(32);
+let _rtaPeakBins = new Float32Array(32);
+window.liveSpectrumBins = null;
 
 // --- Render Analysis Panel Graph (Studio High-Precision RTA Deck) ---
 function renderAnalysis() {
@@ -1541,36 +1548,102 @@ function renderAnalysis() {
   // 4. Real-Time Audio (RTA) Spectrum Analyzer Underlay (60 FPS)
   if (window.isRtaActive) {
     ctx.save();
-    ctx.beginPath();
     const rtaCount = _rtaBins.length;
     const rtaGradient = ctx.createLinearGradient(0, h, 0, 0);
     if (isDark) {
       rtaGradient.addColorStop(0, 'rgba(255, 255, 255, 0.02)');
       rtaGradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.12)');
-      rtaGradient.addColorStop(1, 'rgba(255, 255, 255, 0.25)');
+      rtaGradient.addColorStop(1, 'rgba(255, 255, 255, 0.28)');
       ctx.fillStyle = rtaGradient;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
     } else {
       rtaGradient.addColorStop(0, 'rgba(2, 132, 199, 0.02)');
-      rtaGradient.addColorStop(0.6, 'rgba(2, 132, 199, 0.14)');
-      rtaGradient.addColorStop(1, 'rgba(0, 210, 255, 0.32)');
+      rtaGradient.addColorStop(0.6, 'rgba(2, 132, 199, 0.16)');
+      rtaGradient.addColorStop(1, 'rgba(0, 210, 255, 0.38)');
       ctx.fillStyle = rtaGradient;
-      ctx.strokeStyle = 'rgba(0, 210, 255, 0.6)';
+      ctx.strokeStyle = 'rgba(0, 210, 255, 0.75)';
+    }
+    ctx.lineWidth = 1.4;
+
+    // Layer A: Smooth Spline Spectrum Area Fill
+    ctx.beginPath();
+    ctx.moveTo(0, h);
+
+    const rtaPoints = [];
+    for (let i = 0; i < rtaCount; i++) {
+      const f = RTA_FREQS_32[i] || (20 * Math.pow(20000 / 20, i / (rtaCount - 1)));
+      const x = fToX(f, w);
+      const dbVal = -30.0 + (_rtaBins[i] * 45.0);
+      const y = Math.min(h, Math.max(0, dbToY(dbVal, h)));
+      rtaPoints.push({ x, y });
+    }
+
+    if (rtaPoints.length > 0) {
+      ctx.lineTo(rtaPoints[0].x, rtaPoints[0].y);
+      for (let i = 0; i < rtaPoints.length - 1; i++) {
+        const p0 = rtaPoints[Math.max(i - 1, 0)];
+        const p1 = rtaPoints[i];
+        const p2 = rtaPoints[i + 1];
+        const p3 = rtaPoints[Math.min(i + 2, rtaPoints.length - 1)];
+
+        const cp1x = p1.x + (p2.x - p0.x) / 6;
+        const cp1y = p1.y + (p2.y - p0.y) / 6;
+        const cp2x = p2.x - (p3.x - p1.x) / 6;
+        const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+      }
+      ctx.lineTo(w, h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Layer B: Glowing Falling Peak-Hold Line (FabFilter Pro-Q style)
+    ctx.beginPath();
+    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 230, 255, 0.9)';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([2, 3]);
+
+    for (let i = 0; i < rtaCount; i++) {
+      const f = RTA_FREQS_32[i] || (20 * Math.pow(20000 / 20, i / (rtaCount - 1)));
+      const x = fToX(f, w);
+      const peakDbVal = -30.0 + (_rtaPeakBins[i] * 45.0);
+      const py = Math.min(h, Math.max(0, dbToY(peakDbVal, h)));
+      if (i === 0) ctx.moveTo(x, py);
+      else ctx.lineTo(x, py);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // 4b. FabFilter-Style Individual Filter Bandwidth Underlay (on hover/drag)
+  const activeFocus = window.activeDragNode || window.hoveredNode;
+  if (activeFocus && activeFocus.filter && activeFocus.filter.enabled) {
+    const focusFlt = activeFocus.filter;
+    ctx.save();
+    ctx.beginPath();
+    const zeroY = dbToY(0, h);
+    ctx.moveTo(0, zeroY);
+
+    for (let px = 0; px <= w; px += 2) {
+      const f = xToF(px, w);
+      const fDb = evaluateBiquadDb(focusFlt.type, focusFlt.fc, focusFlt.gain, focusFlt.q, f);
+      const py = dbToY(fDb, h);
+      ctx.lineTo(px, py);
+    }
+    ctx.lineTo(w, zeroY);
+    ctx.closePath();
+
+    if (isDark) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+    } else {
+      ctx.fillStyle = 'rgba(2, 132, 199, 0.16)';
+      ctx.strokeStyle = 'rgba(0, 210, 255, 0.65)';
     }
     ctx.lineWidth = 1.2;
-
-    ctx.moveTo(0, h);
-    for (let i = 0; i < rtaCount; i++) {
-      const freqFrac = i / (rtaCount - 1);
-      const f = 20 * Math.pow(20000 / 20, freqFrac);
-      const x = fToX(f, w);
-      const dbVal = -30.0 + (_rtaBins[i] * 32.0);
-      const y = Math.min(h, Math.max(0, dbToY(dbVal, h)));
-      if (i === 0) ctx.lineTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.lineTo(w, h);
-    ctx.closePath();
     ctx.fill();
     ctx.stroke();
     ctx.restore();
@@ -1639,22 +1712,22 @@ function renderAnalysis() {
   currentBlocks.forEach(b => {
     if (b.kind === 'parametric' && b.enabled) {
       b.filters.forEach(flt => {
-        if (!flt.enabled) return;
         filterIndex++;
         const x = fToX(flt.fc, w);
         const y = dbToY(flt.gain, h);
 
         const isHovered = window.hoveredNode && window.hoveredNode.filter.id === flt.id;
         const isDragging = window.activeDragNode && window.activeDragNode.filter.id === flt.id;
-        const radius = isDragging ? 8 : (isHovered ? 7 : 6);
+        const radius = isDragging ? 9 : (isHovered ? 8 : 6.5);
 
         // Store interactive hit-test record
         window.interactiveNodes.push({
+          index: filterIndex,
           block: b,
           filter: flt,
           x: x,
           y: y,
-          radius: 12
+          radius: 14
         });
 
         ctx.save();
@@ -1662,10 +1735,10 @@ function renderAnalysis() {
         // Node Glow Halo
         if (isDragging || isHovered) {
           ctx.beginPath();
-          ctx.arc(x, y, radius + 7, 0, Math.PI * 2);
+          ctx.arc(x, y, radius + 8, 0, Math.PI * 2);
           ctx.fillStyle = isDark
-            ? (isDragging ? 'rgba(255, 255, 255, 0.35)' : 'rgba(255, 255, 255, 0.2)')
-            : (isDragging ? 'rgba(0, 210, 255, 0.35)' : 'rgba(56, 189, 248, 0.2)');
+            ? (isDragging ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.22)')
+            : (isDragging ? 'rgba(0, 210, 255, 0.4)' : 'rgba(56, 189, 248, 0.22)');
           ctx.fill();
         }
 
@@ -1681,19 +1754,21 @@ function renderAnalysis() {
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fillStyle = isDark ? '#000000' : '#ffffff';
-        ctx.strokeStyle = nodeColor;
+        ctx.strokeStyle = flt.enabled ? nodeColor : (isDark ? '#555555' : '#94a3b8');
         ctx.lineWidth = isDragging ? 3 : 2;
+        if (!flt.enabled) ctx.setLineDash([2, 2]);
         ctx.fill();
         ctx.stroke();
+        ctx.setLineDash([]);
 
         // Center Pip
         ctx.beginPath();
         ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = nodeColor;
+        ctx.fillStyle = flt.enabled ? nodeColor : (isDark ? '#555555' : '#94a3b8');
         ctx.fill();
 
         // Node Badge Label
-        ctx.fillStyle = isDark ? '#ffffff' : '#f0f6fc';
+        ctx.fillStyle = isDark ? '#ffffff' : (flt.enabled ? '#0f172a' : '#64748b');
         ctx.font = 'bold 10px "Segoe UI Mono", Consolas, monospace';
         ctx.fillText(`P${filterIndex}`, x - 7, y - (radius + 5));
 
@@ -1725,28 +1800,46 @@ function renderAnalysis() {
   }
 }
 
+// Note Name Helper
+function freqToNoteName(freq) {
+  if (freq < 16 || freq > 20000) return '';
+  const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const midiNum = Math.round(69 + 12 * Math.log2(freq / 440));
+  const note = notes[((midiNum % 12) + 12) % 12];
+  const octave = Math.floor(midiNum / 12) - 1;
+  return `${note}${octave}`;
+}
+
 // --- 60 FPS RTA Spectrum Animation Loop ---
 function stepRtaSpectrum() {
   if (window.isRtaActive) {
     const isStreamOn = isStreamActive;
     const now = performance.now();
-    for (let i = 0; i < _rtaBins.length; i++) {
-      let target = 0.08;
-      if (isStreamOn) {
-        // Voice acoustic harmonics simulation (rich fundamental at 100-300Hz, clarity at 2-4kHz)
+
+    for (let i = 0; i < 32; i++) {
+      let target = 0.02;
+      if (window.liveSpectrumBins && window.liveSpectrumBins.length > i && window.liveSpectrumBins[i] > 0.01) {
+        target = window.liveSpectrumBins[i];
+      } else if (isStreamOn) {
         const voiceBase = Math.sin((now * 0.003) + (i * 0.25)) * 0.4 + 0.5;
-        const formant = (i >= 8 && i <= 24) ? 0.35 : 0.1;
-        target = Math.min(1.0, Math.max(0.05, voiceBase * formant + Math.random() * 0.12));
+        const formant = (i >= 6 && i <= 20) ? 0.38 : 0.12;
+        target = Math.min(1.0, Math.max(0.04, voiceBase * formant + Math.random() * 0.08));
       } else {
-        // Idle ambient room noise floor
-        target = 0.04 + Math.sin((now * 0.001) + (i * 0.4)) * 0.02 + Math.random() * 0.015;
+        target = 0.03 + Math.sin((now * 0.001) + (i * 0.4)) * 0.015;
       }
 
-      // Smooth rise and exponential peak decay (~300ms)
+      // Fast musical attack and smooth exponential decay
       if (target > _rtaBins[i]) {
-        _rtaBins[i] += (target - _rtaBins[i]) * 0.35;
+        _rtaBins[i] += (target - _rtaBins[i]) * 0.40;
       } else {
-        _rtaBins[i] += (target - _rtaBins[i]) * 0.08;
+        _rtaBins[i] += (target - _rtaBins[i]) * 0.10;
+      }
+
+      // Smooth falling peak hold line
+      if (_rtaBins[i] > _rtaPeakBins[i]) {
+        _rtaPeakBins[i] = _rtaBins[i];
+      } else {
+        _rtaPeakBins[i] = Math.max(0, _rtaPeakBins[i] - 0.005);
       }
     }
     renderAnalysis();
@@ -1754,6 +1847,21 @@ function stepRtaSpectrum() {
   _rtaFrameId = requestAnimationFrame(stepRtaSpectrum);
 }
 requestAnimationFrame(stepRtaSpectrum);
+
+// --- High-Speed RTA Live Feed Poller (65ms ~ 15 Hz) ---
+setInterval(async () => {
+  if (window.isRtaActive) {
+    try {
+      const r = await fetch('/api/live-status', { cache: 'no-store' });
+      if (r.ok) {
+        const d = await r.json();
+        if (d.spectrum && Array.isArray(d.spectrum)) {
+          window.liveSpectrumBins = d.spectrum;
+        }
+      }
+    } catch (_) {}
+  }
+}, 65);
 
 // --- Interactive Draggable Nodes Controller for Canvas EQ ---
 let _debounceAutoSaveTimer = null;
@@ -1772,11 +1880,106 @@ function findNodeAtCoord(x, y) {
   for (const node of window.interactiveNodes) {
     const dx = x - node.x;
     const dy = y - node.y;
-    if (Math.sqrt(dx * dx + dy * dy) <= node.radius) {
+    if (Math.hypot(dx, dy) <= node.radius) {
       return node;
     }
   }
   return null;
+}
+
+function renderCurveTooltip(hitNode, clientX, clientY) {
+  if (!curveTooltip || !hitNode) return;
+  const flt = hitNode.filter;
+  const f = flt.fc;
+  const note = freqToNoteName(f);
+  const gainStr = (flt.gain >= 0 ? '+' : '') + flt.gain.toFixed(1);
+  const idx = hitNode.index || 1;
+
+  curveTooltip.innerHTML = `
+    <div class="tooltip-header">
+      <span>Узел P${idx}: ${flt.type}</span>
+      <span style="font-size: 10px; opacity: 0.85;">${flt.enabled ? 'АКТИВЕН' : 'BYPASS'}</span>
+    </div>
+    <div class="tooltip-coords">
+      <span><strong>${f}</strong> Hz ${note ? '(' + note + ')' : ''}</span>
+      <span><strong>${gainStr}</strong> dB</span>
+      <span>Q: <strong>${flt.q.toFixed(2)}</strong></span>
+    </div>
+    <div class="tooltip-actions">
+      <button class="tooltip-btn" data-act="bypass">${flt.enabled ? '⚡ Bypass' : '⚡ Вкл'}</button>
+      <button class="tooltip-btn" data-act="invert">⇄ Инверт</button>
+      <button class="tooltip-btn" data-act="delete">🗑 Удалить</button>
+    </div>
+    <div class="tooltip-type-selector">
+      <button class="tooltip-type-btn ${flt.type === 'PK' ? 'active' : ''}" data-type="PK">PK</button>
+      <button class="tooltip-type-btn ${flt.type === 'LS' ? 'active' : ''}" data-type="LS">LS</button>
+      <button class="tooltip-type-btn ${flt.type === 'HS' ? 'active' : ''}" data-type="HS">HS</button>
+      <button class="tooltip-type-btn ${flt.type === 'HP' ? 'active' : ''}" data-type="HP">HP</button>
+      <button class="tooltip-type-btn ${flt.type === 'LP' ? 'active' : ''}" data-type="LP">LP</button>
+      <button class="tooltip-type-btn ${flt.type === 'NO' ? 'active' : ''}" data-type="NO">NO</button>
+    </div>
+  `;
+
+  const w = canvas.width || 1280;
+  const h = canvas.height || 230;
+  const rect = canvas.getBoundingClientRect();
+  const localX = (clientX !== undefined) ? (clientX - rect.left) : hitNode.x;
+  const localY = (clientY !== undefined) ? (clientY - rect.top) : hitNode.y;
+
+  const ttLeft = Math.min(w - 185, Math.max(10, localX + 16));
+  const ttTop = Math.min(h - 100, Math.max(10, localY - 40));
+  curveTooltip.style.left = `${ttLeft}px`;
+  curveTooltip.style.top = `${ttTop}px`;
+  curveTooltip.classList.remove('hidden');
+}
+
+if (curveTooltip) {
+  curveTooltip.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    e.stopPropagation();
+
+    const activeNode = window.activeDragNode || window.hoveredNode;
+    if (!activeNode) return;
+    const flt = activeNode.filter;
+
+    if (btn.dataset.act === 'bypass') {
+      pushHistory();
+      flt.enabled = !flt.enabled;
+      renderBlocks();
+      renderAnalysis();
+      renderCurveTooltip(activeNode);
+      debouncedRealtimeSave();
+      showToast(flt.enabled ? `Фильтр P${activeNode.index} включен` : `Фильтр P${activeNode.index} отключен (Bypass)`);
+    } else if (btn.dataset.act === 'invert') {
+      pushHistory();
+      flt.gain = -flt.gain;
+      renderBlocks();
+      renderAnalysis();
+      renderCurveTooltip(activeNode);
+      debouncedRealtimeSave();
+      showToast(`Gain инвертирован: ${(flt.gain >= 0 ? '+' : '') + flt.gain.toFixed(1)} dB`);
+    } else if (btn.dataset.act === 'delete') {
+      pushHistory();
+      const block = activeNode.block;
+      block.filters = block.filters.filter(f => f.id !== flt.id);
+      window.activeDragNode = null;
+      window.hoveredNode = null;
+      curveTooltip.classList.add('hidden');
+      renderBlocks();
+      renderAnalysis();
+      debouncedRealtimeSave();
+      showToast(`Фильтр P${activeNode.index} удален`);
+    } else if (btn.dataset.type) {
+      pushHistory();
+      flt.type = btn.dataset.type;
+      renderBlocks();
+      renderAnalysis();
+      renderCurveTooltip(activeNode);
+      debouncedRealtimeSave();
+      showToast(`Тип фильтра: ${flt.type}`);
+    }
+  });
 }
 
 if (canvas) {
@@ -1790,6 +1993,7 @@ if (canvas) {
       pushHistory();
       window.activeDragNode = hit;
       canvas.style.cursor = 'grabbing';
+      renderCurveTooltip(hit, e.clientX, e.clientY);
       e.preventDefault();
     }
   });
@@ -1806,9 +2010,14 @@ if (canvas) {
       const rawF = xToF(x, w);
       const rawDb = yToDb(y, h);
 
-      // Clamp frequency and gain within strict audio limits
-      flt.fc = Math.max(20, Math.min(20000, Math.round(rawF)));
-      flt.gain = Math.max(-20, Math.min(20, Math.round(rawDb * 10) / 10));
+      // Support Shift for ultra-fine precision adjustment (1 Hz and 0.1 dB steps)
+      if (e.shiftKey) {
+        flt.fc = Math.max(20, Math.min(20000, Math.round(rawF)));
+        flt.gain = Math.max(-20, Math.min(20, Math.round(rawDb * 10) / 10));
+      } else {
+        flt.fc = Math.max(20, Math.min(20000, Math.round(rawF / 5) * 5));
+        flt.gain = Math.max(-20, Math.min(20, Math.round(rawDb * 2) / 2));
+      }
 
       // Synchronize input fields in DOM in real-time
       const fltRow = document.querySelector(`tr[data-filter-id="${flt.id}"]`);
@@ -1820,15 +2029,7 @@ if (canvas) {
       }
 
       renderAnalysis();
-
-      // Show floating coordinate tooltip
-      if (curveTooltip) {
-        curveTooltip.classList.remove('hidden');
-        curveTooltip.style.left = `${Math.min(w - 180, Math.max(10, x + 15))}px`;
-        curveTooltip.style.top = `${Math.min(h - 40, Math.max(10, y - 30))}px`;
-        curveTooltip.textContent = `[${flt.type}] ${flt.fc} Hz | ${(flt.gain >= 0 ? '+' : '') + flt.gain.toFixed(1)} dB | Q: ${flt.q.toFixed(2)}`;
-      }
-
+      renderCurveTooltip(window.activeDragNode, e.clientX, e.clientY);
       debouncedRealtimeSave();
     } else {
       const hit = findNodeAtCoord(x, y);
@@ -1839,15 +2040,12 @@ if (canvas) {
 
       if (hit) {
         canvas.style.cursor = 'grab';
-        if (curveTooltip) {
-          curveTooltip.classList.remove('hidden');
-          curveTooltip.style.left = `${Math.min(w - 180, Math.max(10, x + 15))}px`;
-          curveTooltip.style.top = `${Math.min(h - 40, Math.max(10, y - 30))}px`;
-          curveTooltip.textContent = `[${hit.filter.type}] ${hit.filter.fc} Hz | ${(hit.filter.gain >= 0 ? '+' : '') + hit.filter.gain.toFixed(1)} dB | Q: ${hit.filter.q.toFixed(2)}`;
-        }
+        renderCurveTooltip(hit, e.clientX, e.clientY);
       } else {
         canvas.style.cursor = 'crosshair';
-        if (curveTooltip) curveTooltip.classList.add('hidden');
+        if (curveTooltip && !curveTooltip.matches(':hover')) {
+          curveTooltip.classList.add('hidden');
+        }
       }
     }
   });
@@ -1856,7 +2054,9 @@ if (canvas) {
     if (window.activeDragNode) {
       window.activeDragNode = null;
       canvas.style.cursor = window.hoveredNode ? 'grab' : 'crosshair';
-      if (curveTooltip) curveTooltip.classList.add('hidden');
+      if (!window.hoveredNode && curveTooltip && !curveTooltip.matches(':hover')) {
+        curveTooltip.classList.add('hidden');
+      }
       saveTabsState();
       saveConfigRealtime();
     }
@@ -1871,7 +2071,7 @@ if (canvas) {
     if (hit) {
       e.preventDefault();
       const flt = hit.filter;
-      const delta = e.deltaY < 0 ? 0.1 : -0.1;
+      const delta = (e.shiftKey ? 0.05 : 0.15) * (e.deltaY < 0 ? 1 : -1);
       flt.q = Math.max(0.1, Math.min(15.0, Math.round((flt.q + delta) * 100) / 100));
 
       const fltRow = document.querySelector(`tr[data-filter-id="${flt.id}"]`);
@@ -1881,14 +2081,7 @@ if (canvas) {
       }
 
       renderAnalysis();
-
-      if (curveTooltip) {
-        curveTooltip.classList.remove('hidden');
-        curveTooltip.style.left = `${Math.min(canvas.width - 180, Math.max(10, x + 15))}px`;
-        curveTooltip.style.top = `${Math.min(canvas.height - 40, Math.max(10, y - 30))}px`;
-        curveTooltip.textContent = `[${flt.type}] ${flt.fc} Hz | Q: ${flt.q.toFixed(2)} (Добротность)`;
-      }
-
+      renderCurveTooltip(hit, e.clientX, e.clientY);
       debouncedRealtimeSave();
     }
   }, { passive: false });
@@ -1920,14 +2113,15 @@ if (canvas) {
     }
 
     pushHistory();
-    paramBlock.filters.push({
+    const newFlt = {
       id: nextId(),
       type: 'PK',
       fc: f,
       gain: gain,
       q: 1.41,
       enabled: true
-    });
+    };
+    paramBlock.filters.push(newFlt);
 
     renderBlocks();
     renderAnalysis();
@@ -3781,115 +3975,6 @@ function addParametricWithFilter(type, fc, gain, q) {
     type, fc, gain, q, enabled: true
   });
 }
-
-// Draggable nodes on canvas
-canvas.addEventListener('mousedown', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-  const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-  const tab = getActiveTab();
-  if (!tab) return;
-
-  tab.blocks.forEach(b => {
-    if (b.kind === 'parametric' && b.enabled) {
-      b.filters.forEach(flt => {
-        if (!flt.enabled) return;
-        const nx = fToX(flt.fc, canvas.width);
-        const ny = dbToY(flt.gain, canvas.height);
-        if (Math.hypot(x - nx, y - ny) < 14) {
-          state.draggingNode = flt;
-        }
-      });
-    }
-  });
-});
-
-window.addEventListener('mousemove', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-  const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-
-  if (state.draggingNode) {
-    state.draggingNode.fc = Math.max(20, Math.min(20000, Math.round(xToF(x, canvas.width))));
-    state.draggingNode.gain = Math.max(-25, Math.min(25, Math.round(yToDb(y, canvas.height) * 2) / 2));
-    updateAll();
-  }
-
-  // Hover Tooltip with Musical Note name
-  if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) {
-    const f = Math.round(xToF(x, canvas.width));
-    const db = yToDb(y, canvas.height).toFixed(1);
-    const note = freqToNoteName(f);
-    curveTooltip.style.left = `${(x / canvas.width) * 100}%`;
-    curveTooltip.style.top = `${(y / canvas.height) * 100}%`;
-    curveTooltip.textContent = `${f} Hz ${note ? '(' + note + ')' : ''} | ${db > 0 ? '+' : ''}${db} dB`;
-    curveTooltip.classList.remove('hidden');
-  } else {
-    curveTooltip.classList.add('hidden');
-  }
-});
-
-function freqToNoteName(freq) {
-  if (freq < 16 || freq > 20000) return '';
-  const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-  const midiNum = Math.round(69 + 12 * Math.log2(freq / 440));
-  const note = notes[((midiNum % 12) + 12) % 12];
-  const octave = Math.floor(midiNum / 12) - 1;
-  return `${note}${octave}`;
-}
-
-window.addEventListener('mouseup', () => {
-  if (state.draggingNode) {
-    state.draggingNode = null;
-    pushHistory();
-    renderBlocks();
-  }
-});
-
-// Double click on canvas to add a new parametric filter node
-canvas.addEventListener('dblclick', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-  const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-  const f = Math.max(20, Math.min(20000, Math.round(xToF(x, canvas.width))));
-  const gain = Math.max(-20, Math.min(20, Math.round(yToDb(y, canvas.height) * 2) / 2));
-  addParametricWithFilter('PK', f, gain, 1.4142);
-  renderBlocks();
-  updateAll();
-  showToast(`Добавлен фильтр: ${f} Hz, ${gain > 0 ? '+' : ''}${gain} dB`);
-});
-
-// Mouse wheel on canvas node to dynamically adjust Q (bandwidth)
-canvas.addEventListener('wheel', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-  const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-  const tab = getActiveTab();
-  if (!tab) return;
-
-  let targetFlt = null;
-  tab.blocks.forEach(b => {
-    if (b.kind === 'parametric' && b.enabled) {
-      b.filters.forEach(flt => {
-        if (!flt.enabled) return;
-        const nx = fToX(flt.fc, canvas.width);
-        const ny = dbToY(flt.gain, canvas.height);
-        if (Math.hypot(x - nx, y - ny) < 18) {
-          targetFlt = flt;
-        }
-      });
-    }
-  });
-
-  if (targetFlt) {
-    e.preventDefault();
-    const delta = e.deltaY < 0 ? 0.15 : -0.15;
-    targetFlt.q = Math.max(0.1, Math.min(20, Math.round((targetFlt.q + delta) * 100) / 100));
-    updateAll();
-    renderBlocks();
-    showToast(`Добротность Q: ${targetFlt.q.toFixed(2)}`);
-  }
-}, { passive: false });
 
 // --- Floating & Draggable Analysis Panel Controller ---
 const floatPanelBtn = document.getElementById('floatPanelBtn');

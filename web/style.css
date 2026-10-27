@@ -1167,14 +1167,141 @@ body.desktop-app {
 
 .curve-tooltip {
   position: absolute;
-  background-color: rgba(0, 0, 0, 0.85);
-  color: #00d2ff;
-  border: 1px solid #0078d7;
-  border-radius: 2px;
-  padding: 2px 6px;
-  font-family: Consolas, monospace;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #f8fafc;
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 11px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  user-select: none;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 175px;
+  transition: opacity 160ms cubic-bezier(0.16, 1, 0.3, 1), transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.curve-tooltip.hidden {
+  opacity: 0;
   pointer-events: none;
+  transform: scale(0.95);
+  display: none;
+}
+
+.tooltip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  color: #38bdf8;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 3px;
+}
+
+.tooltip-coords {
+  display: flex;
+  gap: 8px;
+  font-family: Consolas, "Segoe UI Mono", monospace;
+  font-size: 11px;
+  color: #e2e8f0;
+}
+
+.tooltip-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.tooltip-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #f1f5f9;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.tooltip-btn:hover {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.tooltip-type-selector {
+  display: flex;
+  gap: 2px;
+  margin-top: 1px;
+}
+
+.tooltip-type-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.tooltip-type-btn:hover, .tooltip-type-btn.active {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+/* Minimalist B&W Dark Theme (Permanent Rule) */
+body.theme-dark .curve-tooltip {
+  background: #111111;
+  border: 1px solid #444444;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.85);
+  color: #ffffff;
+}
+
+body.theme-dark .tooltip-header {
+  color: #ffffff;
+  border-bottom: 1px solid #333333;
+}
+
+body.theme-dark .tooltip-coords {
+  color: #ffffff;
+}
+
+body.theme-dark .tooltip-btn {
+  background: #222222;
+  border: 1px solid #444444;
+  color: #ffffff;
+}
+
+body.theme-dark .tooltip-btn:hover {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #000000;
+}
+
+body.theme-dark .tooltip-type-btn {
+  background: #222222;
+  border: 1px solid #333333;
+  color: #888888;
+}
+
+body.theme-dark .tooltip-type-btn:hover,
+body.theme-dark .tooltip-type-btn.active {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #000000;
 }
 
 /* Native Modal Dialogs */
