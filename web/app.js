@@ -1832,6 +1832,26 @@ function renderBlocks(targetScrollBlockId = null) {
           <input type="text" class="win-input-num delay-input" value="${delayVal.toFixed(2)} ms" data-block-id="${block.id}">
         </div>
       `;
+    } else if (block.kind === 'copy') {
+      const copyLbl = window.t ? window.t('blocks.copy.label', null, 'Матрица копирования / микширования каналов:') : 'Матрица копирования / микширования каналов:';
+      const presetsLbl = window.t ? window.t('blocks.copy.presets', null, 'Быстрые пресеты:') : 'Быстрые пресеты:';
+      const val = block.assignments || 'L=L R=R';
+      content.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 11px; font-weight: 600; color: #475569;">${copyLbl}</span>
+            <input type="text" class="win-select copy-assignments-input" style="flex: 1; font-family: Consolas, monospace; font-size: 11px;" value="${val}" data-block-id="${block.id}" placeholder="например: L=R R=L или L=0.5*L+0.5*R">
+          </div>
+          <div class="preset-pills-row">
+            <span class="preset-pill-label">${presetsLbl}</span>
+            <button class="pill-btn copy-preset-pill" data-block-id="${block.id}" data-val="L=R R=L">Смена L/R</button>
+            <button class="pill-btn copy-preset-pill" data-block-id="${block.id}" data-val="L=0.5*L+0.5*R R=0.5*L+0.5*R">Моно микс (Mono sum)</button>
+            <button class="pill-btn copy-preset-pill" data-block-id="${block.id}" data-val="L=L R=L">Левый канал в оба (L -&gt; Stereo)</button>
+            <button class="pill-btn copy-preset-pill" data-block-id="${block.id}" data-val="L=R R=R">Правый канал в оба (R -&gt; Stereo)</button>
+            <button class="pill-btn copy-preset-pill" data-block-id="${block.id}" data-val="L=L R=R">Стерео без изменений</button>
+          </div>
+        </div>
+      `;
     } else if (block.kind === 'include') {
       const fileLbl = window.t ? window.t('blocks.include.fileLabel', null, 'Файл конфигурации:') : 'Файл конфигурации:';
       const filePlaceholder = window.t ? window.t('blocks.include.placeholder', null, 'например: example.txt или mic_preset.txt') : 'например: example.txt или mic_preset.txt';
@@ -2530,6 +2550,32 @@ function attachBlockEvents() {
       showToast(`Файл ${targetName} открыт в новой вкладке`);
     });
   });
+
+  // 14. Copy Matrix Block events
+  document.querySelectorAll('.copy-assignments-input').forEach(inp => {
+    inp.addEventListener('change', (e) => {
+      const bId = inp.dataset.blockId;
+      const blk = tab.blocks.find(x => String(x.id) === String(bId));
+      if (blk) {
+        blk.assignments = e.target.value.trim() || 'L=L R=R';
+        updateAll();
+      }
+    });
+  });
+
+  document.querySelectorAll('.copy-preset-pill').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const bId = btn.dataset.blockId;
+      const blk = tab.blocks.find(x => String(x.id) === String(bId));
+      if (blk) {
+        blk.assignments = btn.dataset.val;
+        renderBlocks();
+        updateAll();
+        showToast(`Применен пресет матрицы: ${btn.dataset.val}`);
+      }
+    });
+  });
 }
 
 // --- Sleek Toast Notification Helper ---
@@ -2915,6 +2961,19 @@ function parseConfigIntoState(text, targetTab = null) {
       });
       continue;
     }
+
+    const copyMatch = line.match(/^Copy:\s*(.+)$/i);
+    if (copyMatch) {
+      currentParametric = null;
+      newBlocks.push({
+        id: nextId(),
+        kind: 'copy',
+        title: 'Копирование каналов (Copy)',
+        enabled: !isExplicitDisabled,
+        assignments: copyMatch[1].trim()
+      });
+      continue;
+    }
   }
 
   if (newBlocks.length > 0 && tab) {
@@ -2957,6 +3016,8 @@ function generateConfig() {
       text += `${prefix}Preamp: ${b.gain >= 0 ? '+' : ''}${b.gain.toFixed(2)} dB\n`;
     } else if (b.kind === 'delay') {
       text += `${prefix}Delay: ${(b.delay || 0.0).toFixed(2)} ms\n`;
+    } else if (b.kind === 'copy') {
+      text += `${prefix}Copy: ${b.assignments || 'L=L R=R'}\n`;
     } else if (b.kind === 'include') {
       text += `${prefix}Include: ${b.path}\n`;
     } else if (b.kind === 'vst') {
@@ -3153,6 +3214,15 @@ document.querySelectorAll('.sub-menu button').forEach(btn => {
         delay: 10.0
       });
       showToast('Добавлен фильтр: Задержка (Delay)');
+    } else if (action === 'add-copy') {
+      tab.blocks.push({
+        id: nextId(),
+        kind: 'copy',
+        title: 'Копирование каналов (Copy)',
+        enabled: true,
+        assignments: 'L=L R=R'
+      });
+      showToast('Добавлен фильтр: Копирование каналов (Copy)');
     }
 
     renderBlocks();
@@ -3562,6 +3632,7 @@ document.getElementById('cfgSaveBtn').addEventListener('click', async () => {
 
   const checkboxes = document.querySelectorAll('.cfg-device-check');
   const selectedMode = document.querySelector('input[name="apoMode"]:checked')?.value || 'ALL';
+  const useOriginal = document.getElementById('cfgUseOriginal')?.checked ?? true;
   const devicesToApply = [];
 
   checkboxes.forEach(cb => {
@@ -3569,7 +3640,8 @@ document.getElementById('cfgSaveBtn').addEventListener('click', async () => {
       guid: cb.dataset.guid,
       type: cb.dataset.type,
       enabled: cb.checked,
-      mode: selectedMode
+      mode: selectedMode,
+      use_original: useOriginal
     });
   });
 

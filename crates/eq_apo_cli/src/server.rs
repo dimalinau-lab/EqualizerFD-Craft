@@ -185,7 +185,7 @@ fn handle_client(mut stream: TcpStream) {
         String::new()
     };
 
-    if method == "GET" {
+    if method == "GET" || method == "HEAD" {
         match path {
             "/" | "/index.html" => {
                 let content = std::fs::read_to_string("web/index.html")
