@@ -5415,6 +5415,7 @@ async function checkStreamStatus() {
       }
       const btn = document.getElementById('btnToggleStream');
       const box = document.getElementById('streamBridgeBox');
+      if (btn && box) {
         btn.dataset.active = data.active ? 'true' : 'false';
         if (data.active) {
           btn.classList.add('active');
