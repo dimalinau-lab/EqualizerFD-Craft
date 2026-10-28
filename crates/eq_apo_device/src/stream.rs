@@ -2,7 +2,7 @@
 //! Bypasses Windows sAPO driver restrictions by bridging Mic -> DSP -> Virtual Cable in user-mode.
 
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -16,6 +16,7 @@ use windows::Win32::System::Com::*;
 
 pub struct StreamController {
     is_running: Arc<AtomicBool>,
+    volume: Arc<AtomicU32>,
     handle: Option<JoinHandle<()>>,
 }
 
@@ -23,12 +24,21 @@ impl StreamController {
     pub fn new() -> Self {
         Self {
             is_running: Arc::new(AtomicBool::new(false)),
+            volume: Arc::new(AtomicU32::new(1.0f32.to_bits())),
             handle: None,
         }
     }
 
     pub fn is_active(&self) -> bool {
         self.is_running.load(Ordering::SeqCst)
+    }
+
+    pub fn set_volume(&self, vol: f32) {
+        self.volume.store(vol.clamp(0.0, 2.0).to_bits(), Ordering::Relaxed);
+    }
+
+    pub fn get_volume(&self) -> f32 {
+        f32::from_bits(self.volume.load(Ordering::Relaxed))
     }
 
     pub fn stop(&mut self) {
@@ -45,11 +55,12 @@ impl StreamController {
 
         let is_running = self.is_running.clone();
         is_running.store(true, Ordering::SeqCst);
+        let volume = self.volume.clone();
 
         let handle = thread::Builder::new()
             .name("resona_wasapi_router".to_string())
             .spawn(move || {
-                run_streaming_pipeline(capture_id_or_keyword, render_id_or_keyword, is_running);
+                run_streaming_pipeline(capture_id_or_keyword, render_id_or_keyword, is_running, volume);
             })
             .map_err(|e| Error::new(E_FAIL, format!("Failed to spawn audio thread: {}", e)))?;
 
@@ -117,9 +128,50 @@ fn find_device(
     keyword: &str,
 ) -> Result<IMMDevice> {
     unsafe {
+        let kw_lower = keyword.trim().to_lowercase();
+        if kw_lower.is_empty() || kw_lower == "default" || kw_lower.starts_with("[object") {
+            if flow == eCapture {
+                // If a physical microphone exists (preferring Fifine or USB mic), select it over a silent virtual device
+                if let Ok(collection) = enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE) {
+                    if let Ok(count) = collection.GetCount() {
+                        let mut best_mic: Option<IMMDevice> = None;
+                        for i in 0..count {
+                            if let Ok(device) = collection.Item(i) {
+                                if let Ok(id_pwstr) = device.GetId() {
+                                    let id_str = id_pwstr.to_string().unwrap_or_default();
+                                    CoTaskMemFree(Some(id_pwstr.as_ptr() as _));
+                                    let friendly_name = get_device_name_from_registry(flow, &id_str);
+                                    let name_lower = friendly_name.to_lowercase();
+                                    if name_lower.contains("fifine") || id_str.to_lowercase().contains("7da7fc22") {
+                                        println!("[WASAPI Stream] Default capture preferring physical mic: '{}' ({})", friendly_name, id_str);
+                                        return Ok(device);
+                                    }
+                                    if !name_lower.contains("cable") && !name_lower.contains("sonar") && !name_lower.contains("virtual") && best_mic.is_none() {
+                                        best_mic = Some(device);
+                                    }
+                                }
+                            }
+                        }
+                        if let Some(dev) = best_mic {
+                            println!("[WASAPI Stream] Default capture preferring non-virtual mic");
+                            return Ok(dev);
+                        }
+                    }
+                }
+            }
+
+            if let Ok(dev) = enumerator.GetDefaultAudioEndpoint(flow, eConsole) {
+                println!("[WASAPI Stream] Using Windows default {:?} audio endpoint (eConsole)", flow);
+                return Ok(dev);
+            }
+            if let Ok(dev) = enumerator.GetDefaultAudioEndpoint(flow, eCommunications) {
+                println!("[WASAPI Stream] Using Windows default {:?} audio endpoint (eCommunications)", flow);
+                return Ok(dev);
+            }
+        }
+
         let collection = enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)?;
         let count = collection.GetCount()?;
-        let kw_lower = keyword.to_lowercase();
 
         for i in 0..count {
             let device = collection.Item(i)?;
@@ -153,11 +205,37 @@ fn find_device(
         }
 
         if flow == eCapture {
+            if let Ok(collection) = enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE) {
+                if let Ok(count) = collection.GetCount() {
+                    for i in 0..count {
+                        if let Ok(device) = collection.Item(i) {
+                            if let Ok(id_pwstr) = device.GetId() {
+                                let id_str = id_pwstr.to_string().unwrap_or_default();
+                                CoTaskMemFree(Some(id_pwstr.as_ptr() as _));
+                                let friendly_name = get_device_name_from_registry(flow, &id_str);
+                                if friendly_name.to_lowercase().contains("fifine") || id_str.to_lowercase().contains("7da7fc22") {
+                                    println!("[WASAPI Stream] Capture fallback to physical mic: '{}' ({})", friendly_name, id_str);
+                                    return Ok(device);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             println!("[WASAPI Stream] Capture device '{}' not found by keyword, falling back to default mic", keyword);
             enumerator.GetDefaultAudioEndpoint(flow, eConsole)
         } else {
-            eprintln!("[WASAPI Stream] ERROR: Target render device '{}' (Virtual Cable) NOT FOUND. Audio stream will NOT output to speakers/headphones to prevent self-listening loopback.", keyword);
-            Err(Error::new(E_FAIL, format!("Render device '{}' (VB-Audio Virtual Cable) not found among active endpoints", keyword)))
+            let kw_lower = keyword.to_lowercase();
+            if kw_lower == "default" || kw_lower.is_empty() || kw_lower.contains("headphone") || kw_lower.contains("наушник") || kw_lower.contains("speaker") || kw_lower.contains("динамик") {
+                println!("[WASAPI Stream] Render device '{}', using default playback endpoint", keyword);
+                enumerator.GetDefaultAudioEndpoint(flow, eConsole)
+            } else if kw_lower.contains("cable") || kw_lower.contains("vb-audio") {
+                eprintln!("[WASAPI Stream] Target render device '{}' (Virtual Cable) NOT FOUND.", keyword);
+                Err(Error::new(E_FAIL, format!("Render device '{}' (VB-Audio Virtual Cable) not found among active endpoints", keyword)))
+            } else {
+                println!("[WASAPI Stream] Specific render device '{}' not found, falling back to default playback endpoint", keyword);
+                enumerator.GetDefaultAudioEndpoint(flow, eConsole)
+            }
         }
     }
 }
@@ -183,6 +261,7 @@ fn run_streaming_pipeline(
     capture_kw: String,
     render_kw: String,
     running: Arc<AtomicBool>,
+    volume: Arc<AtomicU32>,
 ) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
@@ -191,7 +270,7 @@ fn run_streaming_pipeline(
         let avrt_handle = AvSetMmThreadCharacteristicsW(windows::core::w!("Pro Audio"), &mut task_idx);
 
         while running.load(Ordering::Relaxed) {
-            if let Err(e) = run_pipeline_session(&capture_kw, &render_kw, &running) {
+            if let Err(e) = run_pipeline_session(&capture_kw, &render_kw, &running, &volume) {
                 if !running.load(Ordering::Relaxed) {
                     break;
                 }
@@ -208,10 +287,86 @@ fn run_streaming_pipeline(
     }
 }
 
+/// Zero-allocation, continuous phase stream resampler for arbitrary sample rate pairs (e.g. 16k -> 48k).
+struct StreamResampler {
+    phase: f64,
+    last_frame: [f32; 2],
+}
+
+impl StreamResampler {
+    fn new() -> Self {
+        Self {
+            phase: 0.0,
+            last_frame: [0.0, 0.0],
+        }
+    }
+
+    fn process(
+        &mut self,
+        input: &[f32],
+        in_channels: usize,
+        in_rate: f64,
+        out_rate: f64,
+        output: &mut Vec<f32>,
+    ) {
+        if (in_rate - out_rate).abs() < 1.0 {
+            output.extend_from_slice(input);
+            if input.len() >= in_channels {
+                self.last_frame[0] = input[input.len() - in_channels];
+                self.last_frame[1] = input[input.len() - in_channels + (1 % in_channels)];
+            }
+            return;
+        }
+
+        let in_frames = input.len() / in_channels;
+        if in_frames == 0 {
+            return;
+        }
+
+        let ratio = in_rate / out_rate;
+
+        let get_sample = |idx: isize, ch: usize| -> f32 {
+            if idx < 0 {
+                self.last_frame[ch]
+            } else if (idx as usize) < in_frames {
+                input[(idx as usize) * in_channels + (ch % in_channels)]
+            } else {
+                input[(in_frames - 1) * in_channels + (ch % in_channels)]
+            }
+        };
+
+        while self.phase < (in_frames as f64) {
+            let idx = self.phase.floor() as isize;
+            let frac = (self.phase - idx as f64) as f32;
+
+            let s0_l = get_sample(idx, 0);
+            let s1_l = get_sample(idx + 1, 0);
+            let out_l = s0_l + frac * (s1_l - s0_l);
+
+            let s0_r = get_sample(idx, 1 % in_channels);
+            let s1_r = get_sample(idx + 1, 1 % in_channels);
+            let out_r = s0_r + frac * (s1_r - s0_r);
+
+            output.push(out_l);
+            output.push(out_r);
+
+            self.phase += ratio;
+        }
+
+        self.phase -= in_frames as f64;
+
+        if in_frames > 0 {
+            self.last_frame[0] = input[(in_frames - 1) * in_channels];
+            self.last_frame[1] = input[(in_frames - 1) * in_channels + (1 % in_channels)];
+        }
+    }
+}
+
 fn run_pipeline_session(
     capture_kw: &str,
     render_kw: &str,
     running: &Arc<AtomicBool>,
+    volume: &Arc<AtomicU32>,
 ) -> Result<()> {
     unsafe {
         let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
@@ -358,11 +513,22 @@ fn run_pipeline_session(
             let _ = render_service.ReleaseBuffer(init_frames, 0);
         }
 
+        let is_float = if cap_format.wFormatTag == 3 {
+            true
+        } else if cap_format.wFormatTag == 1 {
+            false
+        } else if cap_format.wFormatTag == 0xFFFE && cap_format.cbSize >= 22 {
+            let data1 = *((cap_format_ptr as *const u8).add(24) as *const u32);
+            data1 == 3 // KSDATAFORMAT_SUBTYPE_IEEE_FLOAT has Data1 = 3 (PCM is 1)
+        } else {
+            cap_bits == 32
+        };
+
         let _ = cap_client.Start();
         let _ = ren_client.Start();
 
         let mut dsp = ResonaDspEngine::new(
-            cap_rate as f32,
+            ren_rate as f32,
             ren_channels,
         );
 
@@ -377,17 +543,23 @@ fn run_pipeline_session(
         let shm_handle = resona_apo::shared_mem::SharedMemoryHandle::create_or_open().ok();
         if let Some(ref shm) = shm_handle {
             if !shm.ptr.is_null() {
-                (*shm.ptr).sample_rate = cap_rate;
+                (*shm.ptr).sample_rate = ren_rate;
                 (*shm.ptr).channels = ren_channels as u32;
                 dsp.sync_from_shared_mem(&*shm.ptr);
             }
         }
 
+        let mut resampler = StreamResampler::new();
         let mut float_buffer: Vec<f32> = Vec::with_capacity(4096);
+        let mut raw_stereo_buffer: Vec<f32> = Vec::with_capacity(4096);
         let mut dsp_stereo_buffer: Vec<f32> = Vec::with_capacity(4096);
         let mut jitter_buffer: VecDeque<f32> = VecDeque::with_capacity(16384);
+        let mut dc_x_l = 0.0f32;
+        let mut dc_y_l = 0.0f32;
+        let mut dc_x_r = 0.0f32;
+        let mut dc_y_r = 0.0f32;
 
-        println!("[WASAPI Stream] Stream pipeline RUNNING! Real-time DSP active (event-driven: {}).", event_driven);
+        println!("[WASAPI Stream] Stream pipeline RUNNING! Real-time DSP active (event-driven: {}, is_float: {}).", event_driven, is_float);
 
         let mut error_result: Result<()> = Ok(());
 
@@ -446,8 +618,17 @@ fn run_pipeline_session(
                     float_buffer.clear();
 
                     if cap_bits == 32 {
-                        let slice = std::slice::from_raw_parts(data_ptr as *const f32, total_samples);
-                        float_buffer.extend_from_slice(slice);
+                        if is_float {
+                            let slice = std::slice::from_raw_parts(data_ptr as *const f32, total_samples);
+                            for &s in slice {
+                                float_buffer.push(if s.is_finite() { s.clamp(-1.5, 1.5) } else { 0.0 });
+                            }
+                        } else {
+                            let slice = std::slice::from_raw_parts(data_ptr as *const i32, total_samples);
+                            for &s in slice {
+                                float_buffer.push((s as f32) / 2147483648.0);
+                            }
+                        }
                     } else if cap_bits == 16 {
                         let slice = std::slice::from_raw_parts(data_ptr as *const i16, total_samples);
                         for &s in slice {
@@ -464,17 +645,46 @@ fn run_pipeline_session(
                         }
                     }
 
-                    // Convert to target channels (e.g. mono to stereo)
-                    dsp_stereo_buffer.clear();
-                    if cap_channels == ren_channels {
-                        dsp_stereo_buffer.extend_from_slice(&float_buffer);
-                    } else if cap_channels == 1 && ren_channels == 2 {
+                    // Convert to target channels (mono to stereo or matching)
+                    raw_stereo_buffer.clear();
+                    if cap_channels == 1 {
                         for &s in &float_buffer {
-                            dsp_stereo_buffer.push(s);
-                            dsp_stereo_buffer.push(s);
+                            raw_stereo_buffer.push(s);
+                            raw_stereo_buffer.push(s);
                         }
+                    } else if cap_channels == 2 {
+                        raw_stereo_buffer.extend_from_slice(&float_buffer);
                     } else {
-                        dsp_stereo_buffer.extend_from_slice(&float_buffer[..total_samples.min(num_frames_read as usize * ren_channels)]);
+                        let frames = float_buffer.len() / cap_channels.max(1);
+                        for f in 0..frames {
+                            raw_stereo_buffer.push(float_buffer[f * cap_channels]);
+                            raw_stereo_buffer.push(float_buffer[f * cap_channels + 1]);
+                        }
+                    }
+
+                    // Resample to output rate (e.g. 16k -> 48k) to prevent buffer starvation and hiss
+                    dsp_stereo_buffer.clear();
+                    resampler.process(
+                        &raw_stereo_buffer,
+                        2,
+                        cap_rate as f64,
+                        ren_rate as f64,
+                        &mut dsp_stereo_buffer,
+                    );
+
+                    // DC blocker filter to eliminate mic hardware DC bias and buzzing
+                    for frame in dsp_stereo_buffer.chunks_exact_mut(2) {
+                        let in_l = frame[0];
+                        let out_l = in_l - dc_x_l + 0.995 * dc_y_l;
+                        dc_x_l = in_l;
+                        dc_y_l = out_l;
+                        frame[0] = out_l;
+
+                        let in_r = frame[1];
+                        let out_r = in_r - dc_x_r + 0.995 * dc_y_r;
+                        dc_x_r = in_r;
+                        dc_y_r = out_r;
+                        frame[1] = out_r;
                     }
 
                     // Process DSP (Preamp + Filters + GraphicEQ + Boss RC-505 + VST Plugins)
@@ -494,6 +704,12 @@ fn run_pipeline_session(
 
                     // Push processed frames to jitter ring buffer
                     jitter_buffer.extend(dsp_stereo_buffer.iter().copied());
+
+                    // Prevent buffer overflow and latency drift
+                    if jitter_buffer.len() > 16384 {
+                        let drain_count = jitter_buffer.len() - 8192;
+                        jitter_buffer.drain(..drain_count);
+                    }
                 }
 
                 let _ = capture_service.ReleaseBuffer(num_frames_read);
@@ -522,6 +738,7 @@ fn run_pipeline_session(
             if frames_to_write > 0 {
                 match render_service.GetBuffer(frames_to_write as u32) {
                     Ok(render_buf_ptr) => {
+                        let vol = f32::from_bits(volume.load(Ordering::Relaxed));
                         let total_write_samples = frames_to_write * ren_channels;
                         if ren_bits == 32 {
                             let out_slice = std::slice::from_raw_parts_mut(
@@ -529,7 +746,7 @@ fn run_pipeline_session(
                                 total_write_samples,
                             );
                             for item in out_slice.iter_mut() {
-                                *item = jitter_buffer.pop_front().unwrap_or(0.0);
+                                *item = jitter_buffer.pop_front().unwrap_or(0.0) * vol;
                             }
                         } else if ren_bits == 16 {
                             let out_slice = std::slice::from_raw_parts_mut(
@@ -537,7 +754,7 @@ fn run_pipeline_session(
                                 total_write_samples,
                             );
                             for item in out_slice.iter_mut() {
-                                let s = jitter_buffer.pop_front().unwrap_or(0.0);
+                                let s = jitter_buffer.pop_front().unwrap_or(0.0) * vol;
                                 *item = (s * 32767.0).clamp(-32768.0, 32767.0) as i16;
                             }
                         }

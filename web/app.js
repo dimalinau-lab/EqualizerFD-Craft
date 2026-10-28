@@ -380,11 +380,11 @@ const RC505_CATALOG = {
     params: [
       { key: 'semitones', label: 'Сдвиг тона (Semitones)', min: -12, max: 12, step: 1, unit: 'st', default: 0 },
       { key: 'fine', label: 'Тонкая подстройка (Fine Tune)', min: -50, max: 50, step: 1, unit: 'cents', default: 0 },
-      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 50 }
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 100 }
     ],
     presets: [
-      { name: 'Октава вниз (Monster Bass)', values: { semitones: -12, fine: 0, mix: 70 } },
-      { name: 'Октава вверх (Chipmunk / Lead)', values: { semitones: 12, fine: 0, mix: 65 } },
+      { name: 'Октава вниз (Monster Bass)', values: { semitones: -12, fine: 0, mix: 100 } },
+      { name: 'Октава вверх (Chipmunk / Lead)', values: { semitones: 12, fine: 0, mix: 100 } },
       { name: 'Терция вверх (Гармония)', values: { semitones: 4, fine: 0, mix: 40 } },
       { name: 'Квинта вверх (Power Fifth)', values: { semitones: 7, fine: 0, mix: 45 } },
       { name: 'Детюн-хорус (Detune)', values: { semitones: 0, fine: 15, mix: 50 } }
@@ -534,12 +534,12 @@ const RC505_CATALOG = {
     params: [
       { key: 'pitch', label: 'Базовый тон (Root Pitch)', min: -24, max: 24, step: 1, unit: 'st', default: 0 },
       { key: 'robotic', label: 'Степень роботизации (Robotic)', min: 0, max: 100, step: 1, unit: '%', default: 90 },
-      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 85 }
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 100 }
     ],
     presets: [
-      { name: 'Классический киборг', values: { pitch: 0, robotic: 95, mix: 90 } },
-      { name: 'Глубокий мех (Бас)', values: { pitch: -12, robotic: 90, mix: 85 } },
-      { name: 'Высокий дроид', values: { pitch: 7, robotic: 85, mix: 80 } }
+      { name: 'Классический киборг', values: { pitch: 0, robotic: 95, mix: 100 } },
+      { name: 'Глубокий мех (Бас)', values: { pitch: -12, robotic: 90, mix: 100 } },
+      { name: 'Высокий дроид', values: { pitch: 7, robotic: 85, mix: 100 } }
     ]
   },
   harmony: {
@@ -2216,19 +2216,91 @@ function toggleTheme() {
 }
 
 // --- Sidetone (Headphone Direct Monitor) Controller ---
-function toggleSidetone() {
-  window.isSidetoneActive = !window.isSidetoneActive;
+window.activeMonitoredCapture = '';
+window.activeMonitoredRender = '';
+
+function updateSidetoneUI() {
   const btn = document.getElementById('btnToggleSidetone');
+  const box = document.getElementById('sidetoneBridgeBox');
+  const devSel = document.getElementById('toolbarMonitorDevice');
   if (btn) {
-    btn.classList.toggle('active', window.isSidetoneActive);
+    btn.classList.toggle('active', !!window.isSidetoneActive);
     btn.textContent = window.isSidetoneActive
       ? (window.t ? window.t('toolbar.sidetoneLive', null, '[В ЭФИРЕ]') : '[В ЭФИРЕ]')
       : (window.t ? window.t('toolbar.sidetoneOff', null, '[ВЫКЛ]') : '[ВЫКЛ]');
-    btn.style.background = '';
+    btn.style.background = window.isSidetoneActive ? '#107c41' : '#e2e8f0';
+    btn.style.color = window.isSidetoneActive ? '#ffffff' : '#475569';
   }
-  showToast(window.isSidetoneActive
-    ? (window.t ? window.t('toasts.sidetoneOn', null, 'Мониторинг микрофона в наушники: Включен') : 'Мониторинг микрофона в наушники: Включен')
-    : (window.t ? window.t('toasts.sidetoneOff', null, 'Мониторинг микрофона в наушники: Выключен') : 'Мониторинг микрофона в наушники: Выключен'));
+  if (box) {
+    box.classList.toggle('active', !!window.isSidetoneActive);
+  }
+  if (devSel && window.activeMonitoredRender) {
+    if ([...devSel.options].some(o => o.value === window.activeMonitoredRender)) {
+      devSel.value = window.activeMonitoredRender;
+    }
+  }
+  document.querySelectorAll('.cfg-listen-btn').forEach(b => {
+    const guid = b.dataset.guid;
+    const type = b.dataset.type;
+    const isThisActive = window.isSidetoneActive && (
+      (type === 'Capture' && window.activeMonitoredCapture === guid) ||
+      (type === 'Render' && window.activeMonitoredRender === guid)
+    );
+    b.classList.toggle('active', isThisActive);
+    b.style.background = isThisActive ? '#107c41' : '';
+    b.style.color = isThisActive ? '#ffffff' : '';
+    b.textContent = isThisActive ? '🎧 В эфире' : '🎧 Слушать';
+  });
+}
+
+function getActiveMicrophoneGuid() {
+  const tab = typeof getActiveTab === 'function' ? getActiveTab() : null;
+  if (tab && tab.selectedDevice && tab.selectedDevice !== 'all' && tab.selectedDevice !== 'default') {
+    return tab.selectedDevice;
+  }
+  const mainDevSel = document.getElementById('deviceSelector');
+  if (mainDevSel && mainDevSel.value && mainDevSel.value !== 'all' && mainDevSel.value !== 'default') {
+    return mainDevSel.value;
+  }
+  const savedDev = localStorage.getItem('resona_selected_device');
+  if (savedDev && savedDev !== 'all' && savedDev !== 'default') {
+    return savedDev;
+  }
+  return 'fifine';
+}
+
+async function toggleSidetone(targetCapture, targetRender, mode = 'toggle') {
+  try {
+    const devSel = document.getElementById('toolbarMonitorDevice');
+    const cap = (typeof targetCapture === 'string' && targetCapture && targetCapture !== 'all' && targetCapture !== 'default')
+      ? targetCapture
+      : (window.activeMonitoredCapture || getActiveMicrophoneGuid());
+    const ren = (typeof targetRender === 'string' && targetRender)
+      ? targetRender
+      : (devSel ? devSel.value : 'default');
+    const res = await fetch('/api/monitor/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        capture: cap,
+        render: ren,
+        mode: (typeof mode === 'string') ? mode : 'toggle'
+      })
+    });
+    const data = await res.json();
+    window.isSidetoneActive = !!data.active;
+    window.activeMonitoredCapture = data.capture || '';
+    window.activeMonitoredRender = data.render || '';
+    if (devSel && data.render && [...devSel.options].some(o => o.value === data.render)) {
+      devSel.value = data.render;
+    }
+    updateSidetoneUI();
+    showToast(window.isSidetoneActive
+      ? (window.t ? window.t('toasts.sidetoneOn', null, 'Мониторинг звука в наушники: Включен') : 'Мониторинг звука в наушники: Включен')
+      : (window.t ? window.t('toasts.sidetoneOff', null, 'Мониторинг звука: Выключен') : 'Мониторинг звука: Выключен'));
+  } catch (err) {
+    showToast('Ошибка переключения мониторинга звука', true);
+  }
 }
 
 // --- RTA Spectrum Toggle Controller ---
@@ -2599,9 +2671,9 @@ function renderBlocks(targetScrollBlockId = null) {
 
       let vhtml = `
         <div class="plugin-desc-banner">
-          <div style="font-weight: 700; color: #166534; margin-bottom: 2px;">${meta.title} — ${meta.category}</div>
-          <div style="margin-bottom: 4px;"><strong>${purposeLbl}</strong> ${meta.desc}</div>
-          <div style="color: #475569;"><strong>${howLbl}</strong> ${meta.howItWorks}</div>
+          <div class="vst-desc-title">${meta.title} — ${meta.category}</div>
+          <div class="vst-desc-body"><strong>${purposeLbl}</strong> ${meta.desc}</div>
+          <div class="vst-desc-how"><strong>${howLbl}</strong> ${meta.howItWorks}</div>
         </div>
 
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
@@ -2653,9 +2725,9 @@ function renderBlocks(targetScrollBlockId = null) {
 
       let rhtml = `
         <div class="plugin-desc-banner rc505-desc">
-          <div style="font-weight: 700; color: #1e40af; margin-bottom: 2px;">${meta.title} — ${meta.category}</div>
-          <div style="margin-bottom: 4px;"><strong>${purposeLbl}</strong> ${meta.desc}</div>
-          <div style="color: #475569;"><strong>${howLbl}</strong> ${meta.howItWorks}</div>
+          <div class="rc505-desc-title">${meta.title} — ${meta.category}</div>
+          <div class="rc505-desc-body"><strong>${purposeLbl}</strong> ${meta.desc}</div>
+          <div class="rc505-desc-how"><strong>${howLbl}</strong> ${meta.howItWorks}</div>
         </div>
       `;
 
@@ -2720,7 +2792,7 @@ function renderBlocks(targetScrollBlockId = null) {
       let ahtml = `
         <div class="plugin-desc-banner rnnoise-desc">
           <div class="rnnoise-desc-header">
-            <span class="rnnoise-title-text">🤖 Deep Learning RNNoise (GRU Neural Network)</span>
+            <span class="rnnoise-title-text">Deep Learning RNNoise (GRU Neural Network)</span>
             <span class="rnnoise-vad-indicator idle-voice" id="rnnoiseVad_${block.id}">
               <span class="rnnoise-vad-dot"></span> VAD: Ожидание речи
             </span>
@@ -4272,11 +4344,12 @@ if (cfgTroubleCheck) {
   });
 }
 
-document.getElementById('closeConfiguratorBtn').addEventListener('click', () => configuratorModal.classList.add('hidden'));
-document.getElementById('cfgCancelBtn').addEventListener('click', () => configuratorModal.classList.add('hidden'));
+document.getElementById('closeConfiguratorBtn')?.addEventListener('click', () => configuratorModal?.classList.add('hidden'));
+document.getElementById('cfgCancelBtn')?.addEventListener('click', () => configuratorModal?.classList.add('hidden'));
 
-document.getElementById('cfgSaveBtn').addEventListener('click', async () => {
+document.getElementById('cfgSaveBtn')?.addEventListener('click', async () => {
   const saveBtn = document.getElementById('cfgSaveBtn');
+  if (!saveBtn) return;
   saveBtn.textContent = 'Применение...';
   saveBtn.disabled = true;
 
@@ -4359,6 +4432,10 @@ async function renderConfiguratorDevices() {
   filtered.forEach(d => {
     const row = document.createElement('tr');
     const isInstalled = d.is_installed;
+    const isThisMonitored = window.isSidetoneActive && (
+      (d.endpoint_type === 'Capture' && window.activeMonitoredCapture === d.guid) ||
+      (d.endpoint_type === 'Render' && window.activeMonitoredRender === d.guid)
+    );
 
     row.innerHTML = `
       <td class="cell-center">
@@ -4375,10 +4452,25 @@ async function renderConfiguratorDevices() {
           ${isInstalled ? 'APO активен' : 'Стандартный'}
         </span>
       </td>
-      <td class="cell-center">
-        <button class="win-btn cfg-backup-btn" data-guid="${d.guid}" data-type="${d.endpoint_type}" style="font-size: 10px; padding: 2px 8px;">Бэкап .reg</button>
+      <td class="cell-center" style="white-space: nowrap;">
+        <button class="win-btn cfg-listen-btn ${isThisMonitored ? 'active' : ''}" data-guid="${d.guid}" data-type="${d.endpoint_type}" data-name="${(d.name || '').replace(/"/g, '&quot;')}" style="font-size: 11px; padding: 2px 8px; font-weight: 600; margin-right: 4px; ${isThisMonitored ? 'background:#107c41; color:#fff;' : ''}">
+          ${isThisMonitored ? '🎧 В эфире' : '🎧 Слушать'}
+        </button>
+        <button class="win-btn cfg-backup-btn" data-guid="${d.guid}" data-type="${d.endpoint_type}" style="font-size: 10px; padding: 2px 6px;">.reg</button>
       </td>
     `;
+
+    row.querySelector('.cfg-listen-btn').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const guid = btn.dataset.guid;
+      const type = btn.dataset.type;
+
+      if (type === 'Render') {
+        await toggleSidetone(window.activeMonitoredCapture || getActiveMicrophoneGuid(), guid, 'start');
+      } else {
+        await toggleSidetone(guid, document.getElementById('toolbarMonitorDevice')?.value || 'default', 'start');
+      }
+    });
 
     row.querySelector('.cfg-backup-btn').addEventListener('click', () => {
       backupDevice(d.guid, d.endpoint_type);
@@ -4389,6 +4481,7 @@ async function renderConfiguratorDevices() {
 }
 
 async function openConfigurator() {
+  if (!configuratorModal) return;
   currentCfgTab = 'capture';
   document.querySelectorAll('.cfg-tab').forEach(t => {
     t.classList.toggle('active', t.dataset.tab === 'capture');
@@ -5443,7 +5536,6 @@ document.getElementById('menuResetZoom')?.addEventListener('click', () => {
 
 document.getElementById('menuThemeToggle')?.addEventListener('click', toggleTheme);
 document.getElementById('btnThemeToggle')?.addEventListener('click', toggleTheme);
-document.getElementById('btnToggleSidetone')?.addEventListener('click', toggleSidetone);
 document.getElementById('btnToggleRta')?.addEventListener('click', toggleRta);
 
 // Menubar Settings
@@ -5583,6 +5675,8 @@ async function populateDeviceDropdown() {
     if (capGroup.children.length > 0) sel.appendChild(capGroup);
     if (renGroup.children.length > 0) sel.appendChild(renGroup);
 
+    populateMonitorDevices(devices);
+
     if (savedDev && setDeviceSelectorValue(sel, savedDev)) {
       // successfully restored
     } else {
@@ -5591,6 +5685,23 @@ async function populateDeviceDropdown() {
     }
   } catch (e) {
     console.warn('Could not populate device selector:', e);
+  }
+}
+
+function populateMonitorDevices(devices) {
+  const sel = document.getElementById('toolbarMonitorDevice');
+  if (!sel || !Array.isArray(devices)) return;
+  const currentVal = sel.value || localStorage.getItem('resona_monitor_device') || 'default';
+  const defaultText = window.t ? window.t('toolbar.defaultSpeaker', null, 'Динамики (по умолчанию)') : 'Динамики (по умолчанию)';
+  sel.innerHTML = `<option value="default">${defaultText}</option>`;
+  devices.filter(d => d.endpoint_type === 'Render').forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.guid;
+    opt.textContent = d.name;
+    sel.appendChild(opt);
+  });
+  if ([...sel.options].some(o => o.value === currentVal)) {
+    sel.value = currentVal;
   }
 }
 
@@ -5762,8 +5873,77 @@ if (btnToggleStream) {
   });
 }
 
-setInterval(checkStreamStatus, 1000);
+const btnToggleSidetone = document.getElementById('btnToggleSidetone');
+if (btnToggleSidetone) {
+  btnToggleSidetone.addEventListener('click', async (e) => {
+    e.preventDefault();
+    await toggleSidetone();
+  });
+}
+
+const toolbarMonitorDevice = document.getElementById('toolbarMonitorDevice');
+if (toolbarMonitorDevice) {
+  toolbarMonitorDevice.addEventListener('change', async (e) => {
+    const targetRender = e.target.value;
+    try { localStorage.setItem('resona_monitor_device', targetRender); } catch (_) {}
+    if (window.isSidetoneActive) {
+      // Seamlessly switch device on the fly without stopping
+      await toggleSidetone(window.activeMonitoredCapture || getActiveMicrophoneGuid(), targetRender, 'start');
+    }
+  });
+}
+
+const toolbarMonitorVol = document.getElementById('toolbarMonitorVol');
+const cfgMonitorVolume = document.getElementById('cfgMonitorVolume');
+const cfgMonitorVolVal = document.getElementById('cfgMonitorVolVal');
+
+async function setMonitoringVolume(val) {
+  const norm = Math.max(0, Math.min(200, val)) / 100;
+  if (toolbarMonitorVol) toolbarMonitorVol.value = val;
+  if (cfgMonitorVolume) cfgMonitorVolume.value = val;
+  if (cfgMonitorVolVal) cfgMonitorVolVal.textContent = Math.round(val) + '%';
+  try {
+    await fetch(`/api/monitor/volume?vol=${norm}`, { method: 'POST' });
+  } catch (_) {}
+}
+
+if (toolbarMonitorVol) {
+  toolbarMonitorVol.addEventListener('input', (e) => {
+    setMonitoringVolume(Number(e.target.value));
+  });
+}
+if (cfgMonitorVolume) {
+  cfgMonitorVolume.addEventListener('input', (e) => {
+    setMonitoringVolume(Number(e.target.value));
+  });
+}
+
+// Check monitor status along with stream status
+async function checkMonitorStatus() {
+  try {
+    const res = await fetch('/api/monitor/status');
+    if (res.ok) {
+      const data = await res.json();
+      window.isSidetoneActive = !!data.active;
+      window.activeMonitoredCapture = data.capture || '';
+      window.activeMonitoredRender = data.render || '';
+      if (data.volume !== undefined && !document.activeElement?.matches('#toolbarMonitorVol, #cfgMonitorVolume')) {
+        const pct = Math.round(data.volume * 100);
+        if (toolbarMonitorVol) toolbarMonitorVol.value = pct;
+        if (cfgMonitorVolume) cfgMonitorVolume.value = pct;
+        if (cfgMonitorVolVal) cfgMonitorVolVal.textContent = pct + '%';
+      }
+      updateSidetoneUI();
+    }
+  } catch (_) {}
+}
+
+setInterval(() => {
+  checkStreamStatus();
+  checkMonitorStatus();
+}, 1000);
 checkStreamStatus();
+checkMonitorStatus();
 
 // --- VB-Audio Virtual Cable Dialog Controller ---
 const vbCableModal = document.getElementById('vbCableModal');

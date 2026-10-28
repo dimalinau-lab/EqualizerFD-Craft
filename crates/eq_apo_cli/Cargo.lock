@@ -214,7 +214,7 @@ dependencies = [
 
 [[package]]
 name = "eq_apo_core"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -222,7 +222,7 @@ dependencies = [
 
 [[package]]
 name = "eq_apo_device"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "eq_apo_core",
  "resona_apo",
@@ -233,7 +233,7 @@ dependencies = [
 
 [[package]]
 name = "equalizer_fd_craft"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "eq_apo_core",
  "eq_apo_device",
@@ -438,7 +438,7 @@ dependencies = [
 
 [[package]]
 name = "resona_apo"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "eq_apo_core",
  "nnnoiseless",

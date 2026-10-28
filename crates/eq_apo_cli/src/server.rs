@@ -23,12 +23,23 @@ use std::time::{Duration, Instant};
 
 static CACHED_DEVICES: Mutex<Option<(Instant, String)>> = Mutex::new(None);
 pub static STREAM_CONTROLLER: Mutex<Option<eq_apo_device::stream::StreamController>> = Mutex::new(None);
+pub static MONITOR_CONTROLLER: Mutex<Option<eq_apo_device::stream::StreamController>> = Mutex::new(None);
+static MONITOR_TARGET: Mutex<(String, String)> = Mutex::new((String::new(), String::new()));
 pub static WIZARD_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 pub fn invalidate_device_cache() {
     if let Ok(mut lock) = CACHED_DEVICES.lock() {
         *lock = None;
     }
+}
+
+pub fn is_monitor_active() -> bool {
+    if let Ok(lock) = MONITOR_CONTROLLER.lock() {
+        if let Some(ref ctrl) = *lock {
+            return ctrl.is_active();
+        }
+    }
+    false
 }
 
 pub fn is_stream_active() -> bool {
@@ -391,6 +402,16 @@ fn handle_client(mut stream: TcpStream) {
                 let resp = format!("{{\"active\":{},\"stream_active\":{},\"capture\":\"Microphone\",\"render\":\"VB-Audio Virtual Cable\",\"open_wizard\":{}}}", active, active, wizard);
                 respond_ok(&mut stream, "application/json", resp.as_bytes());
             }
+            "/api/monitor/status" => {
+                let is_active = is_monitor_active();
+                let (cap, ren) = MONITOR_TARGET.lock().map(|t| t.clone()).unwrap_or_default();
+                let vol = MONITOR_CONTROLLER.lock().ok().and_then(|l| l.as_ref().map(|c| c.get_volume())).unwrap_or(1.0);
+                let resp = format!(
+                    "{{\"active\":{},\"capture\":{:?},\"render\":{:?},\"volume\":{}}}",
+                    is_active, cap, ren, vol
+                );
+                respond_ok(&mut stream, "application/json", resp.as_bytes());
+            }
             "/api/wizard/trigger" => {
                 WIZARD_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
                 respond_ok(&mut stream, "application/json", b"{\"status\":\"triggered\"}");
@@ -631,6 +652,184 @@ fn handle_client(mut stream: TcpStream) {
                     }
                 }
                 let resp = format!("{{\"status\":\"{}\",\"active\":{},\"stream_active\":{}}}", if is_active { "started" } else { "stopped" }, is_active, is_active);
+                respond_ok(&mut stream, "application/json", resp.as_bytes());
+            }
+            "/api/monitor/start" => {
+                let mut cap = String::new();
+                let mut ren = "default".to_string();
+
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body_str) {
+                    if let Some(c) = val.get("capture").and_then(|s| s.as_str()) {
+                        if !c.trim().is_empty() { cap = c.to_string(); }
+                    }
+                    if let Some(r) = val.get("render").and_then(|s| s.as_str()) {
+                        if !r.trim().is_empty() { ren = r.to_string(); }
+                    }
+                }
+
+                if let Ok(mut t_lock) = MONITOR_TARGET.lock() {
+                    *t_lock = (cap.clone(), ren.clone());
+                }
+
+                if let Ok(mut lock) = MONITOR_CONTROLLER.lock() {
+                    if lock.is_none() {
+                        *lock = Some(eq_apo_device::stream::StreamController::new());
+                    }
+                    if let Some(ref mut ctrl) = *lock {
+                        let _ = ctrl.start(cap.clone(), ren.clone());
+                    }
+                }
+                respond_ok(&mut stream, "application/json", b"{\"status\":\"started\",\"active\":true}");
+            }
+            "/api/monitor/stop" => {
+                if let Ok(mut lock) = MONITOR_CONTROLLER.lock() {
+                    if let Some(ref mut ctrl) = *lock {
+                        ctrl.stop();
+                    }
+                }
+                if let Ok(mut t_lock) = MONITOR_TARGET.lock() {
+                    *t_lock = (String::new(), String::new());
+                }
+                respond_ok(&mut stream, "application/json", b"{\"status\":\"stopped\",\"active\":false}");
+            }
+            "/api/monitor/toggle" => {
+                let mut cap = String::new();
+                let mut ren = "default".to_string();
+                let mut mode = "toggle".to_string();
+
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body_str) {
+                    if let Some(c) = val.get("capture").and_then(|s| s.as_str()) {
+                        let trimmed = c.trim();
+                        if !trimmed.is_empty() && trimmed != "default" && !trimmed.starts_with("[object") {
+                            cap = trimmed.to_string();
+                        }
+                    }
+                    if let Some(r) = val.get("render").and_then(|s| s.as_str()) {
+                        let trimmed = r.trim();
+                        if !trimmed.is_empty() && !trimmed.starts_with("[object") {
+                            ren = trimmed.to_string();
+                        }
+                    }
+                    if let Some(m) = val.get("mode").and_then(|s| s.as_str()) {
+                        mode = m.to_string();
+                    }
+                }
+
+                if cap.is_empty() {
+                    for path in &[r"d:\testik\config.txt", r"C:\Program Files\EqualizerAPO\config\config.txt", "config.txt"] {
+                        if let Ok(cfg_txt) = std::fs::read_to_string(path) {
+                            for line in cfg_txt.lines() {
+                                let trimmed = line.trim();
+                                if trimmed.starts_with("Device:") {
+                                    if let Some(open) = trimmed.find('{') {
+                                        if let Some(close) = trimmed.find('}') {
+                                            if close > open {
+                                                cap = trimmed[open..=close].to_string();
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if !cap.is_empty() {
+                                break;
+                            }
+                        }
+                    }
+                    if cap.is_empty() {
+                        cap = "fifine".to_string();
+                    }
+                }
+
+                let mut is_active = false;
+                if let Ok(mut lock) = MONITOR_CONTROLLER.lock() {
+                    let should_stop = match mode.as_str() {
+                        "start" => false,
+                        "stop" => true,
+                        _ => {
+                            if let Some(ref ctrl) = *lock {
+                                if ctrl.is_active() {
+                                    let (prev_cap, prev_ren) = MONITOR_TARGET.lock().map(|t| t.clone()).unwrap_or_default();
+                                    if cap.is_empty() && (ren == "default" || ren.is_empty()) {
+                                        true
+                                    } else {
+                                        (cap == prev_cap) && (ren == prev_ren)
+                                    }
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        }
+                    };
+
+                    if should_stop {
+                        if let Some(ref mut ctrl) = *lock {
+                            ctrl.stop();
+                        }
+                        if let Ok(mut t_lock) = MONITOR_TARGET.lock() {
+                            *t_lock = (String::new(), String::new());
+                        }
+                    } else {
+                        if lock.is_none() {
+                            *lock = Some(eq_apo_device::stream::StreamController::new());
+                        }
+                        if let Some(ref mut ctrl) = *lock {
+                            let _ = ctrl.start(cap.clone(), ren.clone());
+                            is_active = true;
+                        }
+                        if let Ok(mut t_lock) = MONITOR_TARGET.lock() {
+                            *t_lock = (cap.clone(), ren.clone());
+                        }
+                    }
+                }
+
+                let resp = format!(
+                    "{{\"status\":\"{}\",\"active\":{},\"capture\":{:?},\"render\":{:?}}}",
+                    if is_active { "started" } else { "stopped" },
+                    is_active,
+                    cap,
+                    ren
+                );
+                respond_ok(&mut stream, "application/json", resp.as_bytes());
+            }
+            p if p.starts_with("/api/monitor/volume") => {
+                let mut vol: f32 = 1.0;
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body_str) {
+                    if let Some(v) = val.get("volume").or_else(|| val.get("vol")).and_then(|v| v.as_f64()) {
+                        vol = v as f32;
+                    }
+                }
+                if let Some(pos) = p.find('?') {
+                    let query = &p[pos + 1..];
+                    for param in query.split('&') {
+                        if let Some((k, v)) = param.split_once('=') {
+                            if k == "vol" || k == "volume" {
+                                if let Ok(parsed) = v.parse::<f32>() {
+                                    vol = parsed;
+                                }
+                            }
+                        }
+                    }
+                }
+                vol = vol.clamp(0.0, 2.0);
+                if let Ok(lock) = MONITOR_CONTROLLER.lock() {
+                    if let Some(ref ctrl) = *lock {
+                        ctrl.set_volume(vol);
+                    }
+                }
+                let resp = format!("{{\"success\":true,\"volume\":{}}}", vol);
+                respond_ok(&mut stream, "application/json", resp.as_bytes());
+            }
+            "/api/monitor/status" => {
+                let is_active = is_monitor_active();
+                let (cap, ren) = MONITOR_TARGET.lock().map(|t| t.clone()).unwrap_or_default();
+                let vol = MONITOR_CONTROLLER.lock().ok().and_then(|l| l.as_ref().map(|c| c.get_volume())).unwrap_or(1.0);
+                let resp = format!(
+                    "{{\"active\":{},\"capture\":{:?},\"render\":{:?},\"volume\":{}}}",
+                    is_active, cap, ren, vol
+                );
                 respond_ok(&mut stream, "application/json", resp.as_bytes());
             }
             "/api/apo/apply-batch" => {

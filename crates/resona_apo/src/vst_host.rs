@@ -370,11 +370,16 @@ impl VstPluginInstance {
             );
         }
 
-        // 4. Re-interleave output channels back into buffer
+        // 4. Re-interleave output channels back into buffer with NaN/inf sanitization
         for f in 0..num_frames {
             for c in 0..channels {
                 let out_c = if c < needed_outputs { c } else { 0 };
-                buffer[f * channels + c] = self.temp_out[out_c][f];
+                let val = self.temp_out[out_c][f];
+                buffer[f * channels + c] = if val.is_finite() {
+                    val.clamp(-1.0, 1.0)
+                } else {
+                    0.0
+                };
             }
         }
     }

@@ -493,15 +493,22 @@ pub fn install_endpoint_hook(guid: &str, endpoint_type: &str, mode: &str) -> Res
 
         let current_efx = query_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},7").unwrap_or_default();
         let current_gfx = query_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},2").unwrap_or_default();
-        let has_soundpad = current_efx.eq_ignore_ascii_case(soundpad_clsid)
-            || current_gfx.eq_ignore_ascii_case(soundpad_clsid)
-            || mode.to_ascii_uppercase().contains("SOUNDPAD")
-            || mode.eq_ignore_ascii_case("ALL");
+        let is_capture = endpoint_type.eq_ignore_ascii_case("Capture");
+
+        // Soundpad is ONLY valid for Capture (Microphones), NEVER for Render (Headphones/Speakers).
+        // In mode "ALL", do NOT force Soundpad if Soundpad is not present on the user's system.
+        let has_soundpad = if !is_capture {
+            false
+        } else {
+            current_efx.eq_ignore_ascii_case(soundpad_clsid)
+                || current_gfx.eq_ignore_ascii_case(soundpad_clsid)
+                || mode.to_ascii_uppercase().contains("SOUNDPAD")
+        };
 
         // 1. LFX (PreMix) -> Equalizer APO
         let _ = set_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},1", pre_clsid);
 
-        // 2. GFX (PostMix) -> Soundpad if present, otherwise Equalizer APO PostMix
+        // 2. GFX (PostMix) -> Soundpad if present on mic, otherwise Equalizer APO PostMix
         let gfx_target = if has_soundpad { soundpad_clsid } else { post_clsid };
         let _ = set_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},2", gfx_target);
 
@@ -511,7 +518,7 @@ pub fn install_endpoint_hook(guid: &str, endpoint_type: &str, mode: &str) -> Res
         // 4. MFX (Mode / Communications / Discord) -> Equalizer APO
         let _ = set_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},6", pre_clsid);
 
-        // 5. EFX (Endpoint Effects) -> Soundpad if present, otherwise Equalizer APO PostMix
+        // 5. EFX (Endpoint Effects) -> Soundpad if present on mic, otherwise Equalizer APO PostMix
         let efx_target = if has_soundpad { soundpad_clsid } else { post_clsid };
         let _ = set_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},7", efx_target);
 
@@ -530,7 +537,7 @@ pub fn install_endpoint_hook(guid: &str, endpoint_type: &str, mode: &str) -> Res
             close_key(h_prop);
         }
 
-        // 8. Configure Child APOs and UniteFx for Soundpad coexistence
+        // 8. Configure Child APOs and UniteFx for Soundpad coexistence or preserve OEM APO
         if has_soundpad {
             let child_sub = format!(r"SOFTWARE\EqualizerAPO\Child APOs\{}", guid);
             if let Ok(h_child) = create_key(&child_sub, KEY_SET_VALUE) {
@@ -546,6 +553,15 @@ pub fn install_endpoint_hook(guid: &str, endpoint_type: &str, mode: &str) -> Res
                 let _ = set_str(h_unite, "Original-Apo", pre_clsid);
                 let _ = set_dword(h_unite, "Version", 3);
                 close_key(h_unite);
+            }
+        } else if !current_efx.is_empty() && !current_efx.eq_ignore_ascii_case(post_clsid) && !current_efx.eq_ignore_ascii_case(soundpad_clsid) {
+            // Preserve OEM manufacturer APO (Realtek, SteelSeries Sonar, Nvidia) as child APO
+            let child_sub = format!(r"SOFTWARE\EqualizerAPO\Child APOs\{}", guid);
+            if let Ok(h_child) = create_key(&child_sub, KEY_SET_VALUE) {
+                let _ = set_str(h_child, "PostMixChild", &current_efx);
+                let _ = set_str(h_child, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},7", &current_efx);
+                let _ = set_str(h_child, "AllowSilentBufferModification", "true");
+                close_key(h_child);
             }
         }
 
@@ -568,11 +584,27 @@ pub fn uninstall_endpoint_hook(guid: &str, endpoint_type: &str) -> Result<(), St
             endpoint_type, guid
         );
         if let Ok(h_fx) = open_key(&fx_sub, KEY_SET_VALUE | KEY_QUERY_VALUE) {
+            let child_sub = format!(r"SOFTWARE\EqualizerAPO\Child APOs\{}", guid);
+            let mut restored_efx = String::new();
+            if let Ok(h_child) = open_key(&child_sub, KEY_QUERY_VALUE) {
+                if let Some(orig) = query_str(h_child, "PostMixChild") {
+                    restored_efx = orig;
+                }
+                close_key(h_child);
+            }
+
+            let soundpad_clsid = "{27384E53-9860-0AC3-9519-C60EBCAA2C71}";
+            if !restored_efx.is_empty() && !restored_efx.eq_ignore_ascii_case(soundpad_clsid) {
+                let _ = set_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},7", &restored_efx);
+                let _ = set_str(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},2", &restored_efx);
+            } else {
+                let _ = delete_val(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},2");
+                let _ = delete_val(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},7");
+            }
+
             let _ = delete_val(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},1");
-            let _ = delete_val(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},2");
             let _ = delete_val(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},5");
             let _ = delete_val(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},6");
-            let _ = delete_val(h_fx, "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},7");
             close_key(h_fx);
         }
         Ok(())

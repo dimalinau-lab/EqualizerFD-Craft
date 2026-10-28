@@ -86,4 +86,7 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
-.DS_Store
+# --- Node / Package Artifacts ---
+node_modules/
+package.json
+package-lock.json

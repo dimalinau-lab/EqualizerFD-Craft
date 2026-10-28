@@ -380,6 +380,14 @@ pub struct BossEffectState {
     pub synth_phase: f32,
     pub generic_filter1: BiquadState,
     pub generic_filter2: BiquadState,
+    // Robot Voice & Monotone Pitch Tracker (Roland Boss RC-505 / VT-4)
+    pub robot_pitch_period: f32,
+    pub robot_last_sample: f32,
+    pub robot_zc_count: usize,
+    pub robot_phase1: f32,
+    pub robot_phase2: f32,
+    pub robot_carrier_phase: f32,
+    pub robot_vocal_env: f32,
 }
 
 impl Default for BossEffectState {
@@ -457,6 +465,13 @@ impl Default for BossEffectState {
             synth_phase: 0.0,
             generic_filter1: BiquadState::default(),
             generic_filter2: BiquadState::default(),
+            robot_pitch_period: 240.0,
+            robot_last_sample: 0.0,
+            robot_zc_count: 0,
+            robot_phase1: 0.0,
+            robot_phase2: 512.0,
+            robot_carrier_phase: 0.0,
+            robot_vocal_env: 0.0,
         }
     }
 }
@@ -511,7 +526,7 @@ pub fn parse_boss_directive(raw_body: &str, sample_rate: f32) -> Option<(BossEff
     let eff_lower = eff_str.to_lowercase();
     let mut state = BossEffectState::default();
 
-    if eff_lower.contains("slicer") || eff_lower.contains("repeat") || eff_lower.contains("нарез") {
+    if eff_lower.contains("slicer") || eff_lower.contains("нарез") || (eff_lower.contains("slice") && !eff_lower.contains("beatrepeat") && !eff_lower.contains("beat repeat")) {
         let bpm = json.get("rate").and_then(|v| v.as_f64()).unwrap_or(128.0) as f32;
         let pat_str = json.get("pattern").and_then(|v| v.as_str()).unwrap_or("1/16 Note");
         let subdiv = if pat_str.contains("1/4") {
@@ -534,7 +549,7 @@ pub fn parse_boss_directive(raw_body: &str, sample_rate: f32) -> Option<(BossEff
         let crackle = (json.get("crackle").and_then(|v| v.as_f64()).unwrap_or(25.0) / 100.0) as f32;
         let flutter = (json.get("flutter").and_then(|v| v.as_f64()).unwrap_or(20.0) / 100.0) as f32;
         Some((BossEffectKind::Vinyl { tone_fc: tone, crackle_level: crackle, flutter_depth: flutter }, state))
-    } else if eff_lower.contains("vocoder") || eff_lower.contains("robot") || eff_lower.contains("вокод") {
+    } else if (eff_lower.contains("vocoder") || eff_lower.contains("вокод")) && !eff_lower.contains("robot") && !eff_lower.contains("робот") {
         let pitch = json.get("pitch").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
         let robotic = (json.get("robotic").and_then(|v| v.as_f64()).unwrap_or(85.0) / 100.0) as f32;
         let wet = (json.get("wet").and_then(|v| v.as_f64()).unwrap_or(80.0) / 100.0) as f32;
@@ -570,14 +585,14 @@ pub fn parse_boss_directive(raw_body: &str, sample_rate: f32) -> Option<(BossEff
         state.lofi_lp.calculate(3, highcut, 0.0, 0.7071, sample_rate);
 
         Some((BossEffectKind::LoFi { drive, lowcut, highcut, noise_level: noise }, state))
-    } else if eff_lower.contains("chorus") || eff_lower.contains("flanger") || eff_lower.contains("хорус") {
+    } else if (eff_lower.contains("chorus") || eff_lower.contains("хорус")) && !eff_lower.contains("flanger") && !eff_lower.contains("флэнж") {
         let rate = json.get("rate").and_then(|v| v.as_f64()).unwrap_or(1.2) as f32;
         let depth = (json.get("depth").and_then(|v| v.as_f64()).unwrap_or(65.0) / 100.0) as f32;
         let feedback = (json.get("feedback").and_then(|v| v.as_f64()).unwrap_or(15.0) / 100.0) as f32;
         let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(45.0) / 100.0) as f32;
 
         Some((BossEffectKind::Chorus { rate, depth, feedback, mix }, state))
-    } else if eff_lower.contains("distortion") || eff_lower.contains("overdrive") || eff_lower.contains("перегруз") {
+    } else if (eff_lower.contains("distortion") || eff_lower.contains("дисторш")) && !eff_lower.contains("overdrive") && !eff_lower.contains("овердрайв") {
         let drive = (json.get("drive").and_then(|v| v.as_f64()).unwrap_or(35.0) / 100.0) as f32;
         let tone = json.get("tone").and_then(|v| v.as_f64()).unwrap_or(4500.0) as f32;
         let bottom = json.get("bottom").and_then(|v| v.as_f64()).unwrap_or(2.0) as f32;
@@ -611,12 +626,12 @@ pub fn parse_boss_directive(raw_body: &str, sample_rate: f32) -> Option<(BossEff
         let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(25.0) / 100.0) as f32;
 
         Some((BossEffectKind::Reverb { decay_time: time, predelay_ms: predelay, shimmer, mix }, state))
-    } else if eff_lower.contains("pitch") || eff_lower.contains("harmony") || eff_lower.contains("гармон") || eff_lower.contains("октав") {
+    } else if (eff_lower.contains("pitch") || eff_lower.contains("питч") || eff_lower.contains("октав")) && !eff_lower.contains("harmony") && !eff_lower.contains("гармон") && !eff_lower.contains("autopitch") {
         let semitones = json.get("semitones").or_else(|| json.get("pitch")).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
         let fine = json.get("fine").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(50.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(100.0) / 100.0) as f32;
         Some((BossEffectKind::PitchShift { semitones, fine_cents: fine, mix }, state))
-    } else if (eff_lower.contains("flanger") || eff_lower.contains("флэнжер") || eff_lower.contains("фленджер")) && !eff_lower.contains("chorus") {
+    } else if eff_lower.contains("flanger") || eff_lower.contains("флэнжер") || eff_lower.contains("фленджер") {
         let rate = json.get("rate").and_then(|v| v.as_f64()).unwrap_or(0.5) as f32;
         let depth = (json.get("depth").and_then(|v| v.as_f64()).unwrap_or(75.0) / 100.0) as f32;
         let feedback = (json.get("feedback").and_then(|v| v.as_f64()).unwrap_or(60.0) / 100.0) as f32;
@@ -677,12 +692,12 @@ pub fn parse_boss_directive(raw_body: &str, sample_rate: f32) -> Option<(BossEff
         Some((BossEffectKind::Telephone { drive, mix }, state))
     } else if eff_lower.contains("autopitch") || eff_lower.contains("electric") || eff_lower.contains("автопитч") {
         let speed = (json.get("speed").and_then(|v| v.as_f64()).unwrap_or(80.0) / 100.0) as f32;
-        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(90.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(100.0) / 100.0) as f32;
         Some((BossEffectKind::AutoPitch { speed, mix }, state))
     } else if eff_lower.contains("robot") || eff_lower.contains("робот") {
         let pitch_st = json.get("pitch").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
         let robotic = (json.get("robotic").and_then(|v| v.as_f64()).unwrap_or(90.0) / 100.0) as f32;
-        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(85.0) / 100.0) as f32;
+        let mix = (json.get("mix").and_then(|v| v.as_f64()).unwrap_or(100.0) / 100.0) as f32;
         Some((BossEffectKind::Robot { pitch_st, robotic, mix }, state))
     } else if eff_lower.contains("harmony") || eff_lower.contains("гармон") {
         let interval = json.get("interval").and_then(|v| v.as_f64()).unwrap_or(4.0) as f32;
@@ -848,7 +863,10 @@ pub fn process_boss_effect(
     sample: f32,
     sample_rate: f32,
 ) -> f32 {
-    match kind {
+    if !sample.is_finite() {
+        return 0.0;
+    }
+    let res = match kind {
         BossEffectKind::Slicer { bpm, subdivision, depth, duty } => {
             let freq = (bpm / 60.0) * subdivision;
             state.slicer_phase += freq / sample_rate;
@@ -1116,7 +1134,11 @@ pub fn process_boss_effect(
 
             let denom = (w1 + w2).max(1e-4);
             let shifted = (s1 * w1 + s2 * w2) / denom;
-            (1.0 - mix) * sample + mix * shifted
+            if *mix >= 0.98 {
+                shifted
+            } else {
+                (1.0 - mix) * sample + mix * shifted
+            }
         }
 
         BossEffectKind::Flanger { rate, depth, feedback, mix } => {
@@ -1237,14 +1259,79 @@ pub fn process_boss_effect(
         }
 
         BossEffectKind::Robot { pitch_st, robotic, mix } => {
-            let f0 = 130.81 * 2.0f32.powf(*pitch_st / 12.0);
-            state.synth_phase += f0 / sample_rate;
-            if state.synth_phase >= 1.0 { state.synth_phase -= 1.0; }
-            let carrier = if state.synth_phase < 0.5 { 1.0 } else { -1.0 };
-            state.comp_env = state.comp_env * 0.99 + sample.abs() * 0.01;
-            let robot = carrier * state.comp_env * 2.8;
-            let out = (1.0 - robotic) * sample + robotic * robot;
-            (1.0 - mix) * sample + mix * out
+            // Roland BOSS RC-505 / VT-4 Authentic Robot Voice:
+            // Locks the fundamental vocal pitch to the designated note (f0 = 130.81 * 2^(pitch_st / 12))
+            // with zero pitch glide, while preserving vocal tract formants and word clarity.
+            let f0 = (130.81 * 2.0f32.powf(*pitch_st / 12.0)).clamp(55.0, 520.0);
+            let target_period = (sample_rate / f0).clamp(32.0, 1024.0);
+
+            let buf_cap = state.pitch_buf.len();
+            let cur_w = state.pitch_w_idx;
+            state.pitch_buf[cur_w] = sample;
+            state.pitch_w_idx = (cur_w + 1) % buf_cap;
+
+            // Pitch tracking: detects fundamental period of incoming voice
+            state.robot_zc_count += 1;
+            if sample > 0.0 && state.robot_last_sample <= 0.0 && (sample - state.robot_last_sample) > 0.004 {
+                let measured_period = state.robot_zc_count as f32;
+                state.robot_zc_count = 0;
+                let min_period = sample_rate / 500.0;
+                let max_period = sample_rate / 70.0;
+                if measured_period >= min_period && measured_period <= max_period {
+                    state.robot_pitch_period = state.robot_pitch_period * 0.82 + measured_period * 0.18;
+                }
+            }
+            state.robot_last_sample = sample;
+
+            let in_period = state.robot_pitch_period.clamp(40.0, 800.0);
+            let shift_ratio = (in_period / target_period).clamp(0.25, 4.0);
+
+            // Grain window dynamically locked to the target pitch period
+            let grain_w = (target_period * 2.0).clamp(128.0, 2048.0);
+
+            // Dual-head crossfade
+            let r_pos1 = (cur_w as f32 + buf_cap as f32 - grain_w + state.robot_phase1) % (buf_cap as f32);
+            let i1_0 = r_pos1.floor() as usize % buf_cap;
+            let i1_1 = (i1_0 + 1) % buf_cap;
+            let f1 = r_pos1 - r_pos1.floor();
+            let s1 = state.pitch_buf[i1_0] * (1.0 - f1) + state.pitch_buf[i1_1] * f1;
+            let w1 = (0.5 * (1.0 - (2.0 * std::f32::consts::PI * (state.robot_phase1 / grain_w)).cos())).max(0.0);
+
+            let r_pos2 = (cur_w as f32 + buf_cap as f32 - grain_w + state.robot_phase2) % (buf_cap as f32);
+            let i2_0 = r_pos2.floor() as usize % buf_cap;
+            let i2_1 = (i2_0 + 1) % buf_cap;
+            let f2 = r_pos2 - r_pos2.floor();
+            let s2 = state.pitch_buf[i2_0] * (1.0 - f2) + state.pitch_buf[i2_1] * f2;
+            let w2 = (0.5 * (1.0 - (2.0 * std::f32::consts::PI * (state.robot_phase2 / grain_w)).cos())).max(0.0);
+
+            state.robot_phase1 += shift_ratio;
+            if state.robot_phase1 >= grain_w {
+                state.robot_phase1 -= grain_w;
+            }
+            state.robot_phase2 += shift_ratio;
+            if state.robot_phase2 >= grain_w {
+                state.robot_phase2 -= grain_w;
+            }
+
+            let denom = (w1 + w2).max(1e-4);
+            let pitch_locked = (s1 * w1 + s2 * w2) / denom;
+
+            // Signature Boss RC-505 / VT-4 robotic timbre reinforcement
+            state.robot_vocal_env = state.robot_vocal_env * 0.994 + sample.abs() * 0.006;
+            state.robot_carrier_phase = (state.robot_carrier_phase + f0 / sample_rate) % 1.0;
+            let p = state.robot_carrier_phase;
+            let saw = 2.0 * p - 1.0 - 0.25 * (2.0 * std::f32::consts::PI * p).sin();
+            let carrier = saw * state.robot_vocal_env * 0.75;
+
+            let robot_wet = (pitch_locked * 0.85 + carrier * (*robotic * 0.45)) * (1.0 + *robotic * 0.25);
+            let robot_saturated = (robot_wet * 1.2).tanh();
+
+            // Complete isolation of dry voice when mix is 100% (mix >= 0.98)
+            if *mix >= 0.98 {
+                robot_saturated
+            } else {
+                (1.0 - *mix) * sample + *mix * robot_saturated
+            }
         }
 
         BossEffectKind::Harmony { interval, mix } => {
@@ -1278,7 +1365,11 @@ pub fn process_boss_effect(
             let shifted = state.pitch_buf[i0] * (1.0 - frac) + state.pitch_buf[i1] * frac;
             state.pitch_phase1 += ratio;
             if state.pitch_phase1 >= grain_w { state.pitch_phase1 -= grain_w; }
-            (1.0 - mix) * sample + mix * shifted
+            if *mix >= 0.98 {
+                shifted
+            } else {
+                (1.0 - mix) * sample + mix * shifted
+            }
         }
 
         BossEffectKind::GuitarToBass { gain, mix, .. } => {
@@ -1581,5 +1672,10 @@ pub fn process_boss_effect(
             state.rev_comb4_idx = (state.rev_comb4_idx + 1) % 1356;
             (1.0 - mix) * sample + mix * o1
         }
+    };
+    if res.is_finite() {
+        res.clamp(-1.0, 1.0)
+    } else {
+        0.0
     }
 }

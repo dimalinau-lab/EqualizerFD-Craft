@@ -1,6 +1,6 @@
 [package]
 name = "eq_apo_core"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 authors = ["Antigravity Replica"]
 description = "Clean-room audio DSP and configuration engine for Equalizer FD CRAFT"

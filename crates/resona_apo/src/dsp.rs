@@ -223,6 +223,12 @@ impl RnNoiseProcessor {
                 ch_data.in_fifo.drain(0..480);
             }
 
+            // Cap out_fifo to prevent unbounded latency drift
+            if ch_data.out_fifo.len() > 960 {
+                let excess = ch_data.out_fifo.len() - 960;
+                ch_data.out_fifo.drain(0..excess);
+            }
+
             for frame in 0..total_frames {
                 if let Some(val) = ch_data.out_fifo.pop_front() {
                     samples[frame * ch_cnt + c] = val;

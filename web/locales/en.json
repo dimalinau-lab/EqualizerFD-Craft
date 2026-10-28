@@ -79,7 +79,9 @@
     "micPrefix": "Microphone",
     "speakerPrefix": "Speakers",
     "captureGroup": "Microphones (Capture)",
-    "renderGroup": "Playback (Render / Speakers / Headphones)"
+    "renderGroup": "Playback (Render / Speakers / Headphones)",
+    "monitorDevTitle": "Monitoring output playback device",
+    "defaultSpeaker": "Speakers (default)"
   },
   "add": {
     "buttonTitle": "Add filter or control block",
@@ -447,6 +449,9 @@
       "thConnector": "Connector / Type",
       "thStatus": "APO Status",
       "thBackup": "Backup Copy",
+      "thActions": "Actions",
+      "btnListen": "🎧 Monitor",
+      "btnListening": "🎧 Live",
       "troubleCheck": "Troubleshooting Options (APO Interception Modes)",
       "modeAll": "Hybrid ALL Mode (LFX/GFX + SFX/MFX/EFX) — Full capture for Discord, Telegram & all apps",
       "modeSfx": "Install as SFX/MFX — Windows 10/11 Voice Mode",
