@@ -222,8 +222,14 @@ fn find_device(
                     }
                 }
             }
-            println!("[WASAPI Stream] Capture device '{}' not found by keyword, falling back to default mic", keyword);
-            enumerator.GetDefaultAudioEndpoint(flow, eConsole)
+            let kw_lower = keyword.trim().to_lowercase();
+            if kw_lower.is_empty() || kw_lower == "default" {
+                println!("[WASAPI Stream] Using default capture endpoint");
+                enumerator.GetDefaultAudioEndpoint(flow, eConsole)
+            } else {
+                eprintln!("[WASAPI Stream] Target capture device '{}' not yet ready in active endpoints. Retrying...", keyword);
+                Err(Error::new(E_FAIL, format!("Capture device '{}' not found among active endpoints", keyword)))
+            }
         } else {
             let kw_lower = keyword.to_lowercase();
             if kw_lower == "default" || kw_lower.is_empty() || kw_lower.contains("headphone") || kw_lower.contains("наушник") || kw_lower.contains("speaker") || kw_lower.contains("динамик") {
@@ -269,14 +275,36 @@ fn run_streaming_pipeline(
         let mut task_idx = 0u32;
         let avrt_handle = AvSetMmThreadCharacteristicsW(windows::core::w!("Pro Audio"), &mut task_idx);
 
+        let mut backoff_ms = 150u64;
+        let mut last_success_time = std::time::Instant::now();
+
         while running.load(Ordering::Relaxed) {
+            let session_start = std::time::Instant::now();
             if let Err(e) = run_pipeline_session(&capture_kw, &render_kw, &running, &volume) {
                 if !running.load(Ordering::Relaxed) {
                     break;
                 }
-                eprintln!("[WASAPI Stream] Pipeline error / disconnect: {:?}. Auto-reconnecting in 400ms...", e);
-                thread::sleep(Duration::from_millis(400));
+                let err_str = format!("{:?}", e);
+                let is_sleep_resume = err_str.contains("sleep") || err_str.contains("hibernation");
+                if is_sleep_resume {
+                    backoff_ms = 1500;
+                } else if session_start.elapsed().as_secs() >= 2 {
+                    backoff_ms = 250;
+                }
+                eprintln!(
+                    "[WASAPI Guard] Device disconnect / invalidation: {:?}. Hot-Plug auto-reconnecting in {}ms...",
+                    e, backoff_ms
+                );
+                thread::sleep(Duration::from_millis(backoff_ms));
+                backoff_ms = (backoff_ms * 3 / 2).min(1500);
+            } else {
+                backoff_ms = 250;
+                println!(
+                    "[WASAPI Guard] Stream recovered successfully in {:.1}ms!",
+                    last_success_time.elapsed().as_secs_f64() * 1000.0
+                );
             }
+            last_success_time = std::time::Instant::now();
         }
 
         if !avrt_handle.is_invalid() {
@@ -562,8 +590,27 @@ fn run_pipeline_session(
         println!("[WASAPI Stream] Stream pipeline RUNNING! Real-time DSP active (event-driven: {}, is_float: {}).", event_driven, is_float);
 
         let mut error_result: Result<()> = Ok(());
+        let mut last_iter_instant = std::time::Instant::now();
+        let mut last_packet_instant = std::time::Instant::now();
 
         while running.load(Ordering::Relaxed) {
+            let now = std::time::Instant::now();
+
+            // Watchdog 1: System Sleep / Hibernation resume (time jump > 1500ms)
+            if now.duration_since(last_iter_instant).as_millis() > 1500 {
+                eprintln!("[WASAPI Stream] System resume from sleep/hibernation detected (time jump > 1500ms). Resetting stream pipeline.");
+                error_result = Err(Error::new(E_FAIL, "System sleep/hibernation resume detected"));
+                break;
+            }
+            last_iter_instant = now;
+
+            // Watchdog 2: USB microphone packet stall (> 1800ms without captured packets)
+            if now.duration_since(last_packet_instant).as_millis() > 1800 {
+                eprintln!("[WASAPI Stream] Capture packet stall detected (> 1800ms without input). Audio endpoint re-enumeration required.");
+                error_result = Err(Error::new(E_FAIL, "Capture packet stall watchdog timeout"));
+                break;
+            }
+
             // Fast in-memory sync from shared memory
             if let Some(ref shm) = shm_handle {
                 if !shm.ptr.is_null() {
@@ -585,9 +632,7 @@ fn run_pipeline_session(
                 let packet_size = match capture_service.GetNextPacketSize() {
                     Ok(sz) => sz,
                     Err(e) => {
-                        if e.code() == AUDCLNT_E_DEVICE_INVALIDATED || e.code() == AUDCLNT_E_RESOURCES_INVALIDATED {
-                            error_result = Err(e);
-                        }
+                        error_result = Err(e);
                         break;
                     }
                 };
@@ -607,13 +652,12 @@ fn run_pipeline_session(
                     None,
                     None,
                 ) {
-                    if e.code() == AUDCLNT_E_DEVICE_INVALIDATED || e.code() == AUDCLNT_E_RESOURCES_INVALIDATED {
-                        error_result = Err(e);
-                    }
+                    error_result = Err(e);
                     break;
                 }
 
                 if num_frames_read > 0 && !data_ptr.is_null() {
+                    last_packet_instant = std::time::Instant::now();
                     let total_samples = (num_frames_read as usize) * cap_channels;
                     float_buffer.clear();
 
@@ -723,11 +767,8 @@ fn run_pipeline_session(
             let padding = match ren_client.GetCurrentPadding() {
                 Ok(p) => p,
                 Err(e) => {
-                    if e.code() == AUDCLNT_E_DEVICE_INVALIDATED || e.code() == AUDCLNT_E_RESOURCES_INVALIDATED {
-                        error_result = Err(e);
-                        break;
-                    }
-                    continue;
+                    error_result = Err(e);
+                    break;
                 }
             };
 
@@ -762,10 +803,8 @@ fn run_pipeline_session(
                         let _ = render_service.ReleaseBuffer(frames_to_write as u32, 0);
                     }
                     Err(e) => {
-                        if e.code() == AUDCLNT_E_DEVICE_INVALIDATED || e.code() == AUDCLNT_E_RESOURCES_INVALIDATED {
-                            error_result = Err(e);
-                            break;
-                        }
+                        error_result = Err(e);
+                        break;
                     }
                 }
             } else if padding < 480 {
@@ -780,12 +819,20 @@ fn run_pipeline_session(
                 }
             }
 
-            // Smooth drift compensation: keep jitter buffer bounded between 15ms and 45ms
+            // Non-destructive drift compensation:
+            // NEVER drop frames while user is speaking (speech_prob >= 0.20)!
+            // Only trim excess buffered silence during speech pauses to keep latency optimal (~40-50ms).
+            let speech_active = dsp.rnnoise.speech_prob >= 0.20;
             let current_frames = jitter_buffer.len() / ren_channels;
-            if current_frames > 2200 {
-                for _ in 0..ren_channels {
+            if !speech_active && current_frames > 2880 {
+                let excess_frames = (current_frames - 2160).min(480);
+                for _ in 0..(excess_frames * ren_channels) {
                     jitter_buffer.pop_front();
                 }
+            } else if current_frames > 12000 {
+                // Hard emergency safeguard: only if speaking continuously for 15+ minutes without a single pause
+                let drain = (current_frames - 9600) * ren_channels;
+                jitter_buffer.drain(..drain);
             }
         }
 

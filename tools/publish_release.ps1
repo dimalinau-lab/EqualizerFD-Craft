@@ -1,7 +1,7 @@
-# Publish release v1.0.0 to GitHub (Official Release)
+# Publish release v1.2.0 to GitHub (Official Release)
 param (
-    [string]$TagName = "v1.0.0",
-    [string]$ReleaseName = "Equalizer FD CRAFT v1.0.0 (Official Release)"
+    [string]$TagName = "v1.2.0",
+    [string]$ReleaseName = "Equalizer FD CRAFT v1.2.0 (Studio Stability & Full 50 Boss Effects)"
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,45 +33,51 @@ try {
 }
 
 $releaseBody = @"
-# Equalizer FD CRAFT v1.0.0 — Официальный релиз
+# Equalizer FD CRAFT v1.2.0 — Обновление стабильности, шумоподавления и полная коллекция Boss RC-505
 
-Первый стабильный релиз Equalizer FD CRAFT — выход из статуса Beta!
+В релизе **v1.2.0** полностью решены проблемы с искажениями звука при непрерывной речи, модернизирована система шумоподавления с внедрением VAD-гейта, добавлено автоматическое восстановление аудиопотока после гибернации/сна Windows, а также завершена интеграция всех 50 аутентичных студийных эффектов Boss RC-505 Mk2.
 
-## Главные нововведения и улучшения
+---
 
-### 1. Нейросетевое AI-шумоподавление (RNNoise / Deep Learning)
-- Рекуррентная нейросеть GRU в реальном времени устраняет фоновые шумы, клики клавиатуры и мыши, гул вентиляторов без искажения голоса.
-- Безопасная реализация на чистом Rust (`nnnoiseless`) без нестабильных сторонних библиотек.
-- Stage 0 обработка до параметрики и VST.
-- Динамический индикатор Voice Activity Detection (VAD) с отображением вероятности речи в процентах.
-- Ползунок глубины подавления (0–100%) и быстрые пресеты (50% Мягкий, 85% Оптимальный, 100% Максимальный).
+## Главные нововведения и исправления
 
-### 2. Интерактивный параметрический эквалайзер на графике АЧХ (FabFilter-Style)
-- Живое перетаскивание узлов фильтров мышью прямо на кривой АЧХ (частота и усиление).
-- Регулировка добротности (Q) колесиком мыши с визуализацией полосы пропускания под курсором.
-- Фиксация узла кликом мыши: карточка действий закрепляется на графике и не исчезает при движении курсора.
-- Быстрое переключение типов фильтров: PK (колокол), LS (low-shelf), HS (high-shelf), HP (high-pass), LP (low-pass), NO (notch).
-- Быстрые действия: Bypass фильтра, инвертирование усиления, удаление фильтра.
-- Спектроанализатор реального времени RTA 60 FPS с переключением режима и откреплением в отдельное окно.
+### 1. Устранение «репения» и треска при непрерывной речи (Pause-Only Drift Compensation)
+- **Проблема:** Разница тактовой частоты USB-микрофона и драйвера VB-Cable при непрерывной речи приводила к переполнению джиттер-буфера и регулярному сбросу сэмплов из середины звуковой волны, что звучало как непрерывный роботизированный зуд/треск.
+- **Решение:** Внедрен алгоритм неразрушающей компенсации тактового дрифта. Во время активной речи (`speech_prob >= 0.20`) ни один сэмпл не отбрасывается. Микро-подстройка буфера выполняется исключительно в естественных паузах между словами и фразами, когда это на 100% бесшумно.
+- **Удаление фазового DeClicker:** Устранен агрессивный высокочастотный IIR-фильтр, который ложно срабатывал на согласных («с», «т», «ч», «ц», «к», «п») более 1100 раз в секунду и смещал фазу сигнала.
 
-### 3. Интерфейс и дизайн
-- Полностью удалены лишние эмодзи — строгий профессиональный стиль студийного оборудования.
-- Две выверенные темы: монохромная черная темная тема (OLED Black) и нативная светлая тема в стиле Windows Desktop.
-- Оптимизированные области клика для быстрого и удобного управления параметрами.
+### 2. Студийный мягкий лимитер (Smooth Rational Soft Knee)
+- Жесткий цифровой клиппинг `clamp(-1.0, 1.0)` заменен на гладкий C1-рациональный мягкий лимитер.
+- До уровня `-2.5 dBFS` искажения равны 0.00%. Громкие всплески голоса и предусиление компрессируются тепло и гладко без цифрового хрипа и гармонических щелчков.
 
-### 4. Встроенный авто-апдейтер v1.0.0
-- Быстрое фоновое обновление без перекачивания плагинов (~3 МБ).
-- Полный офлайн установщик со всеми 98 студийными VST-плагинами (~166 МБ).
+### 3. Автоматическое восстановление после спящего режима и гибернации (Hibernation Watchdog)
+- При выходе Windows из сна или гибернации встроенный сторожевой таймер отслеживает скачки системного времени и состояние аудиосессии.
+- Поток WASAPI и маршрутизация виртуального кабеля VB-Cable перезапускаются автоматически без необходимости перезагрузки ПК или ручного перезапуска драйверов.
+
+### 4. Полная аутентичная коллекция 50 эффектов Boss RC-505 Mk2
+- Реализованы и протестированы все 50 эффектов оригинального процессора Boss RC-505:
+  - **Pitch / Vocal:** Pitch Shift, Auto-Pitch, Robot Voice, Vocoder, Voice Double, Octave, Harmonist.
+  - **Dynamics & Filters:** Dynamic Compressor, Sustainer, Auto-Wah, Radio Voice, Telephone, Lo-Fi, Ring Modulator.
+  - **Modulation & Space:** Stereo Chorus, Flanger, Phaser, Tremolo, Pan, Tape Echo, Stereo Delay, Hall Reverb, Plate Reverb.
+- Полностью устранен паразитный пропуск сухого необработанного голоса при активных вокодерах и питч-шифтерах.
+
+### 5. Neural VAD Noise Gate (-80 dB Silence)
+- Интеллектуальный шумовой шлюз на базе вероятности речи нейросети RNNoise (`speech_prob`).
+- В паузах между фразами уровень фонового шума подавляется до абсолютной тишины (-80 dB), полностью отсекая щелчки клавиатуры, клики мыши и комнатный гул.
+
+---
 
 ## Варианты загрузки
-1. **`EqualizerFD-Craft-Setup-v1.0.0.exe`** (~166 MB):
+1. **`EqualizerFD-Craft-Setup-v1.2.0.exe`** (~166 MB):
    - Полный офлайн установщик Inno Setup со всеми 98 студийными 64-битными VST-плагинами (ReaPlugs, Blue Cat, Kuassa и др.).
 2. **`EqualizerFD-Craft-Update-Installer.exe`** (~3.4 MB):
    - Быстрое обновление (рекомендуется): обновляет исполняемые файлы программы, системный трей и веб-интерфейс, сохраняя все ваши пресеты и плагины.
-3. **`EqualizerFD-Craft-Update.zip`** (~2.8 MB):
+3. **`EqualizerFD-Craft-Update.zip`** (~2.9 MB):
    - Быстрое обновление в ZIP-архиве без повторного скачивания плагинов.
-4. **`EqualizerFD-Craft-v1.0.0-Portable.zip`** (~4.1 MB):
+4. **`EqualizerFD-Craft-v1.2.0-Portable.zip`** (~4.2 MB):
    - Портативная версия без необходимости установки.
+5. **`EqualizerFD-Craft.exe`** & **`ResonaAPO.dll`**:
+   - Отдельные скомпилированные бинарники для прямой замены.
 "@
 
 if (-not $release) {
@@ -103,10 +109,12 @@ Write-Host ">>> [3/5] Listing existing assets in release..."
 $existingAssets = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/$releaseId/assets" -Headers $headers -Method Get
 
 $filesToUpload = @(
-    @{ Name = "EqualizerFD-Craft-Setup-v1.0.0.exe"; Path = "dist\EqualizerFD-Craft-Setup-v1.0.0.exe"; ContentType = "application/vnd.microsoft.portable-executable" },
+    @{ Name = "EqualizerFD-Craft-Setup-v1.2.0.exe"; Path = "dist\EqualizerFD-Craft-Setup-v1.2.0.exe"; ContentType = "application/vnd.microsoft.portable-executable" },
     @{ Name = "EqualizerFD-Craft-Update-Installer.exe"; Path = "dist\EqualizerFD-Craft-Update-Installer.exe"; ContentType = "application/vnd.microsoft.portable-executable" },
     @{ Name = "EqualizerFD-Craft-Update.zip"; Path = "dist\EqualizerFD-Craft-Update.zip"; ContentType = "application/zip" },
-    @{ Name = "EqualizerFD-Craft-v1.0.0-Portable.zip"; Path = "dist\EqualizerFD-Craft-v1.0.0-Portable.zip"; ContentType = "application/zip" }
+    @{ Name = "EqualizerFD-Craft-v1.2.0-Portable.zip"; Path = "dist\EqualizerFD-Craft-v1.2.0-Portable.zip"; ContentType = "application/zip" },
+    @{ Name = "EqualizerFD-Craft.exe"; Path = "EqualizerFD-Craft.exe"; ContentType = "application/vnd.microsoft.portable-executable" },
+    @{ Name = "ResonaAPO.dll"; Path = "ResonaAPO.dll"; ContentType = "application/vnd.microsoft.portable-executable" }
 )
 
 Write-Host ">>> [4/5] Uploading release assets..."

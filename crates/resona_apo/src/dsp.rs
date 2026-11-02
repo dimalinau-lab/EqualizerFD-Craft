@@ -103,6 +103,16 @@ impl BiquadState {
                 let a2 = 1.0 - alpha;
                 (b0, b1, b2, a0, a1, a2)
             }
+            // Band Pass (constant 0 dB peak gain)
+            6 => {
+                let b0 = alpha;
+                let b1 = 0.0;
+                let b2 = -alpha;
+                let a0 = 1.0 + alpha;
+                let a1 = -2.0 * cs;
+                let a2 = 1.0 - alpha;
+                (b0, b1, b2, a0, a1, a2)
+            }
             _ => (1.0, 0.0, 0.0, 1.0, 0.0, 0.0),
         };
 
@@ -120,6 +130,8 @@ pub struct ChannelDsp {
     geq_filters: [BiquadState; 15],
     active_filters_count: usize,
     preamp_linear: f32,
+    pub lowcut_filter: BiquadState,
+    pub expander_env: f32,
     pub rc505_effects: Vec<(crate::boss_rc505::BossEffectKind, crate::boss_rc505::BossEffectState)>,
 }
 
@@ -223,15 +235,11 @@ impl RnNoiseProcessor {
                 ch_data.in_fifo.drain(0..480);
             }
 
-            // Cap out_fifo to prevent unbounded latency drift
-            if ch_data.out_fifo.len() > 960 {
-                let excess = ch_data.out_fifo.len() - 960;
-                ch_data.out_fifo.drain(0..excess);
-            }
-
             for frame in 0..total_frames {
                 if let Some(val) = ch_data.out_fifo.pop_front() {
                     samples[frame * ch_cnt + c] = val;
+                } else {
+                    samples[frame * ch_cnt + c] = 0.0;
                 }
             }
         }
@@ -254,6 +262,8 @@ pub struct ResonaDspEngine {
     pub vst_plugins: Vec<VstPluginInstance>,
     pub rnnoise: RnNoiseProcessor,
     pub spectrum_bins: [f32; 32],
+    pub vad_hold_samples: usize,
+    pub gate_gain_smooth: f32,
 }
 
 impl ResonaDspEngine {
@@ -264,11 +274,15 @@ impl ResonaDspEngine {
             for (i, &f) in ISO_FREQUENCIES_15.iter().enumerate() {
                 geq[i].calculate(0, f, 0.0, 1.4142, sample_rate);
             }
+            let mut lowcut = BiquadState::default();
+            lowcut.calculate(4, 80.0, 0.0, 0.7071, sample_rate); // High Pass 80 Hz Low-Cut
             ch_vec.push(ChannelDsp {
                 filters: [BiquadFilterSlot::default(); 16],
                 geq_filters: geq,
                 active_filters_count: 0,
                 preamp_linear: 1.0,
+                lowcut_filter: lowcut,
+                expander_env: 0.0,
                 rc505_effects: Vec::new(),
             });
         }
@@ -280,6 +294,8 @@ impl ResonaDspEngine {
             vst_plugins: Vec::new(),
             rnnoise: RnNoiseProcessor::new(num_channels),
             spectrum_bins: [0.0; 32],
+            vad_hold_samples: 0,
+            gate_gain_smooth: 1.0,
         }
     }
 
@@ -478,42 +494,94 @@ impl ResonaDspEngine {
 
         let total_frames = samples.len() / ch_cnt;
 
-        // Stage 0: AI Neural Noise Suppression (RNNoise)
-        self.rnnoise.process_interleaved(samples, ch_cnt);
-
-        // Stage 1: Preamp, Biquad Filters, Graphic EQ, Boss RC-505
+        // Stage 0: True raw mic peak measurement + 80 Hz Low-Cut + Preamp
+        // Normalizes quiet microphone signal to studio operating level (-18 dBFS)
+        // so RNNoise's VAD operates with high speech confidence and never adapts to speech during monologues.
         for frame in 0..total_frames {
             for c in 0..ch_cnt {
                 let idx = frame * ch_cnt + c;
-                let input = samples[idx];
-                in_peak_sq = in_peak_sq.max(input * input);
+                let raw_in = samples[idx];
+                in_peak_sq = in_peak_sq.max(raw_in * raw_in);
 
                 let ch = &mut self.channels[c];
+                let cleaned = ch.lowcut_filter.process(raw_in);
+                samples[idx] = cleaned * ch.preamp_linear;
+            }
+        }
 
-                // 1. Preamp
-                let mut s = input * ch.preamp_linear;
+        // Stage 1: AI Neural Noise Suppression (RNNoise)
+        self.rnnoise.process_interleaved(samples, ch_cnt);
 
-                // 2. Parametric Filters
+        // Stage 2: Studio Neural VAD + Transient Killer Gate
+        // RNNoise's speech_prob distinguishes vocal formants from mechanical keyboard clatter and mouse clicks.
+        // Pauses between speech are attenuated to -80 dB studio silence, preventing amplified room noise and typing leaks.
+        let dt = 1.0 / self.sample_rate;
+        let speech_p = self.rnnoise.speech_prob;
+        let is_speech = speech_p >= 0.35;
+        let hold_frames = (self.sample_rate * 0.250) as usize; // 250ms hold prevents consonant/word clipping
+
+        if is_speech {
+            self.vad_hold_samples = hold_frames;
+        }
+
+        let gate_att_coef = (-dt / 0.002).exp(); // 2ms attack: instant transparent vocal opening
+        let gate_rel_coef = (-dt / 0.045).exp(); // 45ms release: natural organic fade to silence
+
+        // Stage 3: Parametric EQ, Graphic EQ, Boss RC-505 Mk2, Soft Limiter
+        for frame in 0..total_frames {
+            if self.vad_hold_samples > 0 && !is_speech {
+                self.vad_hold_samples -= 1;
+            }
+
+            let target_gain = if !self.rnnoise.enabled {
+                1.0f32
+            } else if is_speech || self.vad_hold_samples > 0 {
+                1.0f32
+            } else {
+                0.0001f32 // -80 dB complete black silence in pauses
+            };
+
+            let coef = if target_gain > self.gate_gain_smooth {
+                gate_att_coef
+            } else {
+                gate_rel_coef
+            };
+            self.gate_gain_smooth = target_gain + coef * (self.gate_gain_smooth - target_gain);
+            let current_gain = self.gate_gain_smooth;
+
+            for c in 0..ch_cnt {
+                let idx = frame * ch_cnt + c;
+                let s = samples[idx];
+                let ch = &mut self.channels[c];
+
+                let mut out_s = s * current_gain;
+
+                // Parametric Filters
                 for f_idx in 0..ch.active_filters_count {
                     if ch.filters[f_idx].enabled {
-                        s = ch.filters[f_idx].state.process(s);
+                        out_s = ch.filters[f_idx].state.process(out_s);
                     }
                 }
 
-                // 3. Graphic EQ
+                // Graphic EQ
                 for g_idx in 0..15 {
-                    s = ch.geq_filters[g_idx].process(s);
+                    out_s = ch.geq_filters[g_idx].process(out_s);
                 }
 
-                // 4. Boss RC-505 Mk2 Real-Time Effects
+                // Boss RC-505 Mk2 Real-Time Effects (PitchShift, AutoPitch, Robot, Vocoder)
                 for (kind, state) in &mut ch.rc505_effects {
-                    s = crate::boss_rc505::process_boss_effect(kind, state, s, self.sample_rate);
+                    out_s = crate::boss_rc505::process_boss_effect(kind, state, out_s, self.sample_rate);
                 }
 
-                // 5. Soft Limiter (prevent harsh digital wraps)
-                s = s.clamp(-1.0, 1.0);
-
-                samples[idx] = s;
+                // Studio Soft Limiter (smooth rational knee, zero digital clipping or harsh harmonics)
+                let abs_s = out_s.abs();
+                samples[idx] = if abs_s <= 0.75 {
+                    out_s
+                } else {
+                    let sign = out_s.signum();
+                    let excess = abs_s - 0.75;
+                    sign * (0.75 + 0.23 * (excess / (excess + 0.23)))
+                };
             }
         }
 

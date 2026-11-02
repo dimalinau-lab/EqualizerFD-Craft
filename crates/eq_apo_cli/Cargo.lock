@@ -214,7 +214,7 @@ dependencies = [
 
 [[package]]
 name = "eq_apo_core"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -222,7 +222,7 @@ dependencies = [
 
 [[package]]
 name = "eq_apo_device"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "eq_apo_core",
  "resona_apo",
@@ -233,13 +233,14 @@ dependencies = [
 
 [[package]]
 name = "equalizer_fd_craft"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "eq_apo_core",
  "eq_apo_device",
  "resona_apo",
  "serde",
  "serde_json",
+ "socket2",
  "windows",
  "winres",
 ]
@@ -438,7 +439,7 @@ dependencies = [
 
 [[package]]
 name = "resona_apo"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "eq_apo_core",
  "nnnoiseless",
@@ -513,6 +514,16 @@ name = "smallvec"
 version = "1.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
+
+[[package]]
+name = "socket2"
+version = "0.5.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e22376abed350d73dd1cd119b57ffccad95b4e585a7cda43e286245ce23c0678"
+dependencies = [
+ "libc",
+ "windows-sys 0.52.0",
+]
 
 [[package]]
 name = "strength_reduce"
@@ -610,7 +621,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -686,6 +697,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4cd9b125c486025df0eabcb585e62173c6c9eddcec5d117d3b6e8c30e2ee4d10"
 dependencies = [
  "windows-result",
+ "windows-targets",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
+dependencies = [
  "windows-targets",
 ]
 

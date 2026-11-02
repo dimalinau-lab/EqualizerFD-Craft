@@ -1,4 +1,7 @@
-# Build and package Equalizer FD CRAFT v1.0.0
+param (
+    [string]$Version = "1.2.0"
+)
+# Build and package Equalizer FD CRAFT
 $ErrorActionPreference = "Stop"
 
 Write-Host ">>> [1/6] Building release binaries via Cargo..."
@@ -35,8 +38,8 @@ Copy-Item "web" -Destination $stagingUpdate -Recurse
 Compress-Archive -Path "$stagingUpdate\*" -DestinationPath $updateZipPath -CompressionLevel Optimal
 Remove-Item $stagingUpdate -Recurse -Force
 
-Write-Host ">>> [5/6] Packaging EqualizerFD-Craft-v1.0.0-Portable.zip..."
-$portableZipPath = "dist\EqualizerFD-Craft-v1.0.0-Portable.zip"
+Write-Host ">>> [5/6] Packaging EqualizerFD-Craft-v$Version-Portable.zip..."
+$portableZipPath = "dist\EqualizerFD-Craft-v$Version-Portable.zip"
 if (Test-Path $portableZipPath) { Remove-Item $portableZipPath -Force }
 
 $stagingPortable = "target\staging_portable"
@@ -56,4 +59,4 @@ Compress-Archive -Path "$stagingPortable\*" -DestinationPath $portableZipPath -C
 Remove-Item $stagingPortable -Recurse -Force
 
 Write-Host "`n>>> [6/6] Build complete! Artifacts in dist/:"
-Get-Item "dist\EqualizerFD-Craft-Setup-v1.0.0.exe", "dist\EqualizerFD-Craft-Update-Installer.exe", "dist\EqualizerFD-Craft-Update.zip", "dist\EqualizerFD-Craft-v1.0.0-Portable.zip" | Select-Object Name, Length, LastWriteTime | Format-Table
+Get-Item "dist\EqualizerFD-Craft-Setup-v$Version.exe", "dist\EqualizerFD-Craft-Update-Installer.exe", "dist\EqualizerFD-Craft-Update.zip", "dist\EqualizerFD-Craft-v$Version-Portable.zip" | Select-Object Name, Length, LastWriteTime | Format-Table

@@ -1,6 +1,6 @@
 [package]
 name = "equalizer_fd_craft"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 authors = ["Equalizer FD CRAFT Team"]
 
@@ -14,6 +14,7 @@ eq_apo_device = { path = "../eq_apo_device" }
 resona_apo = { path = "../resona_apo" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+socket2 = "0.5"
 windows = { version = "0.58", features = [
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
@@ -27,4 +28,3 @@ windows = { version = "0.58", features = [
 
 [build-dependencies]
 winres = "0.1"
-

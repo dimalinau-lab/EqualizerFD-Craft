@@ -219,7 +219,7 @@ pub fn open_or_focus_editor() {
 }
 
 pub fn launch_desktop_program() {
-    if is_another_instance_running() {
+    if is_another_instance_running() && server::is_server_alive(APP_PORT) {
         if window_manager::focus_existing_window() {
             return;
         }

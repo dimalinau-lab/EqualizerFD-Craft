@@ -245,13 +245,13 @@ const RC505_CATALOG = {
     params: [
       { key: 'pitch', label: 'Тон робота (Root Pitch)', min: -24, max: 24, step: 1, unit: 'st', default: 0 },
       { key: 'formant', label: 'Форманта (Gender / Character)', min: -12, max: 12, step: 1, unit: 'st', default: 0 },
-      { key: 'robotic', label: 'Жесткость квантования (Robot Depth)', min: 0, max: 100, step: 1, unit: '%', default: 85 },
-      { key: 'wet', label: 'Подмес синтеза (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 80 }
+      { key: 'robotic', label: 'Жесткость квантования (Robot Depth)', min: 0, max: 100, step: 1, unit: '%', default: 90 },
+      { key: 'wet', label: 'Подмес синтеза (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 100 }
     ],
     presets: [
-      { name: 'Daft Punk Робот', values: { pitch: -5, formant: -2, robotic: 95, wet: 90 } },
-      { name: 'Электро-вокал', values: { pitch: 0, formant: 2, robotic: 70, wet: 60 } },
-      { name: 'Монстр НЧ', values: { pitch: -12, formant: -6, robotic: 80, wet: 75 } }
+      { name: 'Daft Punk Робот', values: { pitch: -5, formant: -2, robotic: 95, wet: 100 } },
+      { name: 'Электро-вокал', values: { pitch: 0, formant: 2, robotic: 85, wet: 100 } },
+      { name: 'Монстр НЧ', values: { pitch: -12, formant: -6, robotic: 90, wet: 100 } }
     ]
   },
   ringmod: {
@@ -375,19 +375,24 @@ const RC505_CATALOG = {
   pitchshift: {
     title: 'BOSS RC-505 Mk2: Pitch Shift & Harmony',
     category: 'Питч-шифтер и вокальная гармония',
-    desc: 'Аппаратный алгоритм сдвига тона: вокальные гармонии от -12 до +12 полутонов, октавер (Monster Bass / Lead) и тонкий детюн.',
-    howItWorks: 'Двухголовочный гранулярный буфер с перекрестным окном Хэнна для плавного изменения высоты без изменения темпа.',
+    desc: 'Аппаратный алгоритм сдвига тона: вокальные гармонии от -24 до +24 полутонов, октавер (Monster Bass / Lead) и тонкий детюн без утечки оригинального голоса.',
+    howItWorks: 'Двухголовочный гранулярный буфер с перекрестным окном Хэнна для плавного изменения высоты без изменения темпа и без примеси сухого голоса.',
     params: [
-      { key: 'semitones', label: 'Сдвиг тона (Semitones)', min: -12, max: 12, step: 1, unit: 'st', default: 0 },
+      { key: 'semitones', label: 'Сдвиг тона (Semitones)', min: -24, max: 24, step: 1, unit: 'st', default: 0 },
       { key: 'fine', label: 'Тонкая подстройка (Fine Tune)', min: -50, max: 50, step: 1, unit: 'cents', default: 0 },
+      { key: 'formant', label: 'Форманта / Характер (Gender)', min: -12, max: 12, step: 1, unit: 'st', default: 0 },
       { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 100 }
     ],
     presets: [
-      { name: 'Октава вниз (Monster Bass)', values: { semitones: -12, fine: 0, mix: 100 } },
-      { name: 'Октава вверх (Chipmunk / Lead)', values: { semitones: 12, fine: 0, mix: 100 } },
-      { name: 'Терция вверх (Гармония)', values: { semitones: 4, fine: 0, mix: 40 } },
-      { name: 'Квинта вверх (Power Fifth)', values: { semitones: 7, fine: 0, mix: 45 } },
-      { name: 'Детюн-хорус (Detune)', values: { semitones: 0, fine: 15, mix: 50 } }
+      { name: 'Октава вниз (Monster Bass)', values: { semitones: -12, fine: 0, formant: -6, mix: 100 } },
+      { name: 'Суб-бас 2 октавы (-24 st)', values: { semitones: -24, fine: 0, formant: -8, mix: 100 } },
+      { name: 'Глубокий мужской (Deep Male)', values: { semitones: -4, fine: 0, formant: -5, mix: 100 } },
+      { name: 'Женский / Bright (Female Voice)', values: { semitones: 5, fine: 0, formant: 6, mix: 100 } },
+      { name: 'Октава вверх (Chipmunk / Lead)', values: { semitones: 12, fine: 0, formant: 4, mix: 100 } },
+      { name: 'Ультра-лид 2 октавы (+24 st)', values: { semitones: 24, fine: 0, formant: 8, mix: 100 } },
+      { name: 'Терция вверх (Гармония)', values: { semitones: 4, fine: 0, formant: 0, mix: 40 } },
+      { name: 'Квинта вверх (Power Fifth)', values: { semitones: 7, fine: 0, formant: 0, mix: 45 } },
+      { name: 'Детюн-хорус (Detune)', values: { semitones: 0, fine: 15, formant: 0, mix: 50 } }
     ]
   },
   flanger: {
@@ -516,8 +521,8 @@ const RC505_CATALOG = {
     desc: 'Аппаратный алгоритм коррекции высоты тона BOSS RC-505 Mk2: мгновенная подтяжка нот к хроматической гамме, жесткий электро-вокальный квантайз (Hard Tune).',
     howItWorks: 'Автокорреляционное отслеживание основного тона входного сигнала с фазовым синтезом и квантованием к ближайшей ноте с регулируемой скоростью атаки.',
     params: [
-      { key: 'speed', label: 'Скорость подтяжки (Speed)', min: 0, max: 100, step: 1, unit: '%', default: 80 },
-      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 90 }
+      { key: 'speed', label: 'Скорость подтяжки (Speed)', min: 0, max: 100, step: 1, unit: '%', default: 90 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 100 }
     ],
     presets: [
       { name: 'Жесткий Auto-Tune', values: { speed: 95, mix: 100 } },
@@ -875,6 +880,42 @@ const RC505_CATALOG = {
       { name: 'Стандартный микрофон (-45 dB)', values: { threshold: -45, release: 80 } },
       { name: 'Шумная комната (-38 dB)', values: { threshold: -38, release: 50 } },
       { name: 'Тихая студия (-55 dB)', values: { threshold: -55, release: 120 } }
+    ]
+  },
+  deesser: {
+    title: 'Studio De-Esser: Динамический свистящий фильтр',
+    category: 'Вокальная динамика и мастеринг',
+    catGroup: 'vocal',
+    desc: 'Профессиональный студийный де-эссер: мягко и незаметно срезает резкие свистящие и цыкающие согласные (С, З, Ц, Щ) без эффекта шепелявости.',
+    howItWorks: 'Узкополосный полосовой детектор 5.5–8.5 кГц с мгновенной динамической вырезкой пиков сибилянтов.',
+    params: [
+      { key: 'threshold', label: 'Порог сработки (Threshold)', min: -40, max: -6, step: 1, unit: 'dB', default: -24.0 },
+      { key: 'frequency', label: 'Частота сибилянтов (Frequency)', min: 4500, max: 9500, step: 100, unit: 'Hz', default: 6500.0 },
+      { key: 'reduction', label: 'Макс. подавление (Reduction)', min: 3, max: 24, step: 1, unit: 'dB', default: 12.0 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 100 }
+    ],
+    presets: [
+      { name: 'Fifine SC3 S-Cut (Мягкие С)', values: { threshold: -24, frequency: 6500, reduction: 12, mix: 100 } },
+      { name: 'Silk Vocal (Шелковый вокал)', values: { threshold: -28, frequency: 7200, reduction: 14, mix: 100 } },
+      { name: 'Агрессивное удаление цыканья', values: { threshold: -20, frequency: 5800, reduction: 18, mix: 100 } }
+    ]
+  },
+  broadcast: {
+    title: 'Broadcast Multiband Voice: FM Радио и Подкаст',
+    category: 'Вокальная динамика и мастеринг',
+    catGroup: 'vocal',
+    desc: 'Премиальный 3-полосный эфирный процессор: плотный бархатный бас (Proximity Effect), оптический выравниватель речи и воздушный блеск FM-вещания.',
+    howItWorks: 'Кроссовер 240 Гц / 3600 Гц с аналоговой теплой сатурацией низа, компрессором средних частот и экссайтером верха.',
+    params: [
+      { key: 'warmth', label: 'Теплота / Бархат (Warmth)', min: 0, max: 100, step: 1, unit: '%', default: 50.0 },
+      { key: 'presence', label: 'Воздух / Четкость (Presence)', min: 0, max: 100, step: 1, unit: '%', default: 50.0 },
+      { key: 'drive', label: 'Плотность / Компрессия (Leveling)', min: 0, max: 100, step: 1, unit: '%', default: 50.0 },
+      { key: 'mix', label: 'Баланс эффекта (Dry/Wet)', min: 0, max: 100, step: 1, unit: '%', default: 100 }
+    ],
+    presets: [
+      { name: 'FM Radio Host (Диктор радио)', values: { warmth: 60, presence: 55, drive: 50, mix: 100 } },
+      { name: 'Podcast SM7B Warmth', values: { warmth: 75, presence: 40, drive: 45, mix: 100 } },
+      { name: 'Gaming Streamer (Пронзительный стрим)', values: { warmth: 35, presence: 70, drive: 60, mix: 100 } }
     ]
   },
   panningdelay: {
@@ -4778,7 +4819,7 @@ const cancelRc505CatalogBtn = document.getElementById('cancelRc505CatalogBtn');
 
 function getRc505CategoryGroup(id, item) {
   if (item.catGroup) return item.catGroup;
-  if (['vocoder', 'pitchshift', 'autopitch', 'robot', 'harmony', 'transpose', 'guitartobass', 'slowgear'].includes(id)) return 'vocal';
+  if (['vocoder', 'pitchshift', 'autopitch', 'robot', 'harmony', 'transpose', 'guitartobass', 'slowgear', 'deesser', 'broadcast'].includes(id)) return 'vocal';
   if (['slicer', 'vinyl', 'scatter', 'beatrepeat', 'beatshift'].includes(id)) return 'beat';
   if (['ringmod', 'chorus', 'flanger', 'phaser', 'tremolo', 'vibrato', 'rotary', 'autopan'].includes(id)) return 'modulation';
   if (['isolator', 'lofi', 'autowah', 'telephone', 'lpf', 'bpf', 'hpf', 'synth'].includes(id)) return 'filter';

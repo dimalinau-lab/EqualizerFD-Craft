@@ -296,6 +296,28 @@ unsafe extern "system" fn tray_wndproc(
             PostQuitMessage(0);
             LRESULT(0)
         }
+        0x0218 => {
+            // WM_POWERBROADCAST (System power state transitions: Sleep / Hibernation / Resume)
+            let power_event = wparam.0 as u32;
+            match power_event {
+                0x0004 => {
+                    // PBT_APMSUSPEND
+                    println!("[WASAPI Power] Windows entering Sleep/Hibernation (PBT_APMSUSPEND)...");
+                }
+                0x0012 | 0x0007 => {
+                    // PBT_APMRESUMEAUTOMATIC | PBT_APMRESUMESUSPEND
+                    println!("[WASAPI Power] Windows resumed from Sleep/Hibernation! Waiting for USB mic & audio endpoints to settle...");
+                    std::thread::spawn(|| {
+                        // Allow Windows kernel & USB hub 1500ms to re-enumerate endpoints
+                        std::thread::sleep(std::time::Duration::from_millis(1500));
+                        crate::server::invalidate_device_cache();
+                        crate::server::restart_stream_bridge();
+                    });
+                }
+                _ => {}
+            }
+            LRESULT(1)
+        }
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),
     }
 }
@@ -312,6 +334,7 @@ pub fn start_tray_service() {
         Some(std::path::PathBuf::from(r"D:\testik\EqualizerTray.exe")),
     ];
 
+    let mut companion_running = false;
     let my_pid = std::process::id();
     for opt_path in candidate_tray_paths.into_iter().flatten() {
         if opt_path.exists() {
@@ -320,13 +343,14 @@ pub fn start_tray_service() {
                 .spawn()
             {
                 println!("[Tray Service] Started EqualizerTray companion: {:?}", opt_path);
-                return;
+                companion_running = true;
+                break;
             }
         }
     }
 
-    // 2. Fallback to native Win32 message window
-    std::thread::spawn(|| unsafe {
+    // 2. Hidden Win32 message window for system power management (WM_POWERBROADCAST) and fallback tray
+    std::thread::spawn(move || unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         let class_name = w!("EqualizerFDCraftTrayClass");
         let window_name = w!("EqualizerFDCraftTrayWindow");
@@ -369,11 +393,13 @@ pub fn start_tray_service() {
 
         GLOBAL_TRAY_HWND = hwnd;
 
-        // Register tray icon after window is successfully created
-        let ok = add_or_update_tray_icon(hwnd);
-        if !ok {
-            let err = GetLastError();
-            eprintln!("[Native Tray] Shell_NotifyIconW(NIM_ADD) failed with error: {:?}", err);
+        // Register tray icon if companion tray is not active
+        if !companion_running {
+            let ok = add_or_update_tray_icon(hwnd);
+            if !ok {
+                let err = GetLastError();
+                eprintln!("[Native Tray] Shell_NotifyIconW(NIM_ADD) failed with error: {:?}", err);
+            }
         }
 
         let mut msg = MSG::default();

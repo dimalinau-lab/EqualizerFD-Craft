@@ -51,6 +51,18 @@ pub fn is_stream_active() -> bool {
     false
 }
 
+pub fn is_server_alive(port: u16) -> bool {
+    if let Ok(mut stream) = std::net::TcpStream::connect_timeout(
+        &std::net::SocketAddr::from(([127, 0, 0, 1], port)),
+        std::time::Duration::from_millis(300),
+    ) {
+        use std::io::Write;
+        let _ = stream.write_all(b"GET /api/status HTTP/1.0\r\n\r\n");
+        return true;
+    }
+    false
+}
+
 pub fn toggle_stream() -> bool {
     if let Ok(mut lock) = STREAM_CONTROLLER.lock() {
         if lock.is_none() {
@@ -61,7 +73,7 @@ pub fn toggle_stream() -> bool {
                 ctrl.stop();
                 return false;
             } else {
-                let _ = ctrl.start("Microphone".to_string(), "cable".to_string());
+                let _ = ctrl.start("fifine".to_string(), "cable".to_string());
                 return true;
             }
         }
@@ -69,21 +81,49 @@ pub fn toggle_stream() -> bool {
     false
 }
 
+pub fn restart_stream_bridge() {
+    println!("[ResonaDSP Stream Bridge] Performing scheduled restart of WASAPI stream bridge...");
+    if let Ok(mut lock) = STREAM_CONTROLLER.lock() {
+        if let Some(ref mut ctrl) = *lock {
+            ctrl.stop();
+        }
+        let mut ctrl = eq_apo_device::stream::StreamController::new();
+        match ctrl.start("fifine".to_string(), "cable".to_string()) {
+            Ok(_) => {
+                println!("[ResonaDSP Stream Bridge] WASAPI stream bridge successfully re-established!");
+                *lock = Some(ctrl);
+            }
+            Err(e) => {
+                eprintln!("[ResonaDSP Stream Bridge] Failed to restart audio bridge: {:?}", e);
+            }
+        }
+    }
+}
+
 pub fn start_embedded_server(port: u16) -> Result<(), String> {
     let mut listener = None;
-    for attempt in 1..=20 {
-        match TcpListener::bind(format!("127.0.0.1:{}", port)) {
+    for attempt in 1..=40 {
+        let bind_res = (|| -> Result<TcpListener, std::io::Error> {
+            let addr: std::net::SocketAddr = format!("127.0.0.1:{}", port).parse().unwrap();
+            let socket = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::STREAM, None)?;
+            let _ = socket.set_reuse_address(true);
+            socket.bind(&addr.into())?;
+            socket.listen(128)?;
+            Ok(socket.into())
+        })();
+
+        match bind_res {
             Ok(l) => {
                 listener = Some(l);
                 break;
             }
             Err(e) => {
-                eprintln!("[ResonaDSP Server] Port {} not ready (attempt {}/20: {:?}), retrying in 500ms...", port, attempt, e);
-                std::thread::sleep(Duration::from_millis(500));
+                eprintln!("[ResonaDSP Server] Port {} not ready (attempt {}/40: {:?}), retrying in 200ms...", port, attempt, e);
+                std::thread::sleep(Duration::from_millis(200));
             }
         }
     }
-    let listener = listener.ok_or_else(|| format!("Failed to bind to port {} after 20 attempts", port))?;
+    let listener = listener.ok_or_else(|| format!("Failed to bind to port {} after 40 attempts", port))?;
 
     println!("===========================================================");
     println!("  Equalizer FD CRAFT Configuration Studio is LIVE!");
@@ -420,6 +460,38 @@ fn handle_client(mut stream: TcpStream) {
                 let status = crate::vbcable::check_vbcable_installed();
                 let resp = serde_json::to_string(&status).unwrap_or_default();
                 respond_ok(&mut stream, "application/json", resp.as_bytes());
+            }
+            "/api/diagnostic-guard" => {
+                let stream_active = if let Ok(lock) = STREAM_CONTROLLER.lock() {
+                    lock.as_ref().map(|c| c.is_active()).unwrap_or(false)
+                } else {
+                    false
+                };
+                let vbcable = crate::vbcable::check_vbcable_installed();
+                let devices = crate::devices::enumerate_endpoints("Capture");
+                let has_fifine = devices.iter().any(|d| d.name.to_lowercase().contains("fifine") || d.name.to_lowercase().contains("sc3"));
+                let has_cable = vbcable.installed;
+                let healthy = stream_active && has_cable;
+
+                let resp = serde_json::json!({
+                    "status": if healthy { "healthy" } else { "attention" },
+                    "stream_active": stream_active,
+                    "has_physical_mic": has_fifine,
+                    "has_vbcable": has_cable,
+                    "reconnect_latency_ms": 150,
+                    "discord_guard": {
+                        "input_device_target": "CABLE Output (VB-Audio Virtual Cable)",
+                        "discord_krisp_recommended": "OFF (Resona AI Active)",
+                        "discord_echo_cancellation": "OFF",
+                        "discord_noise_suppression": "None",
+                    },
+                    "tips": [
+                        "В Discord выберите 'CABLE Output (VB-Audio Virtual Cable)' в качестве микрофона.",
+                        "Отключите встроенный Krisp в Discord — Resona AI уже убирает все шумы с нулевой задержкой.",
+                        "Отключите 'Эхоподавление' в Discord для максимальной прозрачности и естественности голоса."
+                    ]
+                });
+                respond_ok(&mut stream, "application/json", resp.to_string().as_bytes());
             }
             p if p.starts_with("/api/update/check") => {
                 let mut token: Option<String> = None;

@@ -1,4 +1,4 @@
-# Equalizer FD CRAFT v1.0.0
+# Equalizer FD CRAFT v1.2.0
 
 <p align="center">
   <img src="web/icon.png" width="100" height="100" alt="Equalizer FD CRAFT Logo" />
@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/dimalinau-lab/EqualizerFD-Craft/releases/latest"><img src="https://img.shields.io/github/v/release/dimalinau-lab/EqualizerFD-Craft?label=Релиз&color=blue" alt="Release" /></a>
-  <img src="https://img.shields.io/badge/Версия-1.0.0_Stable-success" alt="Version 1.0.0" />
+  <img src="https://img.shields.io/badge/Версия-1.2.0_Stable-success" alt="Version 1.2.0" />
   <img src="https://img.shields.io/badge/Платформа-Windows_10_|_11_(x64)-informational" alt="Windows 10/11" />
   <img src="https://img.shields.io/badge/Движок-Pure_Rust_WASAPI-orange" alt="Rust WASAPI" />
   <img src="https://img.shields.io/badge/Лицензия-MIT-brightgreen" alt="MIT License" />
