@@ -73,11 +73,16 @@ function createDefaultBlocks() {
   ];
 }
 
-// --- VST Plugins Catalog (APO-PLUGINS Suite) ---
+// --- App Version & VST Plugins Catalog (APO-PLUGINS Suite) ---
+let APP_VERSION = '1.3.0';
 let VST_BASE_DIR = 'D:\\\\testik\\\\vst_plugins\\\\';
 fetch('/api/info')
   .then(res => res.json())
   .then(data => {
+    if (data && data.version) {
+      APP_VERSION = data.version;
+      if (typeof syncAppVersionUI === 'function') syncAppVersionUI();
+    }
     if (data && data.vst_dir) {
       VST_BASE_DIR = data.vst_dir;
       const optBundled = document.getElementById('optBundledVst');
@@ -2276,8 +2281,11 @@ function updateSidetoneUI() {
     box.classList.toggle('active', !!window.isSidetoneActive);
   }
   if (devSel && window.activeMonitoredRender) {
-    if ([...devSel.options].some(o => o.value === window.activeMonitoredRender)) {
-      devSel.value = window.activeMonitoredRender;
+    const matched = [...devSel.options].find(o => o.value === window.activeMonitoredRender)
+      || [...devSel.options].find(o => window.activeMonitoredRender !== 'default' && (o.value.toLowerCase().includes(window.activeMonitoredRender.toLowerCase()) || window.activeMonitoredRender.toLowerCase().includes(o.value.toLowerCase())))
+      || [...devSel.options].find(o => window.activeMonitoredRender !== 'default' && o.textContent.toLowerCase().includes(window.activeMonitoredRender.toLowerCase()));
+    if (matched && devSel.value !== matched.value) {
+      devSel.value = matched.value;
     }
   }
   document.querySelectorAll('.cfg-listen-btn').forEach(b => {
@@ -2833,7 +2841,7 @@ function renderBlocks(targetScrollBlockId = null) {
       let ahtml = `
         <div class="plugin-desc-banner rnnoise-desc">
           <div class="rnnoise-desc-header">
-            <span class="rnnoise-title-text">Deep Learning RNNoise (GRU Neural Network)</span>
+            <span class="rnnoise-title-text">Neural AI Audio (DeepFilterNet3 LL • 48 kHz)</span>
             <span class="rnnoise-vad-indicator idle-voice" id="rnnoiseVad_${block.id}">
               <span class="rnnoise-vad-dot"></span> VAD: Ожидание речи
             </span>
@@ -2854,9 +2862,9 @@ function renderBlocks(targetScrollBlockId = null) {
         </div>
         <div class="preset-pills-row" style="margin-top: 8px;">
           <span class="preset-pill-label">${presetsLbl}</span>
-          <button class="pill-btn rnnoise-preset-pill" data-block-id="${block.id}" data-pct="50">50% (Мягкий)</button>
-          <button class="pill-btn rnnoise-preset-pill" data-block-id="${block.id}" data-pct="85">85% (Оптимальный)</button>
-          <button class="pill-btn rnnoise-preset-pill" data-block-id="${block.id}" data-pct="100">100% (Максимальный)</button>
+          <button class="pill-btn rnnoise-preset-pill" data-block-id="${block.id}" data-pct="65">65% (Студийный)</button>
+          <button class="pill-btn rnnoise-preset-pill" data-block-id="${block.id}" data-pct="85">85% (Discord / Krisp)</button>
+          <button class="pill-btn rnnoise-preset-pill" data-block-id="${block.id}" data-pct="100">100% (Максимум)</button>
         </div>
       `;
       content.innerHTML = ahtml;
@@ -4935,6 +4943,7 @@ if (rc505CategoryFilter) {
 
 // --- About Modal ---
 function openAboutModal() {
+  if (typeof syncAppVersionUI === 'function') syncAppVersionUI();
   aboutModal.classList.remove('hidden');
 }
 document.getElementById('closeAboutBtn').addEventListener('click', () => aboutModal.classList.add('hidden'));
@@ -5025,6 +5034,8 @@ const fileFastName = document.getElementById('fileFastName');
 const fileFullName = document.getElementById('fileFullName');
 const updateOptionsBox = document.getElementById('updateOptionsBox');
 
+const updateCurrentVerText = document.getElementById('updateCurrentVerText');
+const aboutVersionText = document.getElementById('aboutVersionText');
 const updateStatusText = document.getElementById('updateStatusText');
 const updateResultBox = document.getElementById('updateResultBox');
 const updateBadgeStatus = document.getElementById('updateBadgeStatus');
@@ -5042,6 +5053,24 @@ let updatePollTimer = null;
 let lastBytesDownloaded = 0;
 let lastSpeedTime = Date.now();
 
+function syncAppVersionUI() {
+  const ver = APP_VERSION || '1.3.0';
+  if (updateCurrentVerText) {
+    updateCurrentVerText.textContent = window.t
+      ? window.t('update.currentVer', { ver }, `Текущая версия: v${ver}`)
+      : `Текущая версия: v${ver}`;
+  }
+  if (aboutVersionText) {
+    aboutVersionText.textContent = window.t
+      ? window.t('about.version', { ver }, `Версия ${ver} (x64) • Studio Audio Engine`)
+      : `Версия ${ver} (x64) • Studio Audio Engine`;
+  }
+  if (fileFullName && (!currentUpdateData || !currentUpdateData.full_install)) {
+    fileFullName.textContent = `EqualizerFD-Craft-Setup-v${ver}.exe`;
+  }
+}
+window.addEventListener('languageChanged', syncAppVersionUI);
+
 function formatBytes(bytes) {
   if (!bytes || bytes <= 0) return '0 B';
   if (bytes < 1024) return bytes + ' B';
@@ -5051,6 +5080,7 @@ function formatBytes(bytes) {
 
 function openUpdateModal() {
   if (!updateModal) return;
+  syncAppVersionUI();
   updateModal.classList.remove('hidden');
   checkUpdates();
 }
@@ -5066,8 +5096,9 @@ async function checkUpdates() {
     const data = await res.json();
     currentUpdateData = data;
 
-    if (updateCurrentVerText && data.current_version) {
-      updateCurrentVerText.textContent = window.t ? window.t('update.currentVer', { ver: data.current_version }, `Текущая версия: v${data.current_version}`) : `Текущая версия: v${data.current_version}`;
+    if (data.current_version) {
+      APP_VERSION = data.current_version;
+      syncAppVersionUI();
     }
     if (updateStatusText) updateStatusText.textContent = data.message || (window.t ? window.t('update.readyToCheck') : 'Проверка завершена');
     if (updateResultBox) updateResultBox.classList.remove('hidden');
@@ -5732,17 +5763,23 @@ async function populateDeviceDropdown() {
 function populateMonitorDevices(devices) {
   const sel = document.getElementById('toolbarMonitorDevice');
   if (!sel || !Array.isArray(devices)) return;
-  const currentVal = sel.value || localStorage.getItem('resona_monitor_device') || 'default';
+  const savedDev = window.activeMonitoredRender || localStorage.getItem('resona_monitor_device');
+  const targetVal = (savedDev && savedDev !== 'default') ? savedDev : ((sel.value && sel.value !== 'default') ? sel.value : 'default');
   const defaultText = window.t ? window.t('toolbar.defaultSpeaker', null, 'Динамики (по умолчанию)') : 'Динамики (по умолчанию)';
   sel.innerHTML = `<option value="default">${defaultText}</option>`;
   devices.filter(d => d.endpoint_type === 'Render').forEach(d => {
     const opt = document.createElement('option');
-    opt.value = d.guid;
+    opt.value = d.guid || d.name;
     opt.textContent = d.name;
     sel.appendChild(opt);
   });
-  if ([...sel.options].some(o => o.value === currentVal)) {
-    sel.value = currentVal;
+  const matched = [...sel.options].find(o => o.value === targetVal)
+    || [...sel.options].find(o => targetVal !== 'default' && o.value.toLowerCase() === targetVal.toLowerCase())
+    || [...sel.options].find(o => targetVal !== 'default' && (o.value.toLowerCase().includes(targetVal.toLowerCase()) || targetVal.toLowerCase().includes(o.value.toLowerCase())))
+    || [...sel.options].find(o => targetVal !== 'default' && (o.textContent.toLowerCase().includes(targetVal.toLowerCase()) || targetVal.toLowerCase().includes(o.textContent.toLowerCase())));
+  if (matched) {
+    sel.value = matched.value;
+    window.activeMonitoredRender = matched.value;
   }
 }
 
@@ -5751,6 +5788,7 @@ async function initApp() {
   if (window.I18N && window.I18N.readyPromise) {
     try { await window.I18N.readyPromise; } catch (_) {}
   }
+  syncAppVersionUI();
   renderTabs();
   resizeAnalysisCanvas();
 
@@ -5868,14 +5906,22 @@ async function checkStreamStatus() {
 
       if (liveData.rnnoise_enabled) {
         const vadProb = Math.round((liveData.speech_prob || 0.0) * 100);
-        const isVoice = (liveData.speech_prob || 0.0) >= 0.45;
+        const isDfn3 = liveData.ai_engine_mode === 1;
+        const engineTag = isDfn3 ? 'DFN3-LL' : 'RNNoise';
+        const snrStr = (isDfn3 && liveData.ai_lsnr_db !== undefined) ? ` | SNR ${liveData.ai_lsnr_db.toFixed(0)}dB` : '';
+        const isVoice = isDfn3 ? ((liveData.ai_lsnr_db ?? -15) >= -3.0) : ((liveData.speech_prob || 0.0) >= 0.45);
+        document.querySelectorAll('.rnnoise-title-text').forEach(el => {
+          el.textContent = isDfn3
+            ? 'Neural AI Audio (DeepFilterNet3 LL • 48 kHz)'
+            : 'Neural AI Audio (RNNoise Fallback)';
+        });
         document.querySelectorAll('.rnnoise-vad-indicator').forEach(el => {
           if (isVoice) {
             el.className = 'rnnoise-vad-indicator active-voice';
-            el.innerHTML = `<span class="rnnoise-vad-dot"></span> VAD: Голос (${vadProb}%)`;
+            el.innerHTML = `<span class="rnnoise-vad-dot"></span> VAD: Голос (${vadProb}%)${snrStr} • ${engineTag}`;
           } else {
             el.className = 'rnnoise-vad-indicator idle-voice';
-            el.innerHTML = `<span class="rnnoise-vad-dot"></span> VAD: Шумоподавление (${vadProb}%)`;
+            el.innerHTML = `<span class="rnnoise-vad-dot"></span> VAD: Тишина (${vadProb}%)${snrStr} • ${engineTag}`;
           }
         });
       } else {
@@ -5927,6 +5973,14 @@ if (toolbarMonitorDevice) {
   toolbarMonitorDevice.addEventListener('change', async (e) => {
     const targetRender = e.target.value;
     try { localStorage.setItem('resona_monitor_device', targetRender); } catch (_) {}
+    window.activeMonitoredRender = targetRender;
+    try {
+      await fetch('/api/monitor/set-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ render: targetRender })
+      });
+    } catch (_) {}
     if (window.isSidetoneActive) {
       // Seamlessly switch device on the fly without stopping
       await toggleSidetone(window.activeMonitoredCapture || getActiveMicrophoneGuid(), targetRender, 'start');
@@ -5938,17 +5992,31 @@ const toolbarMonitorVol = document.getElementById('toolbarMonitorVol');
 const cfgMonitorVolume = document.getElementById('cfgMonitorVolume');
 const cfgMonitorVolVal = document.getElementById('cfgMonitorVolVal');
 
+function syncMonitorVolumeUI(val) {
+  const pct = Math.round(val);
+  if (toolbarMonitorVol) {
+    toolbarMonitorVol.value = pct;
+    toolbarMonitorVol.style.setProperty('--vol-pct', Math.max(0, Math.min(100, pct)) + '%');
+    toolbarMonitorVol.title = `Громкость мониторинга: ${pct}%`;
+  }
+  if (cfgMonitorVolume) cfgMonitorVolume.value = pct;
+  if (cfgMonitorVolVal) cfgMonitorVolVal.textContent = pct + '%';
+}
+
 async function setMonitoringVolume(val) {
   const norm = Math.max(0, Math.min(200, val)) / 100;
-  if (toolbarMonitorVol) toolbarMonitorVol.value = val;
-  if (cfgMonitorVolume) cfgMonitorVolume.value = val;
-  if (cfgMonitorVolVal) cfgMonitorVolVal.textContent = Math.round(val) + '%';
+  syncMonitorVolumeUI(val);
   try {
-    await fetch(`/api/monitor/volume?vol=${norm}`, { method: 'POST' });
+    await fetch(`/api/monitor/volume?vol=${norm}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ volume: norm, vol: norm })
+    });
   } catch (_) {}
 }
 
 if (toolbarMonitorVol) {
+  syncMonitorVolumeUI(Number(toolbarMonitorVol.value || 80));
   toolbarMonitorVol.addEventListener('input', (e) => {
     setMonitoringVolume(Number(e.target.value));
   });
@@ -5968,11 +6036,11 @@ async function checkMonitorStatus() {
       window.isSidetoneActive = !!data.active;
       window.activeMonitoredCapture = data.capture || '';
       window.activeMonitoredRender = data.render || '';
+      if (data.render && data.render !== 'default') {
+        try { localStorage.setItem('resona_monitor_device', data.render); } catch (_) {}
+      }
       if (data.volume !== undefined && !document.activeElement?.matches('#toolbarMonitorVol, #cfgMonitorVolume')) {
-        const pct = Math.round(data.volume * 100);
-        if (toolbarMonitorVol) toolbarMonitorVol.value = pct;
-        if (cfgMonitorVolume) cfgMonitorVolume.value = pct;
-        if (cfgMonitorVolVal) cfgMonitorVolVal.textContent = pct + '%';
+        syncMonitorVolumeUI(data.volume * 100);
       }
       updateSidetoneUI();
     }

@@ -428,6 +428,8 @@ unsafe extern "system" fn rt_apo_process(
                     sm_mut.speech_prob = dsp.rnnoise.speech_prob;
                     sm_mut.rnnoise_enabled = if dsp.rnnoise.enabled { 1 } else { 0 };
                     sm_mut.rnnoise_strength = dsp.rnnoise.strength;
+                    sm_mut.ai_engine_mode = dsp.rnnoise.active_engine;
+                    sm_mut.ai_lsnr_db = dsp.rnnoise.lsnr_db;
                     sm_mut.spectrum_bins = dsp.spectrum_bins;
                     sm_mut.heartbeat = sm_mut.heartbeat.wrapping_add(1);
                 }

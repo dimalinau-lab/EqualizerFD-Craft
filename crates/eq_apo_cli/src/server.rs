@@ -21,6 +21,69 @@ const APPLE_TOUCH_ICON_PNG: &[u8] = include_bytes!("../../../web/apple-touch-ico
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct AppSettings {
+    #[serde(default)]
+    pub monitor_active: bool,
+    #[serde(default)]
+    pub monitor_capture: String,
+    #[serde(default = "default_monitor_render")]
+    pub monitor_render: String,
+    #[serde(default = "default_monitor_vol")]
+    pub monitor_volume: f32,
+}
+
+fn default_monitor_render() -> String {
+    "default".to_string()
+}
+
+fn default_monitor_vol() -> f32 {
+    0.8
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            monitor_active: false,
+            monitor_capture: String::new(),
+            monitor_render: default_monitor_render(),
+            monitor_volume: default_monitor_vol(),
+        }
+    }
+}
+
+pub fn get_settings_path() -> std::path::PathBuf {
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        let dir = std::path::PathBuf::from(local).join("EqualizerFDCraft");
+        let _ = std::fs::create_dir_all(&dir);
+        return dir.join("settings.json");
+    }
+    std::path::PathBuf::from("settings.json")
+}
+
+pub fn load_app_settings() -> AppSettings {
+    let p = get_settings_path();
+    if let Ok(txt) = std::fs::read_to_string(&p) {
+        if let Ok(s) = serde_json::from_str::<AppSettings>(&txt) {
+            return s;
+        }
+    }
+    if let Ok(txt) = std::fs::read_to_string("settings.json") {
+        if let Ok(s) = serde_json::from_str::<AppSettings>(&txt) {
+            return s;
+        }
+    }
+    AppSettings::default()
+}
+
+pub fn save_app_settings(s: &AppSettings) {
+    let p = get_settings_path();
+    if let Ok(txt) = serde_json::to_string_pretty(s) {
+        let _ = std::fs::write(&p, &txt);
+        let _ = std::fs::write("settings.json", &txt);
+    }
+}
+
 static CACHED_DEVICES: Mutex<Option<(Instant, String)>> = Mutex::new(None);
 pub static STREAM_CONTROLLER: Mutex<Option<eq_apo_device::stream::StreamController>> = Mutex::new(None);
 pub static MONITOR_CONTROLLER: Mutex<Option<eq_apo_device::stream::StreamController>> = Mutex::new(None);
@@ -141,7 +204,7 @@ pub fn start_embedded_server(port: u16) -> Result<(), String> {
     // Auto-start live WASAPI stream bridge to Virtual Cable
     thread::spawn(|| {
         thread::sleep(Duration::from_millis(500));
-        let mut ctrl = eq_apo_device::stream::StreamController::new();
+        let mut ctrl = eq_apo_device::stream::StreamController::new_primary();
         match ctrl.start("fifine".to_string(), "cable".to_string()) {
             Ok(_) => {
                 println!("[ResonaDSP Stream Bridge] Real-time audio bridge (fifine SC3 -> VB-Audio Cable) is ACTIVE!");
@@ -154,6 +217,62 @@ pub fn start_embedded_server(port: u16) -> Result<(), String> {
             }
         }
     });
+
+    // Auto-restore saved headphone direct monitoring (sidetone)
+    let saved_settings = load_app_settings();
+    if let Ok(mut t_lock) = MONITOR_TARGET.lock() {
+        *t_lock = (saved_settings.monitor_capture.clone(), saved_settings.monitor_render.clone());
+    }
+    if saved_settings.monitor_active && !saved_settings.monitor_render.is_empty() {
+        let mut cap = saved_settings.monitor_capture.clone();
+        if cap.is_empty() {
+            for path in &[r"d:\testik\config.txt", r"C:\Program Files\EqualizerAPO\config\config.txt", "config.txt"] {
+                if let Ok(cfg_txt) = std::fs::read_to_string(path) {
+                    for line in cfg_txt.lines() {
+                        let trimmed = line.trim();
+                        if trimmed.starts_with("Device:") {
+                            if let Some(open) = trimmed.find('{') {
+                                if let Some(close) = trimmed.find('}') {
+                                    if close > open {
+                                        cap = trimmed[open..=close].to_string();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if !cap.is_empty() {
+                        break;
+                    }
+                }
+            }
+        }
+        if cap.is_empty() {
+            cap = "fifine".to_string();
+        }
+        let ren = saved_settings.monitor_render.clone();
+        let vol = saved_settings.monitor_volume;
+
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(800));
+            let mut ctrl = eq_apo_device::stream::StreamController::new();
+            ctrl.set_volume(vol);
+            match ctrl.start(cap.clone(), ren.clone()) {
+                Ok(_) => {
+                    println!("[ResonaDSP Monitor] Restored active direct monitoring ({} -> {}) at volume {:.0}%!", cap, ren, vol * 100.0);
+                    if let Ok(mut lock) = MONITOR_CONTROLLER.lock() {
+                        *lock = Some(ctrl);
+                    }
+                    if let Ok(mut t_lock) = MONITOR_TARGET.lock() {
+                        *t_lock = (cap, ren);
+                    }
+                }
+                Err(e) => {
+                    println!("[ResonaDSP Monitor] Direct monitor auto-restore deferred: {:?}", e);
+                }
+            }
+        });
+    }
 
     thread::spawn(move || {
         for stream in listener.incoming() {
@@ -404,6 +523,8 @@ fn handle_client(mut stream: TcpStream) {
                     "speech_prob": 0.0,
                     "rnnoise_enabled": false,
                     "rnnoise_strength": 1.0,
+                    "ai_engine_mode": 0,
+                    "ai_lsnr_db": -15.0,
                     "spectrum": vec![0.0f32; 32],
                 });
 
@@ -421,6 +542,8 @@ fn handle_client(mut stream: TcpStream) {
                             "speech_prob": sm.speech_prob,
                             "rnnoise_enabled": sm.rnnoise_enabled != 0,
                             "rnnoise_strength": sm.rnnoise_strength,
+                            "ai_engine_mode": sm.ai_engine_mode,
+                            "ai_lsnr_db": sm.ai_lsnr_db,
                             "spectrum": &sm.spectrum_bins[..],
                         });
                     }
@@ -444,11 +567,18 @@ fn handle_client(mut stream: TcpStream) {
             }
             "/api/monitor/status" => {
                 let is_active = is_monitor_active();
+                let settings = load_app_settings();
                 let (cap, ren) = MONITOR_TARGET.lock().map(|t| t.clone()).unwrap_or_default();
-                let vol = MONITOR_CONTROLLER.lock().ok().and_then(|l| l.as_ref().map(|c| c.get_volume())).unwrap_or(1.0);
+                let chosen_cap = if !cap.is_empty() { cap } else { settings.monitor_capture };
+                let chosen_ren = if !ren.is_empty() { ren } else if !settings.monitor_render.is_empty() { settings.monitor_render } else { "default".to_string() };
+                let vol = MONITOR_CONTROLLER.lock().ok().and_then(|l| l.as_ref().map(|c| c.get_volume())).unwrap_or(settings.monitor_volume);
                 let resp = format!(
-                    "{{\"active\":{},\"capture\":{:?},\"render\":{:?},\"volume\":{}}}",
-                    is_active, cap, ren, vol
+                    "{{\"status\":\"{}\",\"active\":{},\"capture\":{:?},\"render\":{:?},\"volume\":{:.3}}}",
+                    if is_active { "started" } else { "stopped" },
+                    is_active,
+                    chosen_cap,
+                    chosen_ren,
+                    vol
                 );
                 respond_ok(&mut stream, "application/json", resp.as_bytes());
             }
@@ -690,7 +820,7 @@ fn handle_client(mut stream: TcpStream) {
 
                 if let Ok(mut lock) = STREAM_CONTROLLER.lock() {
                     if lock.is_none() {
-                        *lock = Some(eq_apo_device::stream::StreamController::new());
+                        *lock = Some(eq_apo_device::stream::StreamController::new_primary());
                     }
                     if let Some(ref mut ctrl) = *lock {
                         let _ = ctrl.start(cap, ren);
@@ -717,7 +847,7 @@ fn handle_client(mut stream: TcpStream) {
                             is_active = true;
                         }
                     } else {
-                        let mut new_ctrl = eq_apo_device::stream::StreamController::new();
+                        let mut new_ctrl = eq_apo_device::stream::StreamController::new_primary();
                         let _ = new_ctrl.start("Microphone".to_string(), "cable".to_string());
                         is_active = true;
                         *lock = Some(new_ctrl);
@@ -748,9 +878,17 @@ fn handle_client(mut stream: TcpStream) {
                         *lock = Some(eq_apo_device::stream::StreamController::new());
                     }
                     if let Some(ref mut ctrl) = *lock {
+                        let settings = load_app_settings();
+                        ctrl.set_volume(settings.monitor_volume);
                         let _ = ctrl.start(cap.clone(), ren.clone());
                     }
                 }
+                let mut settings = load_app_settings();
+                settings.monitor_active = true;
+                settings.monitor_capture = cap.clone();
+                settings.monitor_render = ren.clone();
+                save_app_settings(&settings);
+
                 respond_ok(&mut stream, "application/json", b"{\"status\":\"started\",\"active\":true}");
             }
             "/api/monitor/stop" => {
@@ -760,9 +898,27 @@ fn handle_client(mut stream: TcpStream) {
                     }
                 }
                 if let Ok(mut t_lock) = MONITOR_TARGET.lock() {
-                    *t_lock = (String::new(), String::new());
+                    t_lock.0 = String::new();
                 }
+                let mut settings = load_app_settings();
+                settings.monitor_active = false;
+                save_app_settings(&settings);
+
                 respond_ok(&mut stream, "application/json", b"{\"status\":\"stopped\",\"active\":false}");
+            }
+            "/api/monitor/set-device" => {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body_str) {
+                    if let Some(r) = val.get("render").and_then(|s| s.as_str()) {
+                        let trimmed = r.trim().to_string();
+                        let mut settings = load_app_settings();
+                        settings.monitor_render = trimmed.clone();
+                        save_app_settings(&settings);
+                        if let Ok(mut t_lock) = MONITOR_TARGET.lock() {
+                            t_lock.1 = trimmed;
+                        }
+                    }
+                }
+                respond_ok(&mut stream, "application/json", b"{\"success\":true}");
             }
             "/api/monitor/toggle" => {
                 let mut cap = String::new();
@@ -841,15 +997,27 @@ fn handle_client(mut stream: TcpStream) {
                             ctrl.stop();
                         }
                         if let Ok(mut t_lock) = MONITOR_TARGET.lock() {
-                            *t_lock = (String::new(), String::new());
+                            t_lock.0 = String::new();
                         }
+                        let mut settings = load_app_settings();
+                        settings.monitor_active = false;
+                        if !ren.is_empty() {
+                            settings.monitor_render = ren.clone();
+                        }
+                        save_app_settings(&settings);
                     } else {
                         if lock.is_none() {
                             *lock = Some(eq_apo_device::stream::StreamController::new());
                         }
                         if let Some(ref mut ctrl) = *lock {
+                            let mut settings = load_app_settings();
+                            ctrl.set_volume(settings.monitor_volume);
                             let _ = ctrl.start(cap.clone(), ren.clone());
                             is_active = true;
+                            settings.monitor_active = true;
+                            settings.monitor_capture = cap.clone();
+                            settings.monitor_render = ren.clone();
+                            save_app_settings(&settings);
                         }
                         if let Ok(mut t_lock) = MONITOR_TARGET.lock() {
                             *t_lock = (cap.clone(), ren.clone());
@@ -873,8 +1041,8 @@ fn handle_client(mut stream: TcpStream) {
                         vol = v as f32;
                     }
                 }
-                if let Some(pos) = p.find('?') {
-                    let query = &p[pos + 1..];
+                if let Some(pos) = raw_path.find('?') {
+                    let query = &raw_path[pos + 1..];
                     for param in query.split('&') {
                         if let Some((k, v)) = param.split_once('=') {
                             if k == "vol" || k == "volume" {
@@ -891,16 +1059,27 @@ fn handle_client(mut stream: TcpStream) {
                         ctrl.set_volume(vol);
                     }
                 }
+                let mut settings = load_app_settings();
+                settings.monitor_volume = vol;
+                save_app_settings(&settings);
+
                 let resp = format!("{{\"success\":true,\"volume\":{}}}", vol);
                 respond_ok(&mut stream, "application/json", resp.as_bytes());
             }
             "/api/monitor/status" => {
                 let is_active = is_monitor_active();
+                let settings = load_app_settings();
                 let (cap, ren) = MONITOR_TARGET.lock().map(|t| t.clone()).unwrap_or_default();
-                let vol = MONITOR_CONTROLLER.lock().ok().and_then(|l| l.as_ref().map(|c| c.get_volume())).unwrap_or(1.0);
+                let chosen_cap = if !cap.is_empty() { cap } else { settings.monitor_capture };
+                let chosen_ren = if !ren.is_empty() { ren } else if !settings.monitor_render.is_empty() { settings.monitor_render } else { "default".to_string() };
+                let vol = MONITOR_CONTROLLER.lock().ok().and_then(|l| l.as_ref().map(|c| c.get_volume())).unwrap_or(settings.monitor_volume);
                 let resp = format!(
-                    "{{\"active\":{},\"capture\":{:?},\"render\":{:?},\"volume\":{}}}",
-                    is_active, cap, ren, vol
+                    "{{\"status\":\"{}\",\"active\":{},\"capture\":{:?},\"render\":{:?},\"volume\":{:.3}}}",
+                    if is_active { "started" } else { "stopped" },
+                    is_active,
+                    chosen_cap,
+                    chosen_ren,
+                    vol
                 );
                 respond_ok(&mut stream, "application/json", resp.as_bytes());
             }
@@ -1120,6 +1299,18 @@ use std::os::windows::process::CommandExt;
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub fn check_autostart_status() -> bool {
+    // 1. Check high-priority task in Windows Task Scheduler
+    let task_check = std::process::Command::new("schtasks")
+        .args(["/Query", "/TN", "EqualizerFDCraft_AutoStart"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+    if let Ok(ref o) = task_check {
+        if o.status.success() {
+            return true;
+        }
+    }
+
+    // 2. Check standard HKCU Run registry key as backup
     let out = std::process::Command::new("reg")
         .args(["query", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "EqualizerFDCraft"])
         .creation_flags(CREATE_NO_WINDOW)
@@ -1134,14 +1325,111 @@ pub fn set_autostart_status(enable: bool) -> bool {
     if enable {
         if let Ok(exe) = std::env::current_exe() {
             let exe_str = exe.to_string_lossy().to_string();
-            let res = std::process::Command::new("reg")
+
+            // 1. Disable Windows Explorer Startup Delay (0 ms instead of default 10-30s delay)
+            let _ = std::process::Command::new("reg")
+                .args(["add", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize", "/v", "StartupDelayInMSec", "/t", "REG_DWORD", "/d", "0", "/f"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .status();
+
+            // 2. Register in HKCU Run as backup
+            let _ = std::process::Command::new("reg")
                 .args(["add", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "EqualizerFDCraft", "/t", "REG_SZ", "/d", &format!("\"{}\"", exe_str), "/f"])
                 .creation_flags(CREATE_NO_WINDOW)
                 .status();
-            return res.map(|s| s.success()).unwrap_or(false);
+
+            // 3. Register high-priority instant Task in Task Scheduler (Priority 4, RunLevel Highest, Delay 0s)
+            let xml = format!(r#"<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Equalizer FD CRAFT High-Priority Real-Time Audio Engine AutoStart</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <Delay>PT0S</Delay>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>false</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <DisallowStartOnRemoteAppSession>false</DisallowStartOnRemoteAppSession>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>4</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>{}</Command>
+    </Exec>
+  </Actions>
+</Task>"#, exe_str);
+
+            let temp_dir = std::env::temp_dir();
+            let xml_path = temp_dir.join("EqualizerFDCraft_Task.xml");
+            let utf16: Vec<u16> = xml.encode_utf16().collect();
+            let bytes: Vec<u8> = utf16.into_iter().flat_map(|w| w.to_le_bytes()).collect();
+            let mut file_bytes = vec![0xFF, 0xFE]; // UTF-16 LE BOM
+            file_bytes.extend(bytes);
+
+            if std::fs::write(&xml_path, file_bytes).is_ok() {
+                let direct = std::process::Command::new("schtasks")
+                    .args(["/Create", "/TN", "EqualizerFDCraft_AutoStart", "/XML", &xml_path.to_string_lossy(), "/F"])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .status();
+
+                if direct.map(|s| s.success()).unwrap_or(false) {
+                    return true;
+                }
+
+                // If elevated rights needed, trigger elevated via PowerShell
+                let pw_script = format!(
+                    "Start-Process schtasks.exe -ArgumentList '/Create /TN \"EqualizerFDCraft_AutoStart\" /XML \"{}\" /F' -Verb RunAs -WindowStyle Hidden -Wait",
+                    xml_path.to_string_lossy().replace("'", "''")
+                );
+                let _ = std::process::Command::new("powershell")
+                    .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &pw_script])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .status();
+            }
+
+            return true;
         }
         false
     } else {
+        // Delete Task Scheduler task
+        let direct = std::process::Command::new("schtasks")
+            .args(["/Delete", "/TN", "EqualizerFDCraft_AutoStart", "/F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .status();
+
+        if !direct.map(|s| s.success()).unwrap_or(false) {
+            let _ = std::process::Command::new("powershell")
+                .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", "Start-Process schtasks.exe -ArgumentList '/Delete /TN \"EqualizerFDCraft_AutoStart\" /F' -Verb RunAs -WindowStyle Hidden -Wait"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .status();
+        }
+
+        // Delete HKCU Run key
         let res = std::process::Command::new("reg")
             .args(["delete", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "EqualizerFDCraft", "/f"])
             .creation_flags(CREATE_NO_WINDOW)

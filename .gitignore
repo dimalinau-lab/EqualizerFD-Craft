@@ -38,6 +38,7 @@ vst_plugins_repo/
 # --- User & Local Machine Configurations & Device Backups ---
 # Local configuration files containing personal hardware GUIDs and system paths
 config.txt
+settings.json
 preset_*.txt
 test_*.txt
 *.reg

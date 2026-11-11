@@ -3,7 +3,7 @@
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -14,9 +14,39 @@ use windows::Win32::Foundation::*;
 use windows::Win32::Media::Audio::*;
 use windows::Win32::System::Com::*;
 
+struct SharedCleanTapState {
+    active: bool,
+    epoch: u64,
+    capture_id: String,
+    sample_rate: u32,
+    channels: usize,
+    total_frames_written: u64,
+    samples: VecDeque<f32>,
+}
+
+static SHARED_TAP_HUB: OnceLock<(Mutex<SharedCleanTapState>, Condvar)> = OnceLock::new();
+
+fn get_shared_tap() -> &'static (Mutex<SharedCleanTapState>, Condvar) {
+    SHARED_TAP_HUB.get_or_init(|| {
+        (
+            Mutex::new(SharedCleanTapState {
+                active: false,
+                epoch: 0,
+                capture_id: String::new(),
+                sample_rate: 48000,
+                channels: 2,
+                total_frames_written: 0,
+                samples: VecDeque::with_capacity(16384),
+            }),
+            Condvar::new(),
+        )
+    })
+}
+
 pub struct StreamController {
     is_running: Arc<AtomicBool>,
     volume: Arc<AtomicU32>,
+    is_primary_publisher: bool,
     handle: Option<JoinHandle<()>>,
 }
 
@@ -25,8 +55,22 @@ impl StreamController {
         Self {
             is_running: Arc::new(AtomicBool::new(false)),
             volume: Arc::new(AtomicU32::new(1.0f32.to_bits())),
+            is_primary_publisher: false,
             handle: None,
         }
+    }
+
+    pub fn new_primary() -> Self {
+        Self {
+            is_running: Arc::new(AtomicBool::new(false)),
+            volume: Arc::new(AtomicU32::new(1.0f32.to_bits())),
+            is_primary_publisher: true,
+            handle: None,
+        }
+    }
+
+    pub fn set_primary_publisher(&mut self, primary: bool) {
+        self.is_primary_publisher = primary;
     }
 
     pub fn is_active(&self) -> bool {
@@ -43,6 +87,8 @@ impl StreamController {
 
     pub fn stop(&mut self) {
         self.is_running.store(false, Ordering::SeqCst);
+        let (_, cvar) = get_shared_tap();
+        cvar.notify_all();
         if let Some(h) = self.handle.take() {
             let _ = h.join();
         }
@@ -56,11 +102,23 @@ impl StreamController {
         let is_running = self.is_running.clone();
         is_running.store(true, Ordering::SeqCst);
         let volume = self.volume.clone();
+        let is_primary = self.is_primary_publisher
+            || render_id_or_keyword.to_lowercase().contains("cable");
 
         let handle = thread::Builder::new()
-            .name("resona_wasapi_router".to_string())
+            .name(if is_primary {
+                "resona_wasapi_primary".to_string()
+            } else {
+                "resona_wasapi_monitor".to_string()
+            })
             .spawn(move || {
-                run_streaming_pipeline(capture_id_or_keyword, render_id_or_keyword, is_running, volume);
+                run_streaming_pipeline(
+                    capture_id_or_keyword,
+                    render_id_or_keyword,
+                    is_running,
+                    volume,
+                    is_primary,
+                );
             })
             .map_err(|e| Error::new(E_FAIL, format!("Failed to spawn audio thread: {}", e)))?;
 
@@ -268,6 +326,7 @@ fn run_streaming_pipeline(
     render_kw: String,
     running: Arc<AtomicBool>,
     volume: Arc<AtomicU32>,
+    is_primary: bool,
 ) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
@@ -280,7 +339,7 @@ fn run_streaming_pipeline(
 
         while running.load(Ordering::Relaxed) {
             let session_start = std::time::Instant::now();
-            if let Err(e) = run_pipeline_session(&capture_kw, &render_kw, &running, &volume) {
+            if let Err(e) = run_pipeline_session(&capture_kw, &render_kw, &running, &volume, is_primary) {
                 if !running.load(Ordering::Relaxed) {
                     break;
                 }
@@ -313,6 +372,196 @@ fn run_streaming_pipeline(
         timeEndPeriod(1);
         println!("[WASAPI Stream] Pipeline thread terminated.");
     }
+}
+
+unsafe fn get_device_id_lower(device: &IMMDevice) -> String {
+    if let Ok(id_pwstr) = device.GetId() {
+        let s = id_pwstr.to_string().unwrap_or_default().to_lowercase();
+        CoTaskMemFree(Some(id_pwstr.as_ptr() as _));
+        s
+    } else {
+        String::new()
+    }
+}
+
+unsafe fn write_render_from_queue(
+    ren_client: &IAudioClient,
+    render_service: &IAudioRenderClient,
+    ren_buffer_size: u32,
+    ren_channels: usize,
+    ren_bits: u16,
+    vol: f32,
+    queue: &mut VecDeque<f32>,
+) -> Result<()> {
+    let padding = ren_client.GetCurrentPadding()?;
+    let available_space = (ren_buffer_size.saturating_sub(padding)) as usize;
+    let available_frames = queue.len() / ren_channels;
+    let frames_to_write = available_space.min(available_frames);
+
+    if frames_to_write > 0 {
+        let render_buf_ptr = render_service.GetBuffer(frames_to_write as u32)?;
+        let total_write_samples = frames_to_write * ren_channels;
+        if ren_bits == 32 {
+            let out_slice = std::slice::from_raw_parts_mut(render_buf_ptr as *mut f32, total_write_samples);
+            for item in out_slice.iter_mut() {
+                *item = queue.pop_front().unwrap_or(0.0) * vol;
+            }
+        } else if ren_bits == 16 {
+            let out_slice = std::slice::from_raw_parts_mut(render_buf_ptr as *mut i16, total_write_samples);
+            for item in out_slice.iter_mut() {
+                let s = queue.pop_front().unwrap_or(0.0) * vol;
+                *item = (s * 32767.0).clamp(-32768.0, 32767.0) as i16;
+            }
+        }
+        let _ = render_service.ReleaseBuffer(frames_to_write as u32, 0);
+    } else if padding < 480 {
+        let silence_frames = (480 - padding).min(available_space as u32);
+        if silence_frames > 0 {
+            if let Ok(ptr) = render_service.GetBuffer(silence_frames) {
+                let byte_count = (silence_frames as usize) * ren_channels * (ren_bits as usize / 8);
+                std::ptr::write_bytes(ptr, 0, byte_count);
+                let _ = render_service.ReleaseBuffer(silence_frames, 0);
+            }
+        }
+    }
+    Ok(())
+}
+
+unsafe fn run_tap_subscriber_session(
+    cap_id: &str,
+    ren_device: IMMDevice,
+    running: &Arc<AtomicBool>,
+    volume: &Arc<AtomicU32>,
+    tap_epoch: u64,
+) -> Result<()> {
+    let ren_client: IAudioClient = ren_device.Activate(CLSCTX_ALL, None)?;
+    let ren_format_ptr = ren_client.GetMixFormat()?;
+    let ren_format = *ren_format_ptr;
+    let ren_rate = ren_format.nSamplesPerSec;
+    let ren_channels = ren_format.nChannels as usize;
+    let ren_bits = ren_format.wBitsPerSample;
+
+    if let Err(e) = ren_client.Initialize(
+        AUDCLNT_SHAREMODE_SHARED,
+        0,
+        400_000, // 40ms lightweight headphone render ring
+        0,
+        ren_format_ptr,
+        None,
+    ) {
+        CoTaskMemFree(Some(ren_format_ptr as _));
+        return Err(e);
+    }
+
+    let ren_buffer_size = match ren_client.GetBufferSize() {
+        Ok(sz) => sz,
+        Err(e) => {
+            CoTaskMemFree(Some(ren_format_ptr as _));
+            return Err(e);
+        }
+    };
+    let render_service: IAudioRenderClient = match ren_client.GetService() {
+        Ok(s) => s,
+        Err(e) => {
+            CoTaskMemFree(Some(ren_format_ptr as _));
+            return Err(e);
+        }
+    };
+
+    // Minimal 10ms pre-roll for low-latency live monitoring
+    let init_frames = (ren_buffer_size / 4).min(480);
+    if let Ok(ptr) = render_service.GetBuffer(init_frames) {
+        std::ptr::write_bytes(ptr, 0, (init_frames as usize) * ren_channels * (ren_bits as usize / 8));
+        let _ = render_service.ReleaseBuffer(init_frames, 0);
+    }
+
+    let _ = ren_client.Start();
+    println!(
+        "[WASAPI Monitor] Attached to shared AI-cleaned stream ({}Hz, {}ch) -> zero duplicate AI CPU!",
+        ren_rate, ren_channels
+    );
+
+    let (lock, cvar) = get_shared_tap();
+    let mut read_seq = lock
+        .lock()
+        .map(|t| t.total_frames_written)
+        .unwrap_or(0);
+    let mut local_queue: VecDeque<f32> = VecDeque::with_capacity(4096);
+    let mut last_iter_instant = std::time::Instant::now();
+    let mut res = Ok(());
+
+    while running.load(Ordering::Relaxed) {
+        let now = std::time::Instant::now();
+        if now.duration_since(last_iter_instant).as_millis() > 1500 {
+            res = Err(Error::new(E_FAIL, "System sleep/hibernation resume detected"));
+            break;
+        }
+        last_iter_instant = now;
+
+        let mut still_valid = false;
+        if let Ok(mut guard) = lock.lock() {
+            if guard.active
+                && guard.epoch == tap_epoch
+                && guard.capture_id == cap_id
+                && guard.total_frames_written <= read_seq
+            {
+                let (g, _) = cvar.wait_timeout(guard, Duration::from_millis(12)).unwrap();
+                guard = g;
+            }
+            if guard.active
+                && guard.epoch == tap_epoch
+                && guard.capture_id == cap_id
+                && guard.sample_rate == ren_rate
+                && guard.channels == ren_channels
+            {
+                still_valid = true;
+                let total_stored_frames = (guard.samples.len() / ren_channels) as u64;
+                let earliest_seq = guard.total_frames_written.saturating_sub(total_stored_frames);
+                if read_seq < earliest_seq {
+                    read_seq = earliest_seq;
+                }
+                if guard.total_frames_written > read_seq {
+                    let start_frame = (read_seq - earliest_seq) as usize;
+                    let start_idx = start_frame * ren_channels;
+                    for &s in guard.samples.iter().skip(start_idx) {
+                        local_queue.push_back(s);
+                    }
+                    read_seq = guard.total_frames_written;
+                }
+            }
+        }
+
+        if !still_valid {
+            // Primary publisher stopped or reconfigured: yield cleanly back to standalone capture fallback
+            break;
+        }
+
+        // Clamp monitor latency tightly (< 25 ms)
+        let max_q_frames = 1200;
+        let cur_q_frames = local_queue.len() / ren_channels;
+        if cur_q_frames > max_q_frames {
+            let drop_samples = (cur_q_frames - 480) * ren_channels;
+            local_queue.drain(..drop_samples);
+        }
+
+        let vol = f32::from_bits(volume.load(Ordering::Relaxed));
+        if let Err(e) = write_render_from_queue(
+            &ren_client,
+            &render_service,
+            ren_buffer_size,
+            ren_channels,
+            ren_bits,
+            vol,
+            &mut local_queue,
+        ) {
+            res = Err(e);
+            break;
+        }
+    }
+
+    let _ = ren_client.Stop();
+    CoTaskMemFree(Some(ren_format_ptr as _));
+    res
 }
 
 /// Zero-allocation, continuous phase stream resampler for arbitrary sample rate pairs (e.g. 16k -> 48k).
@@ -395,6 +644,7 @@ fn run_pipeline_session(
     render_kw: &str,
     running: &Arc<AtomicBool>,
     volume: &Arc<AtomicU32>,
+    is_primary: bool,
 ) -> Result<()> {
     unsafe {
         let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
@@ -414,6 +664,22 @@ fn run_pipeline_session(
                 return Err(e);
             }
         };
+
+        let cap_id = get_device_id_lower(&cap_device);
+
+        // If this is a secondary stream (e.g. Headphone Monitor) and the primary stream
+        // is already cleaning the same microphone, reuse its AI-cleaned output with zero extra AI CPU.
+        if !is_primary {
+            let mut sub_epoch = None;
+            if let Ok(tap) = get_shared_tap().0.lock() {
+                if tap.active && tap.capture_id == cap_id && !cap_id.is_empty() {
+                    sub_epoch = Some(tap.epoch);
+                }
+            }
+            if let Some(ep) = sub_epoch {
+                return run_tap_subscriber_session(&cap_id, ren_device, running, volume, ep);
+            }
+        }
 
         let cap_client: IAudioClient = cap_device.Activate(CLSCTX_ALL, None)?;
         let ren_client: IAudioClient = ren_device.Activate(CLSCTX_ALL, None)?;
@@ -441,9 +707,25 @@ fn run_pipeline_session(
             ren_rate, ren_channels, ren_bits
         );
 
-        // 40ms buffer duration for capture, 100ms for virtual cable render buffer
-        let cap_buffer_duration_hns = 400_000;
-        let ren_buffer_duration_hns = 1_000_000;
+        let mut published_epoch = 0u64;
+        if is_primary {
+            let (lock, cvar) = get_shared_tap();
+            if let Ok(mut tap) = lock.lock() {
+                tap.epoch = tap.epoch.wrapping_add(1);
+                tap.active = true;
+                tap.capture_id = cap_id.clone();
+                tap.sample_rate = ren_rate;
+                tap.channels = ren_channels;
+                tap.total_frames_written = 0;
+                tap.samples.clear();
+                published_epoch = tap.epoch;
+                cvar.notify_all();
+            }
+        }
+
+        // 25ms buffer duration for capture (10-20ms effective latency), 60ms/100ms for render stability
+        let cap_buffer_duration_hns = 250_000;
+        let ren_buffer_duration_hns = if is_primary { 800_000 } else { 400_000 };
 
         let capture_event = windows::Win32::System::Threading::CreateEventW(None, false, false, None).ok();
         let event_driven = if let Some(evt) = capture_event {
@@ -489,6 +771,15 @@ fn run_pipeline_session(
             None,
         ) {
             eprintln!("[WASAPI Stream] Render init failed: {:?}", e);
+            if is_primary {
+                let (lock, cvar) = get_shared_tap();
+                if let Ok(mut tap) = lock.lock() {
+                    if tap.epoch == published_epoch {
+                        tap.active = false;
+                        cvar.notify_all();
+                    }
+                }
+            }
             if let Some(evt) = capture_event {
                 let _ = CloseHandle(evt);
             }
@@ -533,8 +824,12 @@ fn run_pipeline_session(
             }
         };
 
-        // Pre-roll initial silence into render client so VB-Cable never starts in starvation
-        let init_frames = (ren_buffer_size / 2).min(2400);
+        // Balanced low-latency pre-roll (20ms VB-Cable, 10ms Monitor) to prevent startup crackles
+        let init_frames = if is_primary {
+            (ren_buffer_size / 3).min(960)
+        } else {
+            (ren_buffer_size / 4).min(480)
+        };
         if let Ok(ptr) = render_service.GetBuffer(init_frames) {
             let byte_count = (init_frames as usize) * ren_channels * (ren_bits as usize / 8);
             std::ptr::write_bytes(ptr, 0, byte_count);
@@ -551,9 +846,6 @@ fn run_pipeline_session(
         } else {
             cap_bits == 32
         };
-
-        let _ = cap_client.Start();
-        let _ = ren_client.Start();
 
         let mut dsp = ResonaDspEngine::new(
             ren_rate as f32,
@@ -576,6 +868,14 @@ fn run_pipeline_session(
                 dsp.sync_from_shared_mem(&*shm.ptr);
             }
         }
+
+        // Preload DeepFilterNet3_ll before starting WASAPI capture so frame 0 runs full AI denoising with zero stalls
+        if dsp.rnnoise.enabled {
+            dsp.rnnoise.preload_sync();
+        }
+
+        let _ = cap_client.Start();
+        let _ = ren_client.Start();
 
         let mut resampler = StreamResampler::new();
         let mut float_buffer: Vec<f32> = Vec::with_capacity(4096);
@@ -731,18 +1031,43 @@ fn run_pipeline_session(
                         frame[1] = out_r;
                     }
 
-                    // Process DSP (Preamp + Filters + GraphicEQ + Boss RC-505 + VST Plugins)
+                    // Process DSP (80Hz HPF -> DeepFilterNet3_ll -> Neural Guard -> Preamp -> EQ -> VST)
                     let (in_pk, out_pk) = dsp.process_interleaved(&mut dsp_stereo_buffer, ren_channels);
 
-                    if let Some(ref shm) = shm_handle {
-                        if !shm.ptr.is_null() {
-                            (*shm.ptr).input_peak_db = in_pk;
-                            (*shm.ptr).output_peak_db = out_pk;
-                            (*shm.ptr).speech_prob = dsp.rnnoise.speech_prob;
-                            (*shm.ptr).rnnoise_enabled = if dsp.rnnoise.enabled { 1 } else { 0 };
-                            (*shm.ptr).rnnoise_strength = dsp.rnnoise.strength;
-                            (*shm.ptr).spectrum_bins = dsp.spectrum_bins;
-                            (*shm.ptr).heartbeat = (*shm.ptr).heartbeat.wrapping_add(1);
+                    if is_primary {
+                        let new_frames = dsp_stereo_buffer.len() / ren_channels;
+                        if new_frames > 0 {
+                            let (lock, cvar) = get_shared_tap();
+                            if let Ok(mut tap) = lock.lock() {
+                                if tap.epoch == published_epoch {
+                                    tap.samples.extend(dsp_stereo_buffer.iter().copied());
+                                    tap.total_frames_written += new_frames as u64;
+                                    let max_samples = 4800 * ren_channels;
+                                    if tap.samples.len() > max_samples {
+                                        let overflow = tap.samples.len() - max_samples;
+                                        tap.samples.drain(..overflow);
+                                    }
+                                    cvar.notify_all();
+                                }
+                            }
+                        }
+                    }
+
+                    // Telemetry only owned by primary publisher (or standalone monitor when primary is off)
+                    let allow_shm = is_primary || !get_shared_tap().0.lock().map(|t| t.active).unwrap_or(false);
+                    if allow_shm {
+                        if let Some(ref shm) = shm_handle {
+                            if !shm.ptr.is_null() {
+                                (*shm.ptr).input_peak_db = in_pk;
+                                (*shm.ptr).output_peak_db = out_pk;
+                                (*shm.ptr).speech_prob = dsp.rnnoise.speech_prob;
+                                (*shm.ptr).rnnoise_enabled = if dsp.rnnoise.enabled { 1 } else { 0 };
+                                (*shm.ptr).rnnoise_strength = dsp.rnnoise.strength;
+                                (*shm.ptr).ai_engine_mode = dsp.rnnoise.active_engine;
+                                (*shm.ptr).ai_lsnr_db = dsp.rnnoise.lsnr_db;
+                                (*shm.ptr).spectrum_bins = dsp.spectrum_bins;
+                                (*shm.ptr).heartbeat = (*shm.ptr).heartbeat.wrapping_add(1);
+                            }
                         }
                     }
 
@@ -763,76 +1088,57 @@ fn run_pipeline_session(
                 break;
             }
 
-            // 2. Feed render client from jitter buffer without overflow/underflow
-            let padding = match ren_client.GetCurrentPadding() {
-                Ok(p) => p,
-                Err(e) => {
-                    error_result = Err(e);
+            // If secondary standalone monitor notices primary stream came online on the same mic, hand off to save CPU
+            if !is_primary {
+                let handoff = get_shared_tap()
+                    .0
+                    .lock()
+                    .map(|t| t.active && t.capture_id == cap_id && t.sample_rate == ren_rate && t.channels == ren_channels)
+                    .unwrap_or(false);
+                if handoff {
+                    println!("[WASAPI Monitor] Primary stream active on same mic; handing off to shared AI tap.");
                     break;
-                }
-            };
-
-            let available_space = (ren_buffer_size.saturating_sub(padding)) as usize;
-            let available_frames = jitter_buffer.len() / ren_channels;
-            let frames_to_write = available_space.min(available_frames);
-
-            if frames_to_write > 0 {
-                match render_service.GetBuffer(frames_to_write as u32) {
-                    Ok(render_buf_ptr) => {
-                        let vol = f32::from_bits(volume.load(Ordering::Relaxed));
-                        let total_write_samples = frames_to_write * ren_channels;
-                        if ren_bits == 32 {
-                            let out_slice = std::slice::from_raw_parts_mut(
-                                render_buf_ptr as *mut f32,
-                                total_write_samples,
-                            );
-                            for item in out_slice.iter_mut() {
-                                *item = jitter_buffer.pop_front().unwrap_or(0.0) * vol;
-                            }
-                        } else if ren_bits == 16 {
-                            let out_slice = std::slice::from_raw_parts_mut(
-                                render_buf_ptr as *mut i16,
-                                total_write_samples,
-                            );
-                            for item in out_slice.iter_mut() {
-                                let s = jitter_buffer.pop_front().unwrap_or(0.0) * vol;
-                                *item = (s * 32767.0).clamp(-32768.0, 32767.0) as i16;
-                            }
-                        }
-
-                        let _ = render_service.ReleaseBuffer(frames_to_write as u32, 0);
-                    }
-                    Err(e) => {
-                        error_result = Err(e);
-                        break;
-                    }
-                }
-            } else if padding < 480 {
-                // Buffer starvation prevention: inject comfort silence so VB-Cable never starves or resets
-                let silence_frames = (480 - padding).min(available_space as u32);
-                if silence_frames > 0 {
-                    if let Ok(ptr) = render_service.GetBuffer(silence_frames) {
-                        let byte_count = (silence_frames as usize) * ren_channels * (ren_bits as usize / 8);
-                        std::ptr::write_bytes(ptr, 0, byte_count);
-                        let _ = render_service.ReleaseBuffer(silence_frames, 0);
-                    }
                 }
             }
 
-            // Non-destructive drift compensation:
-            // NEVER drop frames while user is speaking (speech_prob >= 0.20)!
-            // Only trim excess buffered silence during speech pauses to keep latency optimal (~40-50ms).
-            let speech_active = dsp.rnnoise.speech_prob >= 0.20;
+            // 2. Feed render client from jitter buffer via shared helper
+            let vol = f32::from_bits(volume.load(Ordering::Relaxed));
+            if let Err(e) = write_render_from_queue(
+                &ren_client,
+                &render_service,
+                ren_buffer_size,
+                ren_channels,
+                ren_bits,
+                vol,
+                &mut jitter_buffer,
+            ) {
+                error_result = Err(e);
+                break;
+            }
+
+            // Non-destructive low-latency drift compensation:
+            // NEVER drop frames while speaking (speech_prob >= 0.25 or lsnr >= -3 dB).
+            // Trim excess silence gently during pauses to maintain 10-20ms monitoring responsiveness.
+            let speech_active = dsp.rnnoise.speech_prob >= 0.25 || dsp.rnnoise.lsnr_db >= -3.0;
             let current_frames = jitter_buffer.len() / ren_channels;
-            if !speech_active && current_frames > 2880 {
-                let excess_frames = (current_frames - 2160).min(480);
+            if !speech_active && current_frames > 1440 {
+                let excess_frames = (current_frames - 720).min(480);
                 for _ in 0..(excess_frames * ren_channels) {
                     jitter_buffer.pop_front();
                 }
             } else if current_frames > 12000 {
-                // Hard emergency safeguard: only if speaking continuously for 15+ minutes without a single pause
                 let drain = (current_frames - 9600) * ren_channels;
                 jitter_buffer.drain(..drain);
+            }
+        }
+
+        if is_primary {
+            let (lock, cvar) = get_shared_tap();
+            if let Ok(mut tap) = lock.lock() {
+                if tap.epoch == published_epoch {
+                    tap.active = false;
+                    cvar.notify_all();
+                }
             }
         }
 

@@ -52,6 +52,8 @@ pub struct ResonaSharedMemory {
     pub spectrum_bins: [f32; 32],
     pub config_len: u32,
     pub config_bytes: [u8; 8192],
+    pub ai_engine_mode: u32, // 0 = RNNoise fallback, 1 = DeepFilterNet3 Low-Latency
+    pub ai_lsnr_db: f32,
 }
 
 impl Default for ResonaSharedMemory {
@@ -75,6 +77,8 @@ impl Default for ResonaSharedMemory {
             spectrum_bins: [0.0; 32],
             config_len: 0,
             config_bytes: [0u8; 8192],
+            ai_engine_mode: 0,
+            ai_lsnr_db: -15.0,
         }
     }
 }

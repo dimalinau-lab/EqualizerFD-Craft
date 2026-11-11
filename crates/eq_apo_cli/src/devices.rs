@@ -454,12 +454,18 @@ pub fn enumerate_endpoints(endpoint_type: &str) -> Vec<AudioEndpointInfo> {
 }
 
 pub fn ensure_vst_permissions() {
-    let mut targets = vec![std::path::PathBuf::from(r"D:\testik\vst_plugins")];
+    let mut targets = vec![
+        std::path::PathBuf::from(r"D:\testik\vst_plugins"),
+        std::path::PathBuf::from(r"D:\testik\models"),
+        std::path::PathBuf::from(r"C:\Program Files\EqualizerAPO\models"),
+    ];
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
-            let local_vst = parent.join("vst_plugins");
-            if local_vst != targets[0] {
-                targets.push(local_vst);
+            for sub in ["vst_plugins", "models"] {
+                let p = parent.join(sub);
+                if !targets.contains(&p) {
+                    targets.push(p);
+                }
             }
         }
     }

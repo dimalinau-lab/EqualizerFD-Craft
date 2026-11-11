@@ -141,111 +141,7 @@ struct BiquadFilterSlot {
     enabled: bool,
 }
 
-pub struct RnNoiseChannel {
-    state: Box<nnnoiseless::DenoiseState<'static>>,
-    in_fifo: Vec<f32>,
-    out_fifo: std::collections::VecDeque<f32>,
-}
-
-impl RnNoiseChannel {
-    pub fn new() -> Self {
-        let mut out_fifo = std::collections::VecDeque::with_capacity(1024);
-        for _ in 0..480 {
-            out_fifo.push_back(0.0);
-        }
-        Self {
-            state: nnnoiseless::DenoiseState::new(),
-            in_fifo: Vec::with_capacity(1024),
-            out_fifo,
-        }
-    }
-
-    pub fn reset(&mut self) {
-        self.state = nnnoiseless::DenoiseState::new();
-        self.in_fifo.clear();
-        self.out_fifo.clear();
-        for _ in 0..480 {
-            self.out_fifo.push_back(0.0);
-        }
-    }
-}
-
-pub struct RnNoiseProcessor {
-    pub enabled: bool,
-    pub strength: f32,
-    channels: Vec<RnNoiseChannel>,
-    pub speech_prob: f32,
-    scratch_in: [f32; 480],
-    scratch_out: [f32; 480],
-}
-
-impl RnNoiseProcessor {
-    pub fn new(num_channels: usize) -> Self {
-        let count = num_channels.max(1);
-        let mut chs = Vec::with_capacity(count);
-        for _ in 0..count {
-            chs.push(RnNoiseChannel::new());
-        }
-        Self {
-            enabled: false,
-            strength: 1.0,
-            channels: chs,
-            speech_prob: 0.0,
-            scratch_in: [0.0; 480],
-            scratch_out: [0.0; 480],
-        }
-    }
-
-    pub fn process_interleaved(&mut self, samples: &mut [f32], channels_count: usize) {
-        if !self.enabled || samples.is_empty() {
-            return;
-        }
-
-        let ch_cnt = channels_count.min(self.channels.len());
-        if ch_cnt == 0 {
-            return;
-        }
-
-        let total_frames = samples.len() / ch_cnt;
-        let strength = self.strength.clamp(0.0, 1.0);
-
-        for c in 0..ch_cnt {
-            let ch_data = &mut self.channels[c];
-            for frame in 0..total_frames {
-                ch_data.in_fifo.push(samples[frame * ch_cnt + c]);
-            }
-
-            while ch_data.in_fifo.len() >= 480 {
-                for i in 0..480 {
-                    self.scratch_in[i] = (ch_data.in_fifo[i] * 32768.0).clamp(-32768.0, 32767.0);
-                }
-
-                let prob = ch_data.state.process_frame(&mut self.scratch_out, &self.scratch_in);
-                if c == 0 {
-                    self.speech_prob = prob;
-                }
-
-                for i in 0..480 {
-                    let wet = (self.scratch_out[i] / 32768.0).clamp(-1.0, 1.0);
-                    let dry = ch_data.in_fifo[i];
-                    let mixed = dry * (1.0 - strength) + wet * strength;
-                    ch_data.out_fifo.push_back(mixed);
-                }
-
-                ch_data.in_fifo.drain(0..480);
-            }
-
-            for frame in 0..total_frames {
-                if let Some(val) = ch_data.out_fifo.pop_front() {
-                    samples[frame * ch_cnt + c] = val;
-                } else {
-                    samples[frame * ch_cnt + c] = 0.0;
-                }
-            }
-        }
-    }
-}
-
+use crate::ai_denoise::NeuralDenoiser;
 use crate::vst_host::VstPluginInstance;
 
 pub const RTA_FREQUENCIES_32: [f32; 32] = [
@@ -260,10 +156,8 @@ pub struct ResonaDspEngine {
     sample_rate: f32,
     last_synced_version: u32,
     pub vst_plugins: Vec<VstPluginInstance>,
-    pub rnnoise: RnNoiseProcessor,
+    pub rnnoise: NeuralDenoiser,
     pub spectrum_bins: [f32; 32],
-    pub vad_hold_samples: usize,
-    pub gate_gain_smooth: f32,
 }
 
 impl ResonaDspEngine {
@@ -292,10 +186,8 @@ impl ResonaDspEngine {
             sample_rate,
             last_synced_version: 0,
             vst_plugins: Vec::new(),
-            rnnoise: RnNoiseProcessor::new(num_channels),
+            rnnoise: NeuralDenoiser::new(sample_rate, num_channels),
             spectrum_bins: [0.0; 32],
-            vad_hold_samples: 0,
-            gate_gain_smooth: 1.0,
         }
     }
 
@@ -348,7 +240,8 @@ impl ResonaDspEngine {
     }
 
     pub fn sync_from_config_text(&mut self, text: &str) {
-        if let Ok(config) = eq_apo_core::ConfigFile::parse(text, self.sample_rate as f64) {
+        let expanded = eq_apo_core::ConfigFile::expand_includes(text, 0);
+        if let Ok(config) = eq_apo_core::ConfigFile::parse(&expanded, self.sample_rate as f64) {
             let mut preamp_db = 0.0f32;
             let mut filter_slots = Vec::new();
             let mut geq_bands = [0.0f32; 15];
@@ -465,12 +358,13 @@ impl ResonaDspEngine {
 
             if let Some((rn_enabled, rn_strength)) = rnnoise_opt {
                 if !self.rnnoise.enabled && rn_enabled {
-                    for ch in &mut self.rnnoise.channels {
-                        ch.reset();
-                    }
+                    self.rnnoise.reset();
                 }
                 self.rnnoise.enabled = rn_enabled;
                 self.rnnoise.strength = rn_strength;
+                if rn_enabled {
+                    self.rnnoise.ensure_loader_started();
+                }
             } else {
                 self.rnnoise.enabled = false;
             }
@@ -494,9 +388,8 @@ impl ResonaDspEngine {
 
         let total_frames = samples.len() / ch_cnt;
 
-        // Stage 0: True raw mic peak measurement + 80 Hz Low-Cut + Preamp
-        // Normalizes quiet microphone signal to studio operating level (-18 dBFS)
-        // so RNNoise's VAD operates with high speech confidence and never adapts to speech during monologues.
+        // Stage 0: Raw peak telemetry + 80 Hz Low-Cut rumble filter.
+        // User Preamp runs strictly AFTER AI denoising so room hiss and clicks are never boosted before neural separation.
         for frame in 0..total_frames {
             for c in 0..ch_cnt {
                 let idx = frame * ch_cnt + c;
@@ -504,57 +397,20 @@ impl ResonaDspEngine {
                 in_peak_sq = in_peak_sq.max(raw_in * raw_in);
 
                 let ch = &mut self.channels[c];
-                let cleaned = ch.lowcut_filter.process(raw_in);
-                samples[idx] = cleaned * ch.preamp_linear;
+                samples[idx] = ch.lowcut_filter.process(raw_in);
             }
         }
 
-        // Stage 1: AI Neural Noise Suppression (RNNoise)
+        // Stage 1 & 2: DeepFilterNet3 Low-Latency (48 kHz) + Balanced Neural Speech Guard (fallback RNNoise)
         self.rnnoise.process_interleaved(samples, ch_cnt);
 
-        // Stage 2: Studio Neural VAD + Transient Killer Gate
-        // RNNoise's speech_prob distinguishes vocal formants from mechanical keyboard clatter and mouse clicks.
-        // Pauses between speech are attenuated to -80 dB studio silence, preventing amplified room noise and typing leaks.
-        let dt = 1.0 / self.sample_rate;
-        let speech_p = self.rnnoise.speech_prob;
-        let is_speech = speech_p >= 0.35;
-        let hold_frames = (self.sample_rate * 0.250) as usize; // 250ms hold prevents consonant/word clipping
-
-        if is_speech {
-            self.vad_hold_samples = hold_frames;
-        }
-
-        let gate_att_coef = (-dt / 0.002).exp(); // 2ms attack: instant transparent vocal opening
-        let gate_rel_coef = (-dt / 0.045).exp(); // 45ms release: natural organic fade to silence
-
-        // Stage 3: Parametric EQ, Graphic EQ, Boss RC-505 Mk2, Soft Limiter
+        // Stage 3: User Preamp (clean speech makeup), Parametric EQ, Graphic EQ, Boss RC-505 Mk2, Soft Limiter
         for frame in 0..total_frames {
-            if self.vad_hold_samples > 0 && !is_speech {
-                self.vad_hold_samples -= 1;
-            }
-
-            let target_gain = if !self.rnnoise.enabled {
-                1.0f32
-            } else if is_speech || self.vad_hold_samples > 0 {
-                1.0f32
-            } else {
-                0.0001f32 // -80 dB complete black silence in pauses
-            };
-
-            let coef = if target_gain > self.gate_gain_smooth {
-                gate_att_coef
-            } else {
-                gate_rel_coef
-            };
-            self.gate_gain_smooth = target_gain + coef * (self.gate_gain_smooth - target_gain);
-            let current_gain = self.gate_gain_smooth;
-
             for c in 0..ch_cnt {
                 let idx = frame * ch_cnt + c;
-                let s = samples[idx];
                 let ch = &mut self.channels[c];
 
-                let mut out_s = s * current_gain;
+                let mut out_s = samples[idx] * ch.preamp_linear;
 
                 // Parametric Filters
                 for f_idx in 0..ch.active_filters_count {
@@ -672,30 +528,155 @@ fn resolve_vst_path(lib: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Instant;
 
     #[test]
-    fn test_rnnoise_processor_execution() {
-        let mut proc = RnNoiseProcessor::new(2);
+    fn test_neural_denoiser_fallback_and_df3_ll() {
+        let mut proc = NeuralDenoiser::new(48000.0, 2);
         assert!(!proc.enabled);
 
         proc.enabled = true;
-        proc.strength = 1.0;
+        proc.strength = 0.85;
 
-        // Create 2 channels of 960 frames (20 ms at 48kHz, exactly two 480-sample RNNoise frames)
-        let num_frames = 960;
-        let num_channels = 2;
-        let mut samples = vec![0.0f32; num_frames * num_channels];
-
-        // Fill with low-level random/sine noise
-        for (i, s) in samples.iter_mut().enumerate() {
-            let f = (i / 2) as f32;
-            *s = (f * 0.05).sin() * 0.05;
-        }
-
-        let orig_len = samples.len();
-        proc.process_interleaved(&mut samples, num_channels);
-
-        assert_eq!(samples.len(), orig_len);
+        // 1. Test odd/sub-hop buffer sizes and fallback RNNoise cleanly
+        let mut odd_buf = vec![0.01f32; 256 * 2];
+        proc.process_interleaved(&mut odd_buf, 2);
+        assert_eq!(odd_buf.len(), 512);
         assert!(proc.speech_prob >= 0.0 && proc.speech_prob <= 1.0);
+
+        // 2. Load DeepFilterNet3_ll model synchronously, measure exact algorithmic frame delay & speed
+        let loaded = proc.load_sync_for_test();
+        assert!(loaded, "DeepFilterNet3_ll_onnx.tar.gz must load from d:\\testik\\models\\");
+        assert_eq!(proc.active_engine, crate::ai_denoise::AI_ENGINE_DEEPFILTER3_LL);
+
+        proc.reset();
+
+        // Feed 300 ms (30 hops x 480 frames) of room noise (55 Hz AC hum + broadband room hiss)
+        // plus a loud sharp 5 ms mechanical keyboard tap at step 12.
+        // Using ResonaDspEngine (includes 80 Hz High-Pass Stage 0 just like production!)
+        let mut engine = ResonaDspEngine::new(48000.0, 2);
+        assert!(engine.rnnoise.load_sync_for_test());
+        engine.rnnoise.enabled = true;
+        engine.rnnoise.strength = 0.85;
+
+        let hop = 480;
+        let num_channels = 2;
+        let mut click_buf = vec![0.0f32; hop * num_channels];
+        let mut max_click_out = 0.0f32;
+
+        let t0 = Instant::now();
+        for step in 0..30 {
+            for f in 0..hop {
+                let t = ((step * hop + f) as f32) / 48000.0;
+                // 55 Hz mains AC hum + broadband room/fan hiss (typical noisy mic floor ~-38 dBFS)
+                let hum = (2.0 * std::f32::consts::PI * 55.0 * t).sin() * 0.010;
+                let hash = (((step * hop + f).wrapping_mul(1664525).wrapping_add(1013904223)) >> 16) as f32 / 65536.0 - 0.5;
+                let room_noise = hum + hash * 0.015;
+                // Sharp 5 ms mechanical keyboard tap around step 12 (peak 0.25 = -12 dBFS!)
+                let click = if step == 12 && f < 240 {
+                    let decay = (-((f as f32) / 50.0)).exp();
+                    let hf = (2.0 * std::f32::consts::PI * 5200.0 * t).sin() * 0.7
+                        + (2.0 * std::f32::consts::PI * 2400.0 * t).sin() * 0.3;
+                    hf * decay * 0.25
+                } else {
+                    0.0
+                };
+                let sample = room_noise + click;
+                click_buf[f * 2] = sample;
+                click_buf[f * 2 + 1] = sample;
+            }
+            engine.process_interleaved(&mut click_buf, 2);
+            if step >= 10 {
+                for &s in &click_buf {
+                    max_click_out = max_click_out.max(s.abs());
+                }
+            }
+        }
+        let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+        let avg_hop_ms = elapsed_ms / 30.0;
+        println!(
+            "[DeepFilterNet3_ll Bench] 300ms audio processed in {:.2} ms ({:.3} ms per 10ms hop, RTF={:.3}), max click leak={:.6}",
+            elapsed_ms,
+            avg_hop_ms,
+            avg_hop_ms / 10.0,
+            max_click_out
+        );
+
+        // Mechanical click + room hum must stay aggressively attenuated (< -40 dB)
+        assert!(
+            max_click_out < 0.01,
+            "Room noise + keyboard click leaked too strongly: max_click_out = {}",
+            max_click_out
+        );
+        // Must beat real-time comfortably
+        assert!(avg_hop_ms < 8.5, "Inference too slow for 10ms real-time audio: {:.3} ms", avg_hop_ms);
+
+        // 3. Verify genuine modulated vocal signal + background noise opens gate promptly and preserves speech clarity
+        engine.rnnoise.reset();
+        let mut speech_buf = vec![0.0f32; hop * num_channels];
+        let mut out_speech_rms_acc = 0.0f64;
+        let mut measured_hops = 0usize;
+        let mut first_voice_out_step = None;
+
+        for step in 0..35 {
+            for f in 0..hop {
+                let t = ((step * hop + f) as f32) / 48000.0;
+                // Silence+hum for steps 0..4, dynamic speech onset starting at step 5
+                let voice = if step >= 5 {
+                    let syllabic_env = 0.60 + 0.40 * (2.0 * std::f32::consts::PI * 5.2 * (t - 0.05)).sin();
+                    let f0 = 145.0 + 35.0 * (2.0 * std::f32::consts::PI * 3.8 * t).sin();
+                    let f1 = 480.0 + 180.0 * (2.0 * std::f32::consts::PI * 2.7 * t).sin();
+                    let f2 = 1350.0 + 320.0 * (2.0 * std::f32::consts::PI * 2.1 * t).sin();
+                    let glottal = 0.08 * (2.0 * std::f32::consts::PI * f0 * t).sin()
+                        + 0.06 * (2.0 * std::f32::consts::PI * f1 * t).sin()
+                        + 0.04 * (2.0 * std::f32::consts::PI * f2 * t).sin()
+                        + 0.02 * (2.0 * std::f32::consts::PI * 2450.0 * t).sin();
+                    glottal * syllabic_env
+                } else {
+                    0.0
+                };
+                let fan_noise = (2.0 * std::f32::consts::PI * 55.0 * t).sin() * 0.008;
+                let sample = voice + fan_noise;
+                speech_buf[f * 2] = sample;
+                speech_buf[f * 2 + 1] = sample;
+            }
+            engine.process_interleaved(&mut speech_buf, 2);
+            let step_max = speech_buf.iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+            if first_voice_out_step.is_none() && step >= 5 && step_max > 0.01 {
+                first_voice_out_step = Some(step);
+            }
+            if step >= 6 && step <= 14 {
+                let sq: f64 = speech_buf.iter().step_by(2).map(|&s| (s as f64) * (s as f64)).sum();
+                out_speech_rms_acc += sq / (hop as f64);
+                measured_hops += 1;
+            }
+        }
+        let out_speech_rms = (out_speech_rms_acc / (measured_hops as f64)).sqrt();
+        let onset_lag_ms = first_voice_out_step.map(|s| (s - 5) * 10);
+        println!(
+            "[DeepFilterNet3_ll Bench] Voiced onset lag={:?}ms (from step 5), active_out_rms={:.4}, speech_prob={:.2}, lsnr={:.1} dB",
+            onset_lag_ms, out_speech_rms, engine.rnnoise.speech_prob, engine.rnnoise.lsnr_db
+        );
+        assert!(
+            onset_lag_ms.map_or(false, |ms| ms <= 20),
+            "Speech onset lag exceeded 20 ms target: {:?}",
+            onset_lag_ms
+        );
+        assert!(
+            out_speech_rms > 0.02,
+            "Genuine vocal speech was overly attenuated: out_speech_rms = {}",
+            out_speech_rms
+        );
+    }
+
+    #[test]
+    fn test_sync_from_config_text_expands_include() {
+        let mut engine = ResonaDspEngine::new(48000.0, 2);
+        let cfg = "Include: d:\\testik\\preset_2.txt\n";
+        engine.sync_from_config_text(cfg);
+        assert!(
+            engine.rnnoise.enabled,
+            "Include directive should expand preset_2.txt and enable AI denoising"
+        );
     }
 }

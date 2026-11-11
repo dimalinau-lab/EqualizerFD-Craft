@@ -7,7 +7,7 @@ use std::process::Command;
 use serde::{Deserialize, Serialize};
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
-pub const CURRENT_VERSION: &str = "1.0.0";
+pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const REPO_OWNER: &str = "dimalinau-lab";
 pub const REPO_NAME: &str = "EqualizerFD-Craft";
 
@@ -215,7 +215,7 @@ pub fn check_for_updates(token_opt: Option<&str>) -> UpdateCheckResponse {
     let fast_update = fast_asset.map(|a| UpdateOption {
         mode: "fast".to_string(),
         title: "Быстрое обновление (без повторного скачивания плагинов)".to_string(),
-        description: "Лёгкий инсталлятор обновления (~3 МБ). Быстро обновляет исполняемые файлы Equalizer FD CRAFT, веб-интерфейс и системный трей, сохраняя ваши настройки и установленные плагины.".to_string(),
+        description: "Лёгкий инсталлятор обновления (без VST-плагинов). Обновляет исполняемые файлы Equalizer FD CRAFT, AI-модель DeepFilterNet3 LL, веб-интерфейс и системный трей, сохраняя ваши настройки и установленные плагины.".to_string(),
         asset_name: a.name.clone(),
         download_url: a.browser_download_url.clone(),
         size: a.size,
@@ -225,7 +225,7 @@ pub fn check_for_updates(token_opt: Option<&str>) -> UpdateCheckResponse {
     let full_install = full_asset.map(|a| UpdateOption {
         mode: "full".to_string(),
         title: "Полная переустановка (все VST плагины)".to_string(),
-        description: "Официальный полный инсталлятор Inno Setup (~166 МБ). Включает все 98 профессиональных студийных VST-плагинов (ReaPlugs, Blue Cat, Kuassa), регистрацию компонентов и чистую переустановку.".to_string(),
+        description: "Официальный полный инсталлятор Inno Setup. Включает все 98 профессиональных студийных VST-плагинов (ReaPlugs, Blue Cat, Kuassa), AI-модель DeepFilterNet3 LL, регистрацию компонентов и чистую переустановку.".to_string(),
         asset_name: a.name.clone(),
         download_url: a.browser_download_url.clone(),
         size: a.size,
@@ -542,4 +542,23 @@ fn is_newer_version(current: &str, candidate: &str) -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_current_version_matches_cargo_pkg() {
+        assert_eq!(CURRENT_VERSION, env!("CARGO_PKG_VERSION"));
+        assert_eq!(CURRENT_VERSION, "1.3.0");
+    }
+
+    #[test]
+    fn test_is_newer_version_semver() {
+        assert!(!is_newer_version("1.3.0", "1.2.0"));
+        assert!(!is_newer_version("1.3.0", "1.3.0"));
+        assert!(is_newer_version("1.3.0", "1.3.1"));
+        assert!(is_newer_version("1.0.0", "1.3.0"));
+    }
 }

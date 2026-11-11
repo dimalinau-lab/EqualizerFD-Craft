@@ -1,6 +1,7 @@
 //! ResonaAPO - Native Windows System Audio Processing Object (sAPO)
 //! High-performance real-time audio interceptor and DSP processor
 
+pub mod ai_denoise;
 pub mod boss_rc505;
 pub mod com;
 pub mod dsp;

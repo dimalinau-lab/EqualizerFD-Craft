@@ -20,6 +20,12 @@ const APP_PORT: u16 = 49200; // Dedicated audio application port
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 fn main() {
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::System::Threading::{GetCurrentProcess, SetPriorityClass, HIGH_PRIORITY_CLASS};
+        let _ = SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+    }
+
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 || args[1] == "gui" || args[1] == "editor" {
@@ -227,8 +233,10 @@ pub fn launch_desktop_program() {
         return;
     }
 
-    // 1. Ensure ACL permissions for VST plugins directory (D:\testik\vst_plugins)
-    devices::ensure_vst_permissions();
+    // 1. Ensure ACL permissions for VST plugins in the background (non-blocking)
+    std::thread::spawn(|| {
+        devices::ensure_vst_permissions();
+    });
 
     // 2. Start system tray notification area icon & menu
     tray::start_tray_service();

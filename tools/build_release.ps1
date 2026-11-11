@@ -1,16 +1,27 @@
 param (
-    [string]$Version = "1.2.0"
+    [string]$Version = "1.3.0"
 )
 # Build and package Equalizer FD CRAFT
 $ErrorActionPreference = "Stop"
+
+function Copy-AiModels {
+    param([string]$DestRoot)
+    $modelsDest = Join-Path $DestRoot "models"
+    New-Item -ItemType Directory -Path $modelsDest -Force | Out-Null
+    Copy-Item "models\DeepFilterNet3_ll_onnx.tar.gz" -Destination $modelsDest -Force
+}
 
 Write-Host ">>> [1/6] Building release binaries via Cargo..."
 cargo build --release --manifest-path crates/resona_apo/Cargo.toml
 cargo build --release --manifest-path crates/eq_apo_cli/Cargo.toml
 
 Write-Host ">>> [2/6] Copying release binaries to root directory..."
-Stop-Process -Name "EqualizerFD-Craft", "EqualizerTray" -Force -ErrorAction SilentlyContinue
-Start-Sleep -Milliseconds 500
+$procs = Get-Process -Name "EqualizerFD-Craft", "EqualizerTray" -ErrorAction SilentlyContinue
+if ($procs) {
+    $procs | Stop-Process -Force -ErrorAction SilentlyContinue
+    $procs | Wait-Process -Timeout 5 -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 300
+}
 Copy-Item "crates\eq_apo_cli\target\release\EqualizerFD-Craft.exe" -Destination "EqualizerFD-Craft.exe" -Force
 Copy-Item "crates\resona_apo\target\release\resona_apo.dll" -Destination "ResonaAPO.dll" -Force
 
@@ -19,8 +30,8 @@ if (-not (Test-Path "dist")) {
     New-Item -ItemType Directory -Path "dist" | Out-Null
 }
 
-& "D:\Inno Setup 6\ISCC.exe" "installer.iss"
-& "D:\Inno Setup 6\ISCC.exe" "installer_update.iss"
+& "D:\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$Version" "installer.iss"
+& "D:\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$Version" "installer_update.iss"
 
 Write-Host ">>> [4/6] Packaging EqualizerFD-Craft-Update.zip..."
 $updateZipPath = "dist\EqualizerFD-Craft-Update.zip"
@@ -34,6 +45,7 @@ Copy-Item "EqualizerFD-Craft.ico" -Destination $stagingUpdate
 Copy-Item "EqualizerTray.exe" -Destination $stagingUpdate
 Copy-Item "ResonaAPO.dll" -Destination $stagingUpdate
 Copy-Item "web" -Destination $stagingUpdate -Recurse
+Copy-AiModels -DestRoot $stagingUpdate
 
 Compress-Archive -Path "$stagingUpdate\*" -DestinationPath $updateZipPath -CompressionLevel Optimal
 Remove-Item $stagingUpdate -Recurse -Force
@@ -52,6 +64,7 @@ Copy-Item "EqualizerTray.exe" -Destination $stagingPortable
 Copy-Item "LICENSE" -Destination $stagingPortable
 Copy-Item "README.md" -Destination $stagingPortable
 Copy-Item "ResonaAPO.dll" -Destination $stagingPortable
+Copy-AiModels -DestRoot $stagingPortable
 Copy-Item "tools\vbcable" -Destination "$stagingPortable\vbcable" -Recurse
 Copy-Item "web" -Destination $stagingPortable -Recurse
 
