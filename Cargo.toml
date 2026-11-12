@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/eq_apo_core",
+    "crates/resona_apo",
+    "crates/eq_apo_device",
+    "crates/eq_apo_cli",
+]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+

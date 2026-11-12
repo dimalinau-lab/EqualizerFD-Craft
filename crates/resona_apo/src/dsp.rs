@@ -1,7 +1,7 @@
 //! Real-Time Audio DSP Engine for ResonaAPO
 //! Ultra-low latency, zero allocation per buffer
 
-use crate::shared_mem::{ResonaSharedMemory, SharedFilter};
+use crate::shared_mem::ResonaSharedMemory;
 
 const ISO_FREQUENCIES_15: [f32; 15] = [
     25.0, 40.0, 63.0, 100.0, 160.0, 250.0, 400.0, 630.0,
@@ -126,8 +126,9 @@ impl BiquadState {
 }
 
 pub struct ChannelDsp {
-    filters: [BiquadFilterSlot; 16],
+    filters: [BiquadState; 16],
     geq_filters: [BiquadState; 15],
+    geq_active: bool,
     active_filters_count: usize,
     preamp_linear: f32,
     pub lowcut_filter: BiquadState,
@@ -135,10 +136,51 @@ pub struct ChannelDsp {
     pub rc505_effects: Vec<(crate::boss_rc505::BossEffectKind, crate::boss_rc505::BossEffectState)>,
 }
 
-#[derive(Clone, Copy, Default)]
-struct BiquadFilterSlot {
-    state: BiquadState,
-    enabled: bool,
+#[inline(always)]
+fn soft_limit(out_s: f32) -> f32 {
+    let abs_s = out_s.abs();
+    if abs_s <= 0.75 {
+        out_s
+    } else {
+        let sign = out_s.signum();
+        let excess = abs_s - 0.75;
+        sign * (0.75 + 0.23 * (excess / (excess + 0.23)))
+    }
+}
+
+#[inline]
+fn process_channel_stage3<const GEQ: bool, const BOSS: bool>(
+    ch: &mut ChannelDsp,
+    samples: &mut [f32],
+    channel_offset: usize,
+    stride: usize,
+    sample_rate: f32,
+) -> f32 {
+    let preamp = ch.preamp_linear;
+    let active_filters = &mut ch.filters[..ch.active_filters_count];
+    let mut peak_sq = 0.0f32;
+
+    for s in samples[channel_offset..].iter_mut().step_by(stride) {
+        let mut out_s = *s * preamp;
+        for flt in active_filters.iter_mut() {
+            out_s = flt.process(out_s);
+        }
+        if GEQ {
+            for g in ch.geq_filters.iter_mut() {
+                out_s = g.process(out_s);
+            }
+        }
+        if BOSS {
+            for (kind, state) in &mut ch.rc505_effects {
+                out_s = crate::boss_rc505::process_boss_effect(kind, state, out_s, sample_rate);
+            }
+        }
+        let limited = soft_limit(out_s);
+        *s = limited;
+        peak_sq = peak_sq.max(limited * limited);
+    }
+
+    peak_sq
 }
 
 use crate::ai_denoise::NeuralDenoiser;
@@ -158,6 +200,9 @@ pub struct ResonaDspEngine {
     pub vst_plugins: Vec<VstPluginInstance>,
     pub rnnoise: NeuralDenoiser,
     pub spectrum_bins: [f32; 32],
+    rta_cached_n_samples: usize,
+    rta_coeffs: [f32; 32],
+    rta_mono_buf: [f32; 256],
 }
 
 impl ResonaDspEngine {
@@ -171,8 +216,9 @@ impl ResonaDspEngine {
             let mut lowcut = BiquadState::default();
             lowcut.calculate(4, 80.0, 0.0, 0.7071, sample_rate); // High Pass 80 Hz Low-Cut
             ch_vec.push(ChannelDsp {
-                filters: [BiquadFilterSlot::default(); 16],
+                filters: [BiquadState::default(); 16],
                 geq_filters: geq,
+                geq_active: false,
                 active_filters_count: 0,
                 preamp_linear: 1.0,
                 lowcut_filter: lowcut,
@@ -188,6 +234,9 @@ impl ResonaDspEngine {
             vst_plugins: Vec::new(),
             rnnoise: NeuralDenoiser::new(sample_rate, num_channels),
             spectrum_bins: [0.0; 32],
+            rta_cached_n_samples: 0,
+            rta_coeffs: [0.0; 32],
+            rta_mono_buf: [0.0; 256],
         }
     }
 
@@ -207,34 +256,38 @@ impl ResonaDspEngine {
 
         let preamp_linear = 10.0f32.powf(sm.preamp_gain_db / 20.0);
         let filter_cnt = (sm.filter_count as usize).min(16);
+        let geq_active = sm.geq_bands.iter().any(|&g| g.abs() > 1e-4);
 
         for ch in &mut self.channels {
             ch.preamp_linear = preamp_linear;
-            ch.active_filters_count = filter_cnt;
 
+            let mut packed_cnt = 0usize;
             for i in 0..filter_cnt {
                 let sf = &sm.filters[i];
-                ch.filters[i].enabled = sf.enabled != 0;
-                if ch.filters[i].enabled {
-                    ch.filters[i].state.calculate(
+                if sf.enabled != 0 {
+                    ch.filters[packed_cnt].calculate(
                         sf.filter_type,
                         sf.fc,
                         sf.gain_db,
                         sf.q,
                         self.sample_rate,
                     );
+                    packed_cnt += 1;
                 }
             }
+            ch.active_filters_count = packed_cnt;
+            ch.geq_active = geq_active;
 
-            for i in 0..15 {
-                let gain = sm.geq_bands[i];
-                ch.geq_filters[i].calculate(
-                    0,
-                    ISO_FREQUENCIES_15[i],
-                    gain,
-                    1.4142,
-                    self.sample_rate,
-                );
+            if geq_active {
+                for i in 0..15 {
+                    ch.geq_filters[i].calculate(
+                        0,
+                        ISO_FREQUENCIES_15[i],
+                        sm.geq_bands[i],
+                        1.4142,
+                        self.sample_rate,
+                    );
+                }
             }
         }
     }
@@ -297,19 +350,24 @@ impl ResonaDspEngine {
             }
 
             let preamp_linear = 10.0f32.powf(preamp_db / 20.0);
+            let geq_active = geq_bands.iter().any(|&g| g.abs() > 1e-4);
             for ch in &mut self.channels {
                 ch.preamp_linear = preamp_linear;
-                ch.active_filters_count = filter_slots.len();
 
-                for (i, &(enabled, f_type, fc, gain_db, q)) in filter_slots.iter().enumerate() {
-                    ch.filters[i].enabled = enabled;
+                let mut packed_cnt = 0usize;
+                for &(enabled, f_type, fc, gain_db, q) in &filter_slots {
                     if enabled {
-                        ch.filters[i].state.calculate(f_type, fc, gain_db, q, self.sample_rate);
+                        ch.filters[packed_cnt].calculate(f_type, fc, gain_db, q, self.sample_rate);
+                        packed_cnt += 1;
                     }
                 }
+                ch.active_filters_count = packed_cnt;
+                ch.geq_active = geq_active;
 
-                for i in 0..15 {
-                    ch.geq_filters[i].calculate(0, ISO_FREQUENCIES_15[i], geq_bands[i], 1.4142, self.sample_rate);
+                if geq_active {
+                    for i in 0..15 {
+                        ch.geq_filters[i].calculate(0, ISO_FREQUENCIES_15[i], geq_bands[i], 1.4142, self.sample_rate);
+                    }
                 }
 
                 ch.rc505_effects = boss_effects.clone();
@@ -371,118 +429,117 @@ impl ResonaDspEngine {
         }
     }
 
-    /// Process in-place interleaved float audio buffer
-    /// samples: slice of (frames * channels) floats
-    pub fn process_interleaved(
-        &mut self,
-        samples: &mut [f32],
-        channels_count: usize,
-    ) -> (f32, f32) {
-        let ch_cnt = channels_count.min(self.channels.len());
-        if ch_cnt == 0 || samples.is_empty() {
-            return (-96.0, -96.0);
+    #[inline]
+    fn run_stage0_lowcut(&mut self, samples: &mut [f32], ch_cnt: usize) -> f32 {
+        let mut in_peak_sq = 0.0f32;
+        if ch_cnt == 2 {
+            let mut l_lowcut = self.channels[0].lowcut_filter;
+            let mut r_lowcut = self.channels[1].lowcut_filter;
+            for frame in samples.chunks_exact_mut(2) {
+                let raw_l = frame[0];
+                let raw_r = frame[1];
+                in_peak_sq = in_peak_sq.max(raw_l * raw_l).max(raw_r * raw_r);
+                frame[0] = l_lowcut.process(raw_l);
+                frame[1] = r_lowcut.process(raw_r);
+            }
+            self.channels[0].lowcut_filter = l_lowcut;
+            self.channels[1].lowcut_filter = r_lowcut;
+        } else {
+            for (c, ch) in self.channels[..ch_cnt].iter_mut().enumerate() {
+                let mut lowcut = ch.lowcut_filter;
+                for s in samples[c..].iter_mut().step_by(ch_cnt) {
+                    let raw_in = *s;
+                    in_peak_sq = in_peak_sq.max(raw_in * raw_in);
+                    *s = lowcut.process(raw_in);
+                }
+                ch.lowcut_filter = lowcut;
+            }
+        }
+        in_peak_sq
+    }
+
+    fn run_post_stages_and_rta(&mut self, samples: &mut [f32], ch_cnt: usize, in_peak_sq: f32) -> (f32, f32) {
+        let in_peak_db = if in_peak_sq > 1e-9 { 10.0 * in_peak_sq.log10() } else { -96.0 };
+        let total_frames = samples.len() / ch_cnt;
+        if total_frames == 0 {
+            return (in_peak_db, -96.0);
         }
 
-        let mut in_peak_sq = 0.0f32;
         let mut out_peak_sq = 0.0f32;
 
-        let total_frames = samples.len() / ch_cnt;
-
-        // Stage 0: Raw peak telemetry + 80 Hz Low-Cut rumble filter.
-        // User Preamp runs strictly AFTER AI denoising so room hiss and clicks are never boosted before neural separation.
-        for frame in 0..total_frames {
-            for c in 0..ch_cnt {
-                let idx = frame * ch_cnt + c;
-                let raw_in = samples[idx];
-                in_peak_sq = in_peak_sq.max(raw_in * raw_in);
-
-                let ch = &mut self.channels[c];
-                samples[idx] = ch.lowcut_filter.process(raw_in);
-            }
-        }
-
-        // Stage 1 & 2: DeepFilterNet3 Low-Latency (48 kHz) + Balanced Neural Speech Guard (fallback RNNoise)
-        self.rnnoise.process_interleaved(samples, ch_cnt);
-
-        // Stage 3: User Preamp (clean speech makeup), Parametric EQ, Graphic EQ, Boss RC-505 Mk2, Soft Limiter
-        for frame in 0..total_frames {
-            for c in 0..ch_cnt {
-                let idx = frame * ch_cnt + c;
-                let ch = &mut self.channels[c];
-
-                let mut out_s = samples[idx] * ch.preamp_linear;
-
-                // Parametric Filters
-                for f_idx in 0..ch.active_filters_count {
-                    if ch.filters[f_idx].enabled {
-                        out_s = ch.filters[f_idx].state.process(out_s);
-                    }
-                }
-
-                // Graphic EQ
-                for g_idx in 0..15 {
-                    out_s = ch.geq_filters[g_idx].process(out_s);
-                }
-
-                // Boss RC-505 Mk2 Real-Time Effects (PitchShift, AutoPitch, Robot, Vocoder)
-                for (kind, state) in &mut ch.rc505_effects {
-                    out_s = crate::boss_rc505::process_boss_effect(kind, state, out_s, self.sample_rate);
-                }
-
-                // Studio Soft Limiter (smooth rational knee, zero digital clipping or harsh harmonics)
-                let abs_s = out_s.abs();
-                samples[idx] = if abs_s <= 0.75 {
-                    out_s
-                } else {
-                    let sign = out_s.signum();
-                    let excess = abs_s - 0.75;
-                    sign * (0.75 + 0.23 * (excess / (excess + 0.23)))
-                };
-            }
+        // Stage 3: User Preamp, active Parametric EQ, optional Graphic EQ (bypassed when flat), Boss RC-505, Soft Limiter
+        for (c, ch) in self.channels[..ch_cnt].iter_mut().enumerate() {
+            let has_boss = !ch.rc505_effects.is_empty();
+            let ch_peak = match (ch.geq_active, has_boss) {
+                (false, false) => process_channel_stage3::<false, false>(ch, samples, c, ch_cnt, self.sample_rate),
+                (true, false) => process_channel_stage3::<true, false>(ch, samples, c, ch_cnt, self.sample_rate),
+                (false, true) => process_channel_stage3::<false, true>(ch, samples, c, ch_cnt, self.sample_rate),
+                (true, true) => process_channel_stage3::<true, true>(ch, samples, c, ch_cnt, self.sample_rate),
+            };
+            out_peak_sq = out_peak_sq.max(ch_peak);
         }
 
         // Stage 2: VST 2.4 Plugins Chain (ReaGate, ReaComp, ReaDelay, etc.)
+        let mut any_vst_active = false;
         for vst in &mut self.vst_plugins {
             if vst.enabled {
+                any_vst_active = true;
                 vst.process_interleaved(samples, ch_cnt, total_frames);
             }
         }
-
-        // Measure final output peak across all processed samples
-        for &s in samples.iter() {
-            out_peak_sq = out_peak_sq.max(s * s);
+        if any_vst_active {
+            out_peak_sq = 0.0;
+            for &s in samples.iter() {
+                out_peak_sq = out_peak_sq.max(s * s);
+            }
         }
 
-        let in_peak_db = if in_peak_sq > 1e-9 { 10.0 * in_peak_sq.log10() } else { -96.0 };
         let out_peak_db = if out_peak_sq > 1e-9 { 10.0 * out_peak_sq.log10() } else { -96.0 };
 
-        // 32-Band Logarithmic Audio Spectrum Energy (Goertzel)
+        // 32-Band Logarithmic Audio Spectrum Energy (Goertzel with cached cosines and single mono extraction)
         let step = (total_frames / 256).max(1);
         let n_samples = (total_frames / step).min(256);
         if n_samples >= 16 {
             let n_f32 = n_samples as f32;
+            if self.rta_cached_n_samples != n_samples {
+                for (i, &f_hz) in RTA_FREQUENCIES_32.iter().enumerate() {
+                    let k = (n_f32 * f_hz / self.sample_rate).round();
+                    let omega = 2.0 * std::f32::consts::PI * k / n_f32;
+                    self.rta_coeffs[i] = 2.0 * omega.cos();
+                }
+                self.rta_cached_n_samples = n_samples;
+            }
+
+            if ch_cnt == 1 {
+                for (dst, frame_idx) in self.rta_mono_buf[..n_samples]
+                    .iter_mut()
+                    .zip((0..total_frames).step_by(step))
+                {
+                    *dst = samples[frame_idx];
+                }
+            } else {
+                for (dst, frame_idx) in self.rta_mono_buf[..n_samples]
+                    .iter_mut()
+                    .zip((0..total_frames).step_by(step))
+                {
+                    let base = frame_idx * ch_cnt;
+                    *dst = (samples[base] + samples[base + 1]) * 0.5;
+                }
+            }
+
             let norm_factor = 4.0 / (n_f32 * n_f32);
+            let mono = &self.rta_mono_buf[..n_samples];
             for (i, &f_hz) in RTA_FREQUENCIES_32.iter().enumerate() {
                 if f_hz >= self.sample_rate * 0.49 {
                     self.spectrum_bins[i] = 0.0;
                     continue;
                 }
-                let k = (n_f32 * f_hz / self.sample_rate).round();
-                let omega = 2.0 * std::f32::consts::PI * k / n_f32;
-                let coeff = 2.0 * omega.cos();
+                let coeff = self.rta_coeffs[i];
 
-                let mut s0;
                 let mut s1 = 0.0f32;
                 let mut s2 = 0.0f32;
-
-                for frame_idx in (0..total_frames).step_by(step).take(n_samples) {
-                    let base = frame_idx * ch_cnt;
-                    let mono_sample = if ch_cnt == 1 {
-                        samples[base]
-                    } else {
-                        (samples[base] + samples[base + 1]) * 0.5
-                    };
-                    s0 = mono_sample + coeff * s1 - s2;
+                for &mono_sample in mono {
+                    let s0 = mono_sample + coeff * s1 - s2;
                     s2 = s1;
                     s1 = s0;
                 }
@@ -502,6 +559,40 @@ impl ResonaDspEngine {
         }
 
         (in_peak_db, out_peak_db)
+    }
+
+    /// Process in-place fixed-length interleaved float audio buffer (COM sAPO path).
+    /// samples: slice of (frames * channels) floats
+    pub fn process_interleaved(
+        &mut self,
+        samples: &mut [f32],
+        channels_count: usize,
+    ) -> (f32, f32) {
+        let ch_cnt = channels_count.min(self.channels.len());
+        if ch_cnt == 0 || samples.is_empty() {
+            return (-96.0, -96.0);
+        }
+
+        let in_peak_sq = self.run_stage0_lowcut(samples, ch_cnt);
+        self.rnnoise.process_interleaved(samples, ch_cnt);
+        self.run_post_stages_and_rta(samples, ch_cnt, in_peak_sq)
+    }
+
+    /// Variable-length streaming processor for the WASAPI bridge: avoids zero-padding
+    /// gaps when capture packet sizes do not align to 480-frame AI hops.
+    pub fn process_interleaved_vec(
+        &mut self,
+        samples: &mut Vec<f32>,
+        channels_count: usize,
+    ) -> (f32, f32) {
+        let ch_cnt = channels_count.min(self.channels.len());
+        if ch_cnt == 0 || samples.is_empty() {
+            return (-96.0, -96.0);
+        }
+
+        let in_peak_sq = self.run_stage0_lowcut(samples, ch_cnt);
+        self.rnnoise.process_interleaved_vec(samples, ch_cnt);
+        self.run_post_stages_and_rta(samples, ch_cnt, in_peak_sq)
     }
 }
 
@@ -677,6 +768,60 @@ mod tests {
         assert!(
             engine.rnnoise.enabled,
             "Include directive should expand preset_2.txt and enable AI denoising"
+        );
+    }
+
+    #[test]
+    fn test_streaming_odd_packet_sizes_zero_gaps() {
+        let mut engine = ResonaDspEngine::new(48000.0, 2);
+        assert!(engine.rnnoise.load_sync_for_test());
+        engine.rnnoise.enabled = true;
+        engine.rnnoise.strength = 0.85;
+
+        // Simulate realistic WASAPI/resampled capture packet sizes that do not divide 480
+        let packet_sizes = [448usize, 487, 481, 479, 512, 448, 488, 480, 477, 485, 480, 480, 480, 480, 480];
+        let mut total_in_frames = 0usize;
+        let mut streamed_left: Vec<f32> = Vec::new();
+        let mut phase = 0usize;
+
+        for &pkt_frames in &packet_sizes {
+            total_in_frames += pkt_frames;
+            let mut pkt = vec![0.0f32; pkt_frames * 2];
+            for f in 0..pkt_frames {
+                let t = (phase as f32) / 48000.0;
+                // Continuous multi-formant vocal signal
+                let s = 0.08 * (2.0 * std::f32::consts::PI * 165.0 * t).sin()
+                    + 0.05 * (2.0 * std::f32::consts::PI * 520.0 * t).sin()
+                    + 0.03 * (2.0 * std::f32::consts::PI * 1400.0 * t).sin();
+                pkt[f * 2] = s;
+                pkt[f * 2 + 1] = s;
+                phase += 1;
+            }
+            engine.process_interleaved_vec(&mut pkt, 2);
+            assert_eq!(pkt.len() % (480 * 2), 0, "Output must align strictly to completed hops");
+            for &l in pkt.iter().step_by(2) {
+                streamed_left.push(l);
+            }
+        }
+
+        let expected_frames = (total_in_frames / 480) * 480;
+        assert_eq!(streamed_left.len(), expected_frames);
+
+        // Once gate has opened (after initial 40ms warmup), verify no mid-speech zero-hole runs (>= 4 consecutive zeros)
+        let mut zero_run = 0usize;
+        let mut max_zero_run_after_warmup = 0usize;
+        for &s in streamed_left.iter().skip(1920) {
+            if s.abs() < 1e-6 {
+                zero_run += 1;
+                max_zero_run_after_warmup = max_zero_run_after_warmup.max(zero_run);
+            } else {
+                zero_run = 0;
+            }
+        }
+        assert!(
+            max_zero_run_after_warmup < 4,
+            "Detected zero-hole silence gap in streamed speech: {} samples",
+            max_zero_run_after_warmup
         );
     }
 }

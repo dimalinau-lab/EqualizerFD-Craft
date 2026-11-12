@@ -168,7 +168,6 @@ impl BiquadCoefficients {
 /// Real-time Biquad Filter with Direct Form II Transposed state
 #[derive(Debug, Clone)]
 pub struct BiquadFilter {
-    params: BiquadParams,
     coeffs: BiquadCoefficients,
     s1: f64,
     s2: f64,
@@ -179,22 +178,11 @@ impl BiquadFilter {
     pub fn new(params: BiquadParams) -> Self {
         let coeffs = BiquadCoefficients::compute(&params);
         Self {
-            params,
             coeffs,
             s1: 0.0,
             s2: 0.0,
             is_enabled: true,
         }
-    }
-
-    pub fn update_params(&mut self, params: BiquadParams) {
-        self.params = params;
-        self.coeffs = BiquadCoefficients::compute(&self.params);
-    }
-
-    pub fn reset_state(&mut self) {
-        self.s1 = 0.0;
-        self.s2 = 0.0;
     }
 
     #[inline(always)]

@@ -2,7 +2,6 @@
 //! Full native clean-room implementation of Equalizer FD CRAFT DeviceSelector / Configurator
 
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
@@ -19,7 +18,6 @@ pub const EQUALIZER_APO_PRE_MIX_CLSID: &str = "{EACD2258-FCAC-4FF4-B36D-419E924A
 pub const EQUALIZER_APO_POST_MIX_CLSID: &str = "{EC1CC9CE-FAED-4822-828A-82A81A6F018F}";
 
 pub const RESONA_APO_PRE_MIX_CLSID: &str = "{B9276901-4965-4DA5-B62D-8D75DFB10001}";
-pub const RESONA_APO_POST_MIX_CLSID: &str = "{B9276902-4965-4DA5-B62D-8D75DFB10002}";
 
 pub const PKEY_DEVICE_FRIENDLY_NAME: &str = "{a45c254e-df1c-4efd-8020-67d146a850e0},2";
 pub const DEVPKEY_DEVICE_DESC: &str = "{b3f8fa53-0004-438e-9003-51a46e139bfc},6";
@@ -37,57 +35,6 @@ pub struct AudioEndpointInfo {
     pub apo_installed: bool,
     pub hook_mode: String,
     pub active_sapo_clsid: Option<String>,
-}
-
-fn decode_cmd_output(bytes: &[u8]) -> String {
-    if let Ok(s) = std::str::from_utf8(bytes) {
-        if !s.contains('\u{FFFD}') {
-            return s.to_string();
-        }
-    }
-
-    #[cfg(windows)]
-    {
-        extern "system" {
-            fn MultiByteToWideChar(
-                code_page: u32,
-                flags: u32,
-                lp_multi_byte_str: *const u8,
-                cb_multi_byte: i32,
-                lp_wide_char_str: *mut u16,
-                cch_wide_char: i32,
-            ) -> i32;
-        }
-
-        // Try CP_OEMCP (1)
-        let len = unsafe {
-            MultiByteToWideChar(1, 0, bytes.as_ptr(), bytes.len() as i32, std::ptr::null_mut(), 0)
-        };
-        if len > 0 {
-            let mut buf = vec![0u16; len as usize];
-            unsafe {
-                MultiByteToWideChar(1, 0, bytes.as_ptr(), bytes.len() as i32, buf.as_mut_ptr(), len);
-            }
-            let s = String::from_utf16_lossy(&buf);
-            if !s.contains('\u{FFFD}') {
-                return s;
-            }
-        }
-
-        // Fallback to CP_ACP (0)
-        let len_acp = unsafe {
-            MultiByteToWideChar(0, 0, bytes.as_ptr(), bytes.len() as i32, std::ptr::null_mut(), 0)
-        };
-        if len_acp > 0 {
-            let mut buf = vec![0u16; len_acp as usize];
-            unsafe {
-                MultiByteToWideChar(0, 0, bytes.as_ptr(), bytes.len() as i32, buf.as_mut_ptr(), len_acp);
-            }
-            return String::from_utf16_lossy(&buf);
-        }
-    }
-
-    String::from_utf8_lossy(bytes).to_string()
 }
 
 #[cfg(windows)]

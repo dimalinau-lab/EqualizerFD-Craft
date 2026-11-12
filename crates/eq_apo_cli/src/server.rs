@@ -18,8 +18,9 @@ const ICON_PNG: &[u8] = include_bytes!("../../../web/icon.png");
 const ICON_192_PNG: &[u8] = include_bytes!("../../../web/icon-192.png");
 const APPLE_TOUCH_ICON_PNG: &[u8] = include_bytes!("../../../web/apple-touch-icon.png");
 
-use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant, SystemTime};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AppSettings {
@@ -285,129 +286,207 @@ pub fn start_embedded_server(port: u16) -> Result<(), String> {
     Ok(())
 }
 
-fn handle_client(mut stream: TcpStream) {
-    let _ = stream.set_read_timeout(Some(Duration::from_millis(1500)));
-    let _ = stream.set_write_timeout(Some(Duration::from_millis(1500)));
-    let mut req_bytes = Vec::with_capacity(4096);
+struct SendSharedMem(resona_apo::SharedMemoryHandle);
+unsafe impl Send for SendSharedMem {}
+
+static CACHED_LIVE_SHM: Mutex<Option<SendSharedMem>> = Mutex::new(None);
+
+#[derive(Clone)]
+struct CachedAsset {
+    modified: Option<SystemTime>,
+    bytes: Vec<u8>,
+    etag: String,
+}
+
+static STATIC_ASSET_CACHE: OnceLock<Mutex<HashMap<&'static str, CachedAsset>>> = OnceLock::new();
+
+fn compute_etag(bytes: &[u8]) -> String {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for &b in bytes {
+        hash ^= b as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("\"{:x}-{:x}\"", bytes.len(), hash)
+}
+
+fn static_asset_spec(path: &str) -> Option<(&'static str, &'static [u8], &'static str, bool)> {
+    match path {
+        "/" | "/index.html" => Some(("web/index.html", INDEX_HTML.as_bytes(), "text/html; charset=utf-8", false)),
+        "/style.css" => Some(("web/style.css", STYLE_CSS.as_bytes(), "text/css; charset=utf-8", false)),
+        "/app.js" => Some(("web/app.js", APP_JS.as_bytes(), "application/javascript; charset=utf-8", false)),
+        "/i18n.js" => Some(("web/i18n.js", I18N_JS.as_bytes(), "application/javascript; charset=utf-8", false)),
+        "/locales/ru.json" => Some(("web/locales/ru.json", LOCALE_RU.as_bytes(), "application/json; charset=utf-8", false)),
+        "/locales/en.json" => Some(("web/locales/en.json", LOCALE_EN.as_bytes(), "application/json; charset=utf-8", false)),
+        "/favicon.ico" => Some(("web/favicon.ico", FAVICON_ICO, "image/x-icon", true)),
+        "/icon.png" => Some(("web/icon.png", ICON_PNG, "image/png", true)),
+        "/icon-192.png" => Some(("web/icon-192.png", ICON_192_PNG, "image/png", true)),
+        "/apple-touch-icon.png" => Some(("web/apple-touch-icon.png", APPLE_TOUCH_ICON_PNG, "image/png", true)),
+        "/manifest.json" => Some(("web/manifest.json", MANIFEST_JSON.as_bytes(), "application/manifest+json; charset=utf-8", true)),
+        _ => None,
+    }
+}
+
+fn get_cached_static_asset(disk_path: &'static str, fallback: &'static [u8]) -> CachedAsset {
+    let disk_mod = std::fs::metadata(disk_path).and_then(|m| m.modified()).ok();
+    let cache = STATIC_ASSET_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Ok(guard) = cache.lock() {
+        if let Some(entry) = guard.get(disk_path) {
+            if entry.modified == disk_mod {
+                return entry.clone();
+            }
+        }
+    }
+
+    let bytes = std::fs::read(disk_path).unwrap_or_else(|_| fallback.to_vec());
+    let etag = compute_etag(&bytes);
+    let asset = CachedAsset {
+        modified: disk_mod,
+        bytes,
+        etag,
+    };
+    if let Ok(mut guard) = cache.lock() {
+        guard.insert(disk_path, asset.clone());
+    }
+    asset
+}
+
+fn find_header_end(buf: &[u8]) -> Option<(usize, usize)> {
+    for i in 0..buf.len() {
+        if i + 4 <= buf.len() && &buf[i..i + 4] == b"\r\n\r\n" {
+            return Some((i, 4));
+        }
+        if i + 2 <= buf.len() && &buf[i..i + 2] == b"\n\n" {
+            return Some((i, 2));
+        }
+    }
+    None
+}
+
+struct HttpStream<'a> {
+    inner: &'a mut TcpStream,
+    keep_alive: bool,
+}
+
+fn handle_client(mut tcp_stream: TcpStream) {
+    let _ = tcp_stream.set_nodelay(true);
+    let _ = tcp_stream.set_read_timeout(Some(Duration::from_secs(5)));
+    let _ = tcp_stream.set_write_timeout(Some(Duration::from_millis(2500)));
+
+    let mut req_buf: Vec<u8> = Vec::with_capacity(4096);
     let mut temp = [0u8; 4096];
-    let mut content_length = 0usize;
-    let mut body_start_idx = None;
 
     loop {
-        let n = match stream.read(&mut temp) {
-            Ok(0) => break,
-            Ok(n) => n,
-            Err(_) => break,
+        let mut header_end_pos = None;
+        let mut sep_len = 0usize;
+        let mut content_length = 0usize;
+
+        loop {
+            if header_end_pos.is_none() {
+                if let Some((pos, sl)) = find_header_end(&req_buf) {
+                    header_end_pos = Some(pos);
+                    sep_len = sl;
+                    let header_str = String::from_utf8_lossy(&req_buf[..pos]);
+                    for line in header_str.lines() {
+                        if let Some((k, v)) = line.split_once(':') {
+                            if k.trim().eq_ignore_ascii_case("content-length") {
+                                content_length = v.trim().parse::<usize>().unwrap_or(0);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Some(pos) = header_end_pos {
+                let body_start = pos + sep_len;
+                if req_buf.len() >= body_start + content_length {
+                    break;
+                }
+            }
+
+            match tcp_stream.read(&mut temp) {
+                Ok(0) | Err(_) => {
+                    header_end_pos = None;
+                    break;
+                }
+                Ok(n) => req_buf.extend_from_slice(&temp[..n]),
+            }
+        }
+
+        let Some(header_end) = header_end_pos else {
+            break;
         };
-        req_bytes.extend_from_slice(&temp[..n]);
+        let body_start = header_end + sep_len;
+        let msg_end = (body_start + content_length).min(req_buf.len());
 
-        if body_start_idx.is_none() {
-            if let Some(pos) = req_bytes.windows(4).position(|w| w == b"\r\n\r\n") {
-                body_start_idx = Some(pos + 4);
-                let header_str = String::from_utf8_lossy(&req_bytes[..pos]);
-                for line in header_str.lines() {
-                    let lower = line.to_ascii_lowercase();
-                    if lower.starts_with("content-length:") {
-                        if let Some(val_str) = line.split(':').nth(1) {
-                            content_length = val_str.trim().parse::<usize>().unwrap_or(0);
-                        }
-                    }
-                }
-            } else if let Some(pos) = req_bytes.windows(2).position(|w| w == b"\n\n") {
-                body_start_idx = Some(pos + 2);
-                let header_str = String::from_utf8_lossy(&req_bytes[..pos]);
-                for line in header_str.lines() {
-                    let lower = line.to_ascii_lowercase();
-                    if lower.starts_with("content-length:") {
-                        if let Some(val_str) = line.split(':').nth(1) {
-                            content_length = val_str.trim().parse::<usize>().unwrap_or(0);
-                        }
+        let (method, raw_path, http_ver, conn_close, req_etag) = {
+            let req_headers = String::from_utf8_lossy(&req_buf[..header_end]);
+            let mut lines = req_headers.lines();
+            let first_line = lines.next().unwrap_or("");
+            let mut parts = first_line.split_whitespace();
+            let method = parts.next().unwrap_or("").to_string();
+            let raw_path = parts.next().unwrap_or("").to_string();
+            let http_ver = parts.next().unwrap_or("HTTP/1.1").to_string();
+
+            let mut conn_close = false;
+            let mut etag_opt = None;
+            for line in lines {
+                if let Some((k, v)) = line.split_once(':') {
+                    let key = k.trim();
+                    let val = v.trim();
+                    if key.eq_ignore_ascii_case("connection") && val.eq_ignore_ascii_case("close") {
+                        conn_close = true;
+                    } else if key.eq_ignore_ascii_case("if-none-match") {
+                        etag_opt = Some(val.to_string());
                     }
                 }
             }
+            (method, raw_path, http_ver, conn_close, etag_opt)
+        };
+
+        let body_str = String::from_utf8_lossy(&req_buf[body_start..msg_end]).to_string();
+        req_buf.drain(..msg_end);
+
+        if method.is_empty() || raw_path.is_empty() {
+            break;
         }
 
-        if let Some(start) = body_start_idx {
-            if req_bytes.len() - start >= content_length {
-                break;
+        let path = raw_path.split('?').next().unwrap_or(raw_path.as_str()).to_string();
+        let force_close = path == "/api/exit" || path == "/api/app/quit" || path == "/api/window/close";
+        let keep_alive = http_ver.eq_ignore_ascii_case("HTTP/1.1") && !conn_close && !force_close;
+
+        let mut stream = HttpStream {
+            inner: &mut tcp_stream,
+            keep_alive,
+        };
+
+        if (method == "GET" || method == "HEAD") && static_asset_spec(&path).is_some() {
+            let (disk_path, fallback, content_type, immutable) = static_asset_spec(&path).unwrap();
+            let asset = get_cached_static_asset(disk_path, fallback);
+            if req_etag.as_deref() == Some(asset.etag.as_str()) {
+                respond_304(&mut stream, &asset.etag, immutable);
+            } else {
+                let body_to_send = if method == "HEAD" { &[][..] } else { asset.bytes.as_slice() };
+                respond_static(&mut stream, content_type, &asset.etag, immutable, body_to_send);
             }
+        } else {
+            dispatch_http_request(&mut stream, &method, &raw_path, &path, body_str);
+        }
+
+        if !keep_alive {
+            break;
         }
     }
+}
 
-    if req_bytes.is_empty() {
-        return;
-    }
-
-    let header_end = body_start_idx.unwrap_or(req_bytes.len());
-    let req_headers = String::from_utf8_lossy(&req_bytes[..header_end]);
-    let first_line = req_headers.lines().next().unwrap_or("");
-    let parts: Vec<&str> = first_line.split_whitespace().collect();
-    if parts.len() < 2 {
-        return;
-    }
-
-    let method = parts[0];
-    let raw_path = parts[1];
-    let path = raw_path.split('?').next().unwrap_or(raw_path);
-    let body_str = if header_end <= req_bytes.len() {
-        String::from_utf8_lossy(&req_bytes[header_end..]).to_string()
-    } else {
-        String::new()
-    };
-
+fn dispatch_http_request(
+    mut stream: &mut HttpStream<'_>,
+    method: &str,
+    raw_path: &str,
+    path: &str,
+    body_str: String,
+) {
     if method == "GET" || method == "HEAD" {
         match path {
-            "/" | "/index.html" => {
-                let content = std::fs::read_to_string("web/index.html")
-                    .unwrap_or_else(|_| INDEX_HTML.to_string());
-                respond_ok(&mut stream, "text/html; charset=utf-8", content.as_bytes())
-            }
-            "/style.css" => {
-                let content = std::fs::read_to_string("web/style.css")
-                    .unwrap_or_else(|_| STYLE_CSS.to_string());
-                respond_ok(&mut stream, "text/css; charset=utf-8", content.as_bytes())
-            }
-            "/app.js" => {
-                let content = std::fs::read_to_string("web/app.js")
-                    .unwrap_or_else(|_| APP_JS.to_string());
-                respond_ok(&mut stream, "application/javascript; charset=utf-8", content.as_bytes())
-            }
-            "/i18n.js" => {
-                let content = std::fs::read_to_string("web/i18n.js")
-                    .unwrap_or_else(|_| I18N_JS.to_string());
-                respond_ok(&mut stream, "application/javascript; charset=utf-8", content.as_bytes())
-            }
-            "/locales/ru.json" => {
-                let content = std::fs::read_to_string("web/locales/ru.json")
-                    .unwrap_or_else(|_| LOCALE_RU.to_string());
-                respond_ok(&mut stream, "application/json; charset=utf-8", content.as_bytes())
-            }
-            "/locales/en.json" => {
-                let content = std::fs::read_to_string("web/locales/en.json")
-                    .unwrap_or_else(|_| LOCALE_EN.to_string());
-                respond_ok(&mut stream, "application/json; charset=utf-8", content.as_bytes())
-            }
-            "/favicon.ico" => {
-                let bytes = std::fs::read("web/favicon.ico").unwrap_or_else(|_| FAVICON_ICO.to_vec());
-                respond_ok(&mut stream, "image/x-icon", &bytes);
-            }
-            "/icon.png" => {
-                let bytes = std::fs::read("web/icon.png").unwrap_or_else(|_| ICON_PNG.to_vec());
-                respond_ok(&mut stream, "image/png", &bytes);
-            }
-            "/icon-192.png" => {
-                let bytes = std::fs::read("web/icon-192.png").unwrap_or_else(|_| ICON_192_PNG.to_vec());
-                respond_ok(&mut stream, "image/png", &bytes);
-            }
-            "/apple-touch-icon.png" => {
-                let bytes = std::fs::read("web/apple-touch-icon.png").unwrap_or_else(|_| APPLE_TOUCH_ICON_PNG.to_vec());
-                respond_ok(&mut stream, "image/png", &bytes);
-            }
-            "/manifest.json" => {
-                let content = std::fs::read_to_string("web/manifest.json")
-                    .unwrap_or_else(|_| MANIFEST_JSON.to_string());
-                respond_ok(&mut stream, "application/manifest+json; charset=utf-8", content.as_bytes());
-            }
             "/api/app/quit" => {
                 respond_ok(&mut stream, "application/json", b"{\"status\":\"quitting\"}");
                 std::thread::spawn(|| {
@@ -514,41 +593,54 @@ fn handle_client(mut stream: TcpStream) {
                 respond_ok(&mut stream, "application/json", resp.as_bytes());
             }
             "/api/live-status" => {
-                let mut resp = serde_json::json!({
-                    "active": false,
-                    "heartbeat": 0,
-                    "in_peak_db": -96.0,
-                    "out_peak_db": -96.0,
-                    "preamp_gain_db": 0.0,
-                    "speech_prob": 0.0,
-                    "rnnoise_enabled": false,
-                    "rnnoise_strength": 1.0,
-                    "ai_engine_mode": 0,
-                    "ai_lsnr_db": -15.0,
-                    "spectrum": vec![0.0f32; 32],
-                });
+                let mut resp_str: Option<String> = None;
 
-                if let Ok(handle) = resona_apo::SharedMemoryHandle::create_or_open() {
-                    unsafe {
-                        let sm = &*handle.ptr;
-                        resp = serde_json::json!({
-                            "active": sm.heartbeat > 0,
-                            "heartbeat": sm.heartbeat,
-                            "in_peak_db": sm.input_peak_db,
-                            "out_peak_db": sm.output_peak_db,
-                            "preamp_gain_db": sm.preamp_gain_db,
-                            "sample_rate": sm.sample_rate,
-                            "channels": sm.channels,
-                            "speech_prob": sm.speech_prob,
-                            "rnnoise_enabled": sm.rnnoise_enabled != 0,
-                            "rnnoise_strength": sm.rnnoise_strength,
-                            "ai_engine_mode": sm.ai_engine_mode,
-                            "ai_lsnr_db": sm.ai_lsnr_db,
-                            "spectrum": &sm.spectrum_bins[..],
-                        });
+                if let Ok(mut guard) = CACHED_LIVE_SHM.lock() {
+                    if guard.is_none() {
+                        if let Ok(h) = resona_apo::SharedMemoryHandle::create_or_open() {
+                            *guard = Some(SendSharedMem(h));
+                        }
+                    }
+                    if let Some(ref cached) = *guard {
+                        unsafe {
+                            let sm = &*cached.0.ptr;
+                            let resp = serde_json::json!({
+                                "active": sm.heartbeat > 0,
+                                "heartbeat": sm.heartbeat,
+                                "in_peak_db": sm.input_peak_db,
+                                "out_peak_db": sm.output_peak_db,
+                                "preamp_gain_db": sm.preamp_gain_db,
+                                "sample_rate": sm.sample_rate,
+                                "channels": sm.channels,
+                                "speech_prob": sm.speech_prob,
+                                "rnnoise_enabled": sm.rnnoise_enabled != 0,
+                                "rnnoise_strength": sm.rnnoise_strength,
+                                "ai_engine_mode": sm.ai_engine_mode,
+                                "ai_lsnr_db": sm.ai_lsnr_db,
+                                "spectrum": &sm.spectrum_bins[..],
+                            });
+                            resp_str = Some(resp.to_string());
+                        }
                     }
                 }
-                respond_ok(&mut stream, "application/json", resp.to_string().as_bytes());
+
+                let json_bytes = resp_str.unwrap_or_else(|| {
+                    serde_json::json!({
+                        "active": false,
+                        "heartbeat": 0,
+                        "in_peak_db": -96.0,
+                        "out_peak_db": -96.0,
+                        "preamp_gain_db": 0.0,
+                        "speech_prob": 0.0,
+                        "rnnoise_enabled": false,
+                        "rnnoise_strength": 1.0,
+                        "ai_engine_mode": 0,
+                        "ai_lsnr_db": -15.0,
+                        "spectrum": vec![0.0f32; 32],
+                    })
+                    .to_string()
+                });
+                respond_ok(&mut stream, "application/json", json_bytes.as_bytes());
             }
             "/api/autostart" => {
                 let enabled = check_autostart_status();
@@ -1273,26 +1365,81 @@ fn sync_config_to_shared_mem(config_str: &str) {
     }
 }
 
-fn respond_ok(stream: &mut TcpStream, content_type: &str, body: &[u8]) {
-    let response = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nCache-Control: no-cache, no-store, must-revalidate\r\nPragma: no-cache\r\nExpires: 0\r\nConnection: close\r\n\r\n",
-        content_type,
-        body.len()
+fn write_http_reply(
+    stream: &mut HttpStream<'_>,
+    status: &str,
+    content_type: Option<&str>,
+    cache_control: &str,
+    etag: Option<&str>,
+    body: &[u8],
+) {
+    let conn = if stream.keep_alive { "keep-alive" } else { "close" };
+    let mut header = format!(
+        "HTTP/1.1 {}\r\nContent-Length: {}\r\nCache-Control: {}\r\nConnection: {}\r\n",
+        status,
+        body.len(),
+        cache_control,
+        conn
     );
-    let _ = stream.write_all(response.as_bytes());
-    let _ = stream.write_all(body);
-    let _ = stream.flush();
+    if let Some(ct) = content_type {
+        header.push_str(&format!("Content-Type: {}\r\n", ct));
+    }
+    if let Some(tag) = etag {
+        header.push_str(&format!("ETag: {}\r\n", tag));
+    }
+    header.push_str("\r\n");
+
+    let _ = stream.inner.write_all(header.as_bytes());
+    if !body.is_empty() {
+        let _ = stream.inner.write_all(body);
+    }
+    let _ = stream.inner.flush();
 }
 
-fn respond_404(stream: &mut TcpStream) {
-    let body = b"404 Not Found";
-    let response = format!(
-        "HTTP/1.1 404 Not Found\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
+fn respond_static(
+    stream: &mut HttpStream<'_>,
+    content_type: &str,
+    etag: &str,
+    immutable: bool,
+    body: &[u8],
+) {
+    let cc = if immutable {
+        "public, max-age=86400, immutable"
+    } else {
+        "no-cache"
+    };
+    write_http_reply(stream, "200 OK", Some(content_type), cc, Some(etag), body);
+}
+
+fn respond_304(stream: &mut HttpStream<'_>, etag: &str, immutable: bool) {
+    let cc = if immutable {
+        "public, max-age=86400, immutable"
+    } else {
+        "no-cache"
+    };
+    write_http_reply(stream, "304 Not Modified", None, cc, Some(etag), b"");
+}
+
+fn respond_ok(stream: &mut HttpStream<'_>, content_type: &str, body: &[u8]) {
+    write_http_reply(
+        stream,
+        "200 OK",
+        Some(content_type),
+        "no-cache, no-store, must-revalidate",
+        None,
+        body,
     );
-    let _ = stream.write_all(response.as_bytes());
-    let _ = stream.write_all(body);
-    let _ = stream.flush();
+}
+
+fn respond_404(stream: &mut HttpStream<'_>) {
+    write_http_reply(
+        stream,
+        "404 Not Found",
+        Some("text/plain; charset=utf-8"),
+        "no-store",
+        None,
+        b"404 Not Found",
+    );
 }
 
 use std::os::windows::process::CommandExt;

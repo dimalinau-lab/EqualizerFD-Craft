@@ -6,8 +6,6 @@ use crate::config::{ChannelId, ConfigDirective, ConfigFile};
 use crate::graphic_eq::{GraphicEQ, GraphicEqPoint};
 use crate::matrix::ChannelMatrix;
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FrequencyResponsePoint {
@@ -117,14 +115,6 @@ impl AudioPipeline {
     }
 
     pub fn from_config(config: &ConfigFile, sample_rate: f64) -> Self {
-        Self::from_config_internal(config, sample_rate, None)
-    }
-
-    pub fn from_config_with_includes(config: &ConfigFile, sample_rate: f64, base_dir: &Path) -> Self {
-        Self::from_config_internal(config, sample_rate, Some(base_dir))
-    }
-
-    fn from_config_internal(config: &ConfigFile, sample_rate: f64, base_dir: Option<&Path>) -> Self {
         let mut pipeline = Self::new(sample_rate);
 
         for directive in &config.directives {
@@ -178,23 +168,6 @@ impl AudioPipeline {
                         expr_str.push_str(&format!("{}={} ", t, e));
                     }
                     pipeline.matrix = Some(ChannelMatrix::parse(&expr_str));
-                }
-                ConfigDirective::Include { path } => {
-                    if let Some(base) = base_dir {
-                        let full_path = base.join(path);
-                        if let Ok(content) = fs::read_to_string(&full_path) {
-                            if let Ok(sub_config) = ConfigFile::parse(&content, sample_rate) {
-                                let sub_pipe = Self::from_config_internal(&sub_config, sample_rate, Some(base));
-                                // Append filters from included sub-config
-                                for f in sub_pipe.left_chain.filters {
-                                    pipeline.left_chain.add_filter(f);
-                                }
-                                for f in sub_pipe.right_chain.filters {
-                                    pipeline.right_chain.add_filter(f);
-                                }
-                            }
-                        }
-                    }
                 }
                 _ => {}
             }

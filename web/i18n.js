@@ -38,7 +38,7 @@
       if (this.dictionaries[lang]) return this.dictionaries[lang];
 
       try {
-        const res = await fetch(`/locales/${lang}.json?v=${Date.now()}`);
+        const res = await fetch(`/locales/${lang}.json?v=1.3.1`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         this.dictionaries[lang] = data;
@@ -141,14 +141,24 @@
 
     async init() {
       if (this.readyPromise) return this.readyPromise;
+      const loadPromise = this.load(this.lang);
+      const domReady = document.readyState === 'loading'
+        ? new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }))
+        : Promise.resolve();
+
       this.readyPromise = (async () => {
-        await this.load(this.lang);
+        await Promise.all([loadPromise, domReady]);
         this.isLoaded = true;
         this.applyTranslations();
 
-        // Pre-cache other language in background for instant switching
+        // Pre-cache other language during idle time so startup is unaffected
         const otherLang = this.lang === 'ru' ? 'en' : 'ru';
-        this.load(otherLang).catch(() => {});
+        const prefetchOther = () => this.load(otherLang).catch(() => {});
+        if (typeof window.requestIdleCallback === 'function') {
+          window.requestIdleCallback(prefetchOther, { timeout: 2000 });
+        } else {
+          setTimeout(prefetchOther, 1200);
+        }
 
         // Bind menubar click events
         const btnRu = document.getElementById('langRu');
@@ -168,10 +178,5 @@
 
   window.I18N = new I18nManager();
   window.t = (path, params, fallback) => window.I18N.t(path, params, fallback);
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => window.I18N.init());
-  } else {
-    window.I18N.init();
-  }
+  window.I18N.init();
 })();

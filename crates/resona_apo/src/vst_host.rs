@@ -1,7 +1,6 @@
 //! VST 2.4 High-Performance Audio Plugin Host for ResonaAPO & Equalizer FD CRAFT
 //! Loads 64-bit VST 2.4 DLLs and executes processReplacing in real-time.
 
-use std::collections::HashMap;
 use std::ffi::c_void;
 use std::path::Path;
 

@@ -3,7 +3,7 @@
 
 use crate::dsp::ResonaDspEngine;
 use crate::logger;
-use crate::shared_mem::{ResonaSharedMemory, SharedMemoryHandle};
+use crate::shared_mem::SharedMemoryHandle;
 use crate::types::*;
 use std::ffi::c_void;
 use std::ptr;

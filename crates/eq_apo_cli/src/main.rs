@@ -10,14 +10,11 @@ pub mod window_manager;
 use eq_apo_core::{AudioPipeline, ConfigFile};
 use std::env;
 use std::fs;
-use std::io::{self, BufRead};
-use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
 use std::time::Instant;
 
 const APP_PORT: u16 = 49200; // Dedicated audio application port
-const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 fn main() {
     #[cfg(windows)]
@@ -152,36 +149,83 @@ fn main() {
             }
         }
         "bench" => {
-            let path = args.get(2).map(|s| s.as_str()).unwrap_or(r"C:\Program Files\EqualizerAPO\config\config.txt");
-            let duration_sec: u64 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(2);
-            let content = fs::read_to_string(path).unwrap_or_else(|_| "Preamp: 0.0 dB\nFilter: ON PK Fc 1000 Hz Gain 4.0 dB Q 1.41\n".to_string());
-            let config = ConfigFile::parse(&content, 48000.0).expect("Failed to parse config");
-            let mut pipeline = AudioPipeline::from_config(&config, 48000.0);
+            if args.get(2).map(|s| s.as_str()) == Some("--full") {
+                let duration_sec: u64 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(2);
+                let path = args.get(4).map(|s| s.as_str()).unwrap_or("config.txt");
+                let content = fs::read_to_string(path).unwrap_or_else(|_| {
+                    "Preamp: 0.0 dB\nRNNoise: ON 0.85\nFilter: ON PK Fc 1000 Hz Gain 4.0 dB Q 1.41\n".to_string()
+                });
+                let mut engine = resona_apo::dsp::ResonaDspEngine::new(48000.0, 2);
+                engine.sync_from_config_text(&content);
+                if engine.rnnoise.enabled {
+                    let _ = engine.rnnoise.preload_sync();
+                }
 
-            let buffer_size = 512;
-            let mut buffer = vec![0.5f64; buffer_size * 2]; // interleaved stereo
+                let hop = 480usize;
+                let mut template = vec![0.0f32; hop * 2];
+                for f in 0..hop {
+                    let t = (f as f32) / 48000.0;
+                    let s = (2.0 * std::f32::consts::PI * 220.0 * t).sin() * 0.08
+                        + (2.0 * std::f32::consts::PI * 1000.0 * t).sin() * 0.04;
+                    template[f * 2] = s;
+                    template[f * 2 + 1] = s;
+                }
+                let mut buffer = template.clone();
 
-            println!("Running DSP throughput benchmark for {}s...", duration_sec);
-            let start = Instant::now();
-            let mut total_samples = 0u64;
+                println!("Running full ResonaDspEngine benchmark for {}s (48kHz stereo, 10ms hops)...", duration_sec);
+                let start = Instant::now();
+                let mut total_hops = 0u64;
 
-            while start.elapsed().as_secs() < duration_sec {
-                pipeline.process_interleaved_stereo(&mut buffer);
-                total_samples += (buffer_size * 2) as u64;
+                while start.elapsed().as_secs() < duration_sec {
+                    buffer.copy_from_slice(&template);
+                    let _ = engine.process_interleaved(&mut buffer, 2);
+                    total_hops += 1;
+                }
+
+                let elapsed = start.elapsed().as_secs_f64();
+                let ms_per_hop = (elapsed * 1000.0) / (total_hops.max(1) as f64);
+                let rtf = ms_per_hop / 10.0;
+
+                println!("===========================================================");
+                println!("Full DSP Benchmark Results:");
+                println!("  Elapsed time:        {:.3} s", elapsed);
+                println!("  Processed 10ms hops: {}", total_hops);
+                println!("  Avg time per hop:    {:.3} ms / 10.0 ms", ms_per_hop);
+                println!("  Real-Time Factor:    {:.3} ({:.1}x real-time)", rtf, 1.0 / rtf.max(1e-6));
+                println!("  DSP CPU Budget:      {:.2}% of 10ms frame", rtf * 100.0);
+                println!("===========================================================");
+            } else {
+                let path = args.get(2).map(|s| s.as_str()).unwrap_or(r"C:\Program Files\EqualizerAPO\config\config.txt");
+                let duration_sec: u64 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(2);
+                let content = fs::read_to_string(path).unwrap_or_else(|_| "Preamp: 0.0 dB\nFilter: ON PK Fc 1000 Hz Gain 4.0 dB Q 1.41\n".to_string());
+                let config = ConfigFile::parse(&content, 48000.0).expect("Failed to parse config");
+                let mut pipeline = AudioPipeline::from_config(&config, 48000.0);
+
+                let buffer_size = 512;
+                let mut buffer = vec![0.5f64; buffer_size * 2]; // interleaved stereo
+
+                println!("Running DSP throughput benchmark for {}s...", duration_sec);
+                let start = Instant::now();
+                let mut total_samples = 0u64;
+
+                while start.elapsed().as_secs() < duration_sec {
+                    pipeline.process_interleaved_stereo(&mut buffer);
+                    total_samples += (buffer_size * 2) as u64;
+                }
+
+                let elapsed = start.elapsed().as_secs_f64();
+                let samples_per_sec = (total_samples as f64) / elapsed;
+                let real_time_factor = samples_per_sec / (48000.0 * 2.0);
+
+                println!("===========================================================");
+                println!("Benchmark Results:");
+                println!("  Elapsed time:        {:.3} s", elapsed);
+                println!("  Total stereo samples: {}", total_samples);
+                println!("  Throughput:          {:.2} Million samples/sec", samples_per_sec / 1_000_000.0);
+                println!("  Real-time speedup:   {:.1}x real-time (48kHz stereo)", real_time_factor);
+                println!("  DSP Latency margin:  CPU usage at real-time is {:.3}%", 100.0 / real_time_factor);
+                println!("===========================================================");
             }
-
-            let elapsed = start.elapsed().as_secs_f64();
-            let samples_per_sec = (total_samples as f64) / elapsed;
-            let real_time_factor = samples_per_sec / (48000.0 * 2.0);
-
-            println!("===========================================================");
-            println!("Benchmark Results:");
-            println!("  Elapsed time:        {:.3} s", elapsed);
-            println!("  Total stereo samples: {}", total_samples);
-            println!("  Throughput:          {:.2} Million samples/sec", samples_per_sec / 1_000_000.0);
-            println!("  Real-time speedup:   {:.1}x real-time (48kHz stereo)", real_time_factor);
-            println!("  DSP Latency margin:  CPU usage at real-time is {:.3}%", 100.0 / real_time_factor);
-            println!("===========================================================");
         }
         "help" | "--help" | "-h" => {
             print_help();
@@ -369,7 +413,8 @@ fn print_help() {
     println!("  EqualizerFD-Craft.exe install-hooks        # Install APO driver hooks (elevated)");
     println!("  EqualizerFD-Craft.exe devices [Render|Capture] # Enumerate audio endpoints & APO status");
     println!("  EqualizerFD-Craft.exe backup <guid> <type> # Export .reg backup of device FxProperties");
-    println!("  EqualizerFD-Craft.exe bench [config] [sec] # Run real-time DSP throughput benchmark");
+    println!("  EqualizerFD-Craft.exe bench [config] [sec] # Run eq_apo_core DSP benchmark");
+    println!("  EqualizerFD-Craft.exe bench --full [sec] [config] # Run full ResonaDspEngine + AI benchmark");
     println!("  EqualizerFD-Craft.exe parse <config_path>  # Parse config and dump AST");
     println!("  EqualizerFD-Craft.exe response <config>    # Export frequency response curve JSON");
     println!("===========================================================");

@@ -4,7 +4,6 @@
 //! `tract` with a multi-criterion Balanced Neural Guard (Local SNR + vocal formant balance +
 //! transient anti-click onset + smooth hysteresis) for Krisp-level noise immunity at 10-20 ms latency.
 
-use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::{Arc, OnceLock};
@@ -299,10 +298,6 @@ impl SpeechGuard {
         (ui_prob, target_gain)
     }
 
-    pub fn is_gate_open(&self) -> bool {
-        self.hold_frames_remaining > 0
-    }
-
     #[inline]
     pub fn smooth_sample(&mut self, target_gain: f32) -> f32 {
         let coef = if target_gain > self.gate_gain_smooth {
@@ -355,6 +350,105 @@ impl FallbackRnNoise {
     }
 }
 
+/// Contiguous-slice audio FIFO that avoids shifting/draining on empty ticks
+/// and eliminates per-sample `VecDeque` push/pop overhead in real-time callbacks.
+struct SampleFifo {
+    buf: Vec<f32>,
+    head: usize,
+    tail: usize,
+}
+
+impl SampleFifo {
+    fn with_capacity(cap: usize) -> Self {
+        Self {
+            buf: vec![0.0; cap.max(1024)],
+            head: 0,
+            tail: 0,
+        }
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.tail - self.head
+    }
+
+    #[inline]
+    fn clear(&mut self) {
+        self.head = 0;
+        self.tail = 0;
+    }
+
+    #[inline]
+    fn ensure_write_space(&mut self, extra: usize) {
+        if self.tail + extra <= self.buf.len() {
+            return;
+        }
+        let len = self.len();
+        if len == 0 {
+            self.head = 0;
+            self.tail = 0;
+        } else if self.head > 0 {
+            self.buf.copy_within(self.head..self.tail, 0);
+            self.head = 0;
+            self.tail = len;
+        }
+        if self.tail + extra > self.buf.len() {
+            self.buf.resize((self.tail + extra).next_power_of_two(), 0.0);
+        }
+    }
+
+    #[inline]
+    fn push_slice(&mut self, src: &[f32]) {
+        self.ensure_write_space(src.len());
+        self.buf[self.tail..self.tail + src.len()].copy_from_slice(src);
+        self.tail += src.len();
+    }
+
+    #[inline]
+    fn copy_from_fifo(&mut self, other: &Self) {
+        let len = other.len();
+        self.clear();
+        if len > 0 {
+            self.push_slice(&other.buf[other.head..other.tail]);
+        }
+    }
+
+    #[inline]
+    fn reserve_write_mut(&mut self, len: usize) -> &mut [f32] {
+        self.ensure_write_space(len);
+        let start = self.tail;
+        self.tail += len;
+        &mut self.buf[start..self.tail]
+    }
+
+    #[inline]
+    fn peek_chunk(&self, n: usize) -> &[f32] {
+        &self.buf[self.head..self.head + n]
+    }
+
+    #[inline]
+    fn consume(&mut self, n: usize) {
+        let adv = n.min(self.len());
+        self.head += adv;
+        if self.head == self.tail {
+            self.head = 0;
+            self.tail = 0;
+        }
+    }
+
+    #[inline]
+    fn take_available(&mut self, max_n: usize) -> &[f32] {
+        let n = max_n.min(self.len());
+        let start = self.head;
+        self.head += n;
+        if self.head == self.tail {
+            self.head = 0;
+            self.tail = 0;
+        }
+        &self.buf[start..start + n]
+    }
+}
+
 pub struct NeuralDenoiser {
     pub enabled: bool,
     pub strength: f32,
@@ -374,19 +468,19 @@ pub struct NeuralDenoiser {
     rn_primary: FallbackRnNoise,
     rn_secondary: FallbackRnNoise,
 
-    in_fifo_l: Vec<f32>,
-    in_fifo_r: Vec<f32>,
-    out_fifo_l: VecDeque<f32>,
-    out_fifo_r: VecDeque<f32>,
+    in_fifo_l: SampleFifo,
+    in_fifo_r: SampleFifo,
+    out_fifo_l: SampleFifo,
+    out_fifo_r: SampleFifo,
 
     hop_in_arr: Array2<f32>,
     hop_out_arr: Array2<f32>,
     mono_out_hop: [f32; AI_FRAME_SIZE],
     stereo_out_hop_r: [f32; AI_FRAME_SIZE],
-    gain_fifo: VecDeque<f32>,
     current_target_gain: f32,
     guard: SpeechGuard,
     true_stereo_streak: usize,
+    was_dual_channel: bool,
 }
 
 impl NeuralDenoiser {
@@ -406,18 +500,18 @@ impl NeuralDenoiser {
             last_applied_strength: -1.0,
             rn_primary: FallbackRnNoise::new(),
             rn_secondary: FallbackRnNoise::new(),
-            in_fifo_l: Vec::with_capacity(2048),
-            in_fifo_r: Vec::with_capacity(2048),
-            out_fifo_l: VecDeque::with_capacity(2048),
-            out_fifo_r: VecDeque::with_capacity(2048),
+            in_fifo_l: SampleFifo::with_capacity(4096),
+            in_fifo_r: SampleFifo::with_capacity(4096),
+            out_fifo_l: SampleFifo::with_capacity(4096),
+            out_fifo_r: SampleFifo::with_capacity(4096),
             hop_in_arr: Array2::zeros((1, AI_FRAME_SIZE)),
             hop_out_arr: Array2::zeros((1, AI_FRAME_SIZE)),
             mono_out_hop: [0.0; AI_FRAME_SIZE],
             stereo_out_hop_r: [0.0; AI_FRAME_SIZE],
-            gain_fifo: VecDeque::with_capacity(2048),
             current_target_gain: 0.0001,
             guard: SpeechGuard::new(sample_rate),
             true_stereo_streak: 0,
+            was_dual_channel: false,
         }
     }
 
@@ -522,7 +616,7 @@ impl NeuralDenoiser {
         self.in_fifo_r.clear();
         self.out_fifo_l.clear();
         self.out_fifo_r.clear();
-        self.gain_fifo.clear();
+        self.was_dual_channel = false;
         self.rn_primary.reset();
         self.rn_secondary.reset();
         if self.df_primary.is_some() {
@@ -536,17 +630,12 @@ impl NeuralDenoiser {
         self.lsnr_db = -15.0;
     }
 
-    /// Processes interleaved float samples `[L0, R0, L1, R1, ...]` through AI denoising
-    /// AND applies the Balanced Neural Guard gate smooth envelope cleanly per sample.
-    pub fn process_interleaved(&mut self, samples: &mut [f32], channels_count: usize) {
-        if !self.enabled || samples.is_empty() {
-            return;
-        }
-
-        let ch_cnt = channels_count.min(self.channels_count).max(1);
+    /// Pushes interleaved samples into the analysis FIFOs and runs complete 10ms hops.
+    /// Returns `(total_input_frames, use_dual_channel)`.
+    fn push_and_denoise_hops(&mut self, samples: &[f32], ch_cnt: usize) -> (usize, bool) {
         let total_frames = samples.len() / ch_cnt;
         if total_frames == 0 {
-            return;
+            return (0, false);
         }
 
         self.ensure_loader_started();
@@ -556,8 +645,8 @@ impl NeuralDenoiser {
         // Detect if stereo buffer is actually mono/dual-mono (common for USB mics & WASAPI bridge)
         let mut max_lr_diff = 0.0f32;
         if ch_cnt >= 2 {
-            for f in 0..total_frames {
-                let d = (samples[f * ch_cnt] - samples[f * ch_cnt + 1]).abs();
+            for frame in samples.chunks_exact(ch_cnt) {
+                let d = (frame[0] - frame[1]).abs();
                 if d > max_lr_diff {
                     max_lr_diff = d;
                 }
@@ -572,17 +661,39 @@ impl NeuralDenoiser {
         }
         let use_dual_channel = self.true_stereo_streak >= 8 && ch_cnt >= 2;
 
-        // Push capture samples into analysis FIFOs
-        for f in 0..total_frames {
-            let l = samples[f * ch_cnt];
-            let r = if ch_cnt >= 2 { samples[f * ch_cnt + 1] } else { l };
-            if use_dual_channel {
-                self.in_fifo_l.push(l);
-                self.in_fifo_r.push(r);
-            } else {
-                // Average L+R cleanly if near-mono or duplicated
-                self.in_fifo_l.push(if ch_cnt >= 2 { 0.5 * (l + r) } else { l });
-                self.in_fifo_r.push(if ch_cnt >= 2 { 0.5 * (l + r) } else { l });
+        // Keep right-channel FIFOs synchronized only on transitions to/from true dual-stereo
+        if use_dual_channel && !self.was_dual_channel {
+            self.in_fifo_r.copy_from_fifo(&self.in_fifo_l);
+            self.out_fifo_r.copy_from_fifo(&self.out_fifo_l);
+        } else if !use_dual_channel && self.was_dual_channel {
+            self.in_fifo_r.clear();
+            self.out_fifo_r.clear();
+        }
+        self.was_dual_channel = use_dual_channel;
+
+        // Push capture samples into contiguous analysis FIFOs
+        if use_dual_channel {
+            let dst_l = self.in_fifo_l.reserve_write_mut(total_frames);
+            let dst_r = self.in_fifo_r.reserve_write_mut(total_frames);
+            for ((l_out, r_out), frame) in dst_l
+                .iter_mut()
+                .zip(dst_r.iter_mut())
+                .zip(samples.chunks_exact(ch_cnt))
+            {
+                *l_out = frame[0];
+                *r_out = frame[1];
+            }
+        } else if ch_cnt == 1 {
+            self.in_fifo_l.push_slice(&samples[..total_frames]);
+        } else if ch_cnt == 2 {
+            let dst = self.in_fifo_l.reserve_write_mut(total_frames);
+            for (out, lr) in dst.iter_mut().zip(samples.chunks_exact(2)) {
+                *out = 0.5 * (lr[0] + lr[1]);
+            }
+        } else {
+            let dst = self.in_fifo_l.reserve_write_mut(total_frames);
+            for (out, frame) in dst.iter_mut().zip(samples.chunks_exact(ch_cnt)) {
+                *out = 0.5 * (frame[0] + frame[1]);
             }
         }
 
@@ -591,10 +702,10 @@ impl NeuralDenoiser {
         while self.in_fifo_l.len() >= AI_FRAME_SIZE {
             let (lsnr_db, vad_prob, is_fallback_mode) = if let Some(ref mut df) = self.df_primary {
                 self.active_engine = AI_ENGINE_DEEPFILTER3_LL;
-                // Adaptive threshold: aggressive CPU saving during silence (-8.5 dB), zero mid-speech clipping while talking (-16.0 dB)
-                df.min_db_thresh = if self.guard.is_gate_open() { -16.0 } else { -8.5 };
+                // Keep hard-zero cutoff strictly below lsnr_min (-15 dB) at all times so ERB masks never punch onset/syllable holes.
+                df.min_db_thresh = -16.0;
                 if let Some(slice_in) = self.hop_in_arr.as_slice_mut() {
-                    slice_in.copy_from_slice(&self.in_fifo_l[..AI_FRAME_SIZE]);
+                    slice_in.copy_from_slice(self.in_fifo_l.peek_chunk(AI_FRAME_SIZE));
                 }
                 let lsnr = match df.process(self.hop_in_arr.view(), self.hop_out_arr.view_mut()) {
                     Ok(v) => v,
@@ -611,8 +722,9 @@ impl NeuralDenoiser {
                         }
                     }
                     if let Some(ref mut df2) = self.df_secondary {
+                        df2.min_db_thresh = -16.0;
                         if let Some(slice_in) = self.hop_in_arr.as_slice_mut() {
-                            slice_in.copy_from_slice(&self.in_fifo_r[..AI_FRAME_SIZE]);
+                            slice_in.copy_from_slice(self.in_fifo_r.peek_chunk(AI_FRAME_SIZE));
                         }
                         let _ = df2.process(self.hop_in_arr.view(), self.hop_out_arr.view_mut());
                         if let Some(slice_out) = self.hop_out_arr.as_slice() {
@@ -627,13 +739,13 @@ impl NeuralDenoiser {
             } else {
                 self.active_engine = AI_ENGINE_RNNOISE;
                 let prob = self.rn_primary.process_hop(
-                    &self.in_fifo_l[..AI_FRAME_SIZE],
+                    self.in_fifo_l.peek_chunk(AI_FRAME_SIZE),
                     &mut self.mono_out_hop,
                     strength,
                 );
                 if use_dual_channel {
                     self.rn_secondary.process_hop(
-                        &self.in_fifo_r[..AI_FRAME_SIZE],
+                        self.in_fifo_r.peek_chunk(AI_FRAME_SIZE),
                         &mut self.stereo_out_hop_r,
                         strength,
                     );
@@ -654,34 +766,115 @@ impl NeuralDenoiser {
             self.speech_prob = prob;
             self.current_target_gain = target_gain;
 
-            for i in 0..AI_FRAME_SIZE {
-                let g = self.guard.smooth_sample(target_gain);
-                let out_l = self.mono_out_hop[i] * g;
-                let out_r = if use_dual_channel {
-                    self.stereo_out_hop_r[i] * g
-                } else {
-                    out_l
-                };
-                self.out_fifo_l.push_back(out_l);
-                self.out_fifo_r.push_back(out_r);
-            }
-
-            self.in_fifo_l.drain(0..AI_FRAME_SIZE);
-            self.in_fifo_r.drain(0..AI_FRAME_SIZE);
-        }
-
-        // Write processed frames back without injecting permanent idle FIFO zeros when host feeds >= 480 frames
-        for f in 0..total_frames {
-            let out_l = self.out_fifo_l.pop_front().unwrap_or(0.0);
-            let out_r = self.out_fifo_r.pop_front().unwrap_or(out_l);
-
-            samples[f * ch_cnt] = out_l;
-            if ch_cnt >= 2 {
-                samples[f * ch_cnt + 1] = out_r;
-                for c in 2..ch_cnt {
-                    samples[f * ch_cnt + c] = out_l;
+            if use_dual_channel {
+                let dst_l = self.out_fifo_l.reserve_write_mut(AI_FRAME_SIZE);
+                let dst_r = self.out_fifo_r.reserve_write_mut(AI_FRAME_SIZE);
+                for ((out_l, out_r), (&in_l, &in_r)) in dst_l
+                    .iter_mut()
+                    .zip(dst_r.iter_mut())
+                    .zip(self.mono_out_hop.iter().zip(self.stereo_out_hop_r.iter()))
+                {
+                    let g = self.guard.smooth_sample(target_gain);
+                    *out_l = in_l * g;
+                    *out_r = in_r * g;
+                }
+                self.in_fifo_r.consume(AI_FRAME_SIZE);
+            } else {
+                let dst_l = self.out_fifo_l.reserve_write_mut(AI_FRAME_SIZE);
+                for (out_l, &in_l) in dst_l.iter_mut().zip(self.mono_out_hop.iter()) {
+                    *out_l = in_l * self.guard.smooth_sample(target_gain);
                 }
             }
+
+            self.in_fifo_l.consume(AI_FRAME_SIZE);
+        }
+
+        (total_frames, use_dual_channel)
+    }
+
+    fn drain_out_frames(
+        &mut self,
+        samples: &mut [f32],
+        ch_cnt: usize,
+        use_dual_channel: bool,
+        max_frames: usize,
+    ) -> usize {
+        if use_dual_channel {
+            let out_l = self.out_fifo_l.take_available(max_frames);
+            let out_r = self.out_fifo_r.take_available(max_frames);
+            let avail = out_l.len().min(out_r.len());
+            for (frame, (&l, &r)) in samples[..avail * ch_cnt]
+                .chunks_exact_mut(ch_cnt)
+                .zip(out_l[..avail].iter().zip(out_r[..avail].iter()))
+            {
+                frame[0] = l;
+                frame[1] = r;
+                for extra in &mut frame[2..] {
+                    *extra = l;
+                }
+            }
+            avail
+        } else {
+            let out_l = self.out_fifo_l.take_available(max_frames);
+            let avail = out_l.len();
+            if ch_cnt == 1 {
+                samples[..avail].copy_from_slice(out_l);
+            } else if ch_cnt == 2 {
+                for (frame, &l) in samples[..avail * 2].chunks_exact_mut(2).zip(out_l.iter()) {
+                    frame[0] = l;
+                    frame[1] = l;
+                }
+            } else {
+                for (frame, &l) in samples[..avail * ch_cnt]
+                    .chunks_exact_mut(ch_cnt)
+                    .zip(out_l.iter())
+                {
+                    frame.fill(l);
+                }
+            }
+            avail
+        }
+    }
+
+    /// Processes interleaved float samples `[L0, R0, L1, R1, ...]` through AI denoising
+    /// in fixed-length mode (for COM sAPO callbacks that cannot resize buffers).
+    pub fn process_interleaved(&mut self, samples: &mut [f32], channels_count: usize) {
+        if !self.enabled || samples.is_empty() {
+            return;
+        }
+
+        let ch_cnt = channels_count.min(self.channels_count).max(1);
+        let (total_frames, use_dual_channel) = self.push_and_denoise_hops(samples, ch_cnt);
+        if total_frames == 0 {
+            return;
+        }
+
+        let avail = self.drain_out_frames(samples, ch_cnt, use_dual_channel, total_frames);
+        if avail < total_frames {
+            samples[avail * ch_cnt..total_frames * ch_cnt].fill(0.0);
+        }
+    }
+
+    /// Variable-length streaming variant for the WASAPI jitter-buffered bridge:
+    /// emits ONLY exact completed hops so arbitrary/jittered capture packet sizes never insert zero holes.
+    pub fn process_interleaved_vec(&mut self, samples: &mut Vec<f32>, channels_count: usize) {
+        if !self.enabled || samples.is_empty() {
+            return;
+        }
+
+        let ch_cnt = channels_count.min(self.channels_count).max(1);
+        let (_, use_dual_channel) = self.push_and_denoise_hops(samples, ch_cnt);
+
+        let avail_frames = if use_dual_channel {
+            self.out_fifo_l.len().min(self.out_fifo_r.len())
+        } else {
+            self.out_fifo_l.len()
+        };
+
+        samples.resize(avail_frames * ch_cnt, 0.0);
+        if avail_frames > 0 {
+            let drained = self.drain_out_frames(samples, ch_cnt, use_dual_channel, avail_frames);
+            samples.truncate(drained * ch_cnt);
         }
     }
 }

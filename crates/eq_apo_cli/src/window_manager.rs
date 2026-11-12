@@ -9,7 +9,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     BringWindowToTop, EnumWindows, GetClassNameW, GetForegroundWindow,
     GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsWindow, IsZoomed,
     LoadImageW, SendMessageW, SetForegroundWindow, SetWindowPos, ShowWindow,
-    IMAGE_ICON, LR_DEFAULTSIZE, LR_LOADFROMFILE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    IMAGE_ICON, LR_LOADFROMFILE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
     SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE, SW_SHOW,
     WM_SETICON,
 };

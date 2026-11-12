@@ -1,5 +1,5 @@
 param (
-    [string]$Version = "1.3.0"
+    [string]$Version = "1.3.1"
 )
 # Build and package Equalizer FD CRAFT
 $ErrorActionPreference = "Stop"
@@ -12,8 +12,8 @@ function Copy-AiModels {
 }
 
 Write-Host ">>> [1/6] Building release binaries via Cargo..."
-cargo build --release --manifest-path crates/resona_apo/Cargo.toml
-cargo build --release --manifest-path crates/eq_apo_cli/Cargo.toml
+cargo build --release -p resona_apo --lib
+cargo build --release -p equalizer_fd_craft --bin EqualizerFD-Craft
 
 Write-Host ">>> [2/6] Copying release binaries to root directory..."
 $procs = Get-Process -Name "EqualizerFD-Craft", "EqualizerTray" -ErrorAction SilentlyContinue
@@ -22,8 +22,8 @@ if ($procs) {
     $procs | Wait-Process -Timeout 5 -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 300
 }
-Copy-Item "crates\eq_apo_cli\target\release\EqualizerFD-Craft.exe" -Destination "EqualizerFD-Craft.exe" -Force
-Copy-Item "crates\resona_apo\target\release\resona_apo.dll" -Destination "ResonaAPO.dll" -Force
+Copy-Item "target\release\EqualizerFD-Craft.exe" -Destination "EqualizerFD-Craft.exe" -Force
+Copy-Item "target\release\resona_apo.dll" -Destination "ResonaAPO.dll" -Force
 
 Write-Host ">>> [3/6] Compiling Inno Setup installers..."
 if (-not (Test-Path "dist")) {

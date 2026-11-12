@@ -74,6 +74,9 @@ installer_update.iss
 
 # --- Agent Tasks & Internal Storage ---
 .agents/
+.claude/
+agent/
+skills-lock.json
 
 # --- IDE, Editor & OS Artifacts ---
 .idea/

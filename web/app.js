@@ -74,7 +74,7 @@ function createDefaultBlocks() {
 }
 
 // --- App Version & VST Plugins Catalog (APO-PLUGINS Suite) ---
-let APP_VERSION = '1.3.0';
+let APP_VERSION = '1.3.1';
 let VST_BASE_DIR = 'D:\\\\testik\\\\vst_plugins\\\\';
 fetch('/api/info')
   .then(res => res.json())
@@ -1283,6 +1283,7 @@ function getActiveTab() {
 
 // Clipboard & History
 let clipboardBlock = null;
+let selectedBlockId = null;
 let undoStack = [];
 let redoStack = [];
 let isUndoRedoing = false;
@@ -1312,18 +1313,43 @@ const saveAsModal = document.getElementById('saveAsModal');
 const aboutModal = document.getElementById('aboutModal');
 const wizardModal = document.getElementById('wizardModal');
 
-// --- Window Resize & Observer for Responsive Windowed Mode (Task 8) ---
+// --- Window Resize, Canvas Rect Cache & Analysis Panel Toggle ---
+let _cachedCanvasRect = null;
+function invalidateCanvasRect() {
+  _cachedCanvasRect = null;
+}
+function getCanvasRect() {
+  if (!_cachedCanvasRect && canvas) {
+    _cachedCanvasRect = canvas.getBoundingClientRect();
+  }
+  return _cachedCanvasRect;
+}
+
 function resizeAnalysisCanvas() {
-  const rect = canvas.getBoundingClientRect();
-  if (rect.width > 0 && rect.height > 0) {
-    if (canvas.width !== Math.floor(rect.width) || canvas.height !== Math.floor(rect.height)) {
-      canvas.width = Math.floor(rect.width);
-      canvas.height = Math.floor(rect.height);
+  invalidateCanvasRect();
+  const rect = getCanvasRect();
+  if (rect && rect.width > 0 && rect.height > 0) {
+    const newW = Math.floor(rect.width);
+    const newH = Math.floor(rect.height);
+    if (canvas.width !== newW || canvas.height !== newH) {
+      canvas.width = newW;
+      canvas.height = newH;
     }
-    renderAnalysis();
+    renderAnalysis(true);
   }
 }
 window.addEventListener('resize', resizeAnalysisCanvas);
+window.addEventListener('scroll', invalidateCanvasRect, { passive: true });
+
+function toggleAnalysisPanel() {
+  if (!analysisPanel) return;
+  const collapsed = analysisPanel.classList.toggle('collapsed');
+  if (togglePanelBtn) togglePanelBtn.innerHTML = collapsed ? '&#9650;' : '&#9660;';
+  if (!collapsed) {
+    requestAnimationFrame(() => resizeAnalysisCanvas());
+  }
+  if (typeof ensureRtaLoop === 'function') ensureRtaLoop();
+}
 
 const canvasWrapEl = document.querySelector('.analysis-canvas-wrap');
 if (window.ResizeObserver && canvasWrapEl) {
@@ -1523,7 +1549,7 @@ function saveTabsState() {
   localStorage.setItem('resona_tabs_state', JSON.stringify(state.tabs));
 }
 
-// --- Interactive Canvas State & 60 FPS RTA Spectrum System ---
+// --- Interactive Canvas State & Offscreen-Cached 60 FPS RTA Spectrum System ---
 window.interactiveNodes = [];
 window.activeDragNode = null;
 window.hoveredNode = null;
@@ -1536,260 +1562,245 @@ const RTA_FREQS_32 = [
   800, 1000, 1250, 1600, 2000, 2500, 3150, 4000,
   5000, 6300, 8000, 10000, 12500, 16000, 18000, 20000
 ];
-let _rtaBins = new Float32Array(32);
-let _rtaPeakBins = new Float32Array(32);
+const _rtaBins = new Float32Array(32);
+const _rtaPeakBins = new Float32Array(32);
+const _rtaCoordsX = new Float32Array(32);
+const _rtaCoordsY = new Float32Array(32);
 window.liveSpectrumBins = null;
 
-// --- Render Analysis Panel Graph (Studio High-Precision RTA Deck) ---
-function renderAnalysis() {
-  const t0 = performance.now();
-  const w = canvas.width || 1280;
-  const h = canvas.height || 230;
+// Offscreen layer caches (eliminates grid/trig/shadowBlur/DOM recalculation during 60 FPS RTA)
+const _bgCacheCanvas = document.createElement('canvas');
+const _bgCacheCtx = _bgCacheCanvas.getContext('2d');
+const _eqCacheCanvas = document.createElement('canvas');
+const _eqCacheCtx = _eqCacheCanvas.getContext('2d');
+let _bgCacheKey = '';
+let _eqDirty = true;
+let _cachedRtaGrad = null;
+let _cachedRtaGradKey = '';
+let _cachedColFreqs = null;
+let _cachedColFreqKey = '';
+let _cachedRtaX = null;
+let _cachedRtaXKey = '';
+let _lastMetricsKey = '';
+let _lastClipDomKey = '';
+let _lastLiveTitleKey = '';
+let _lastVadDomKey = '';
+let _lastStreamUiKey = '';
+let _lastMonitorUiKey = '';
+let _lastLiveDomSyncMs = 0;
 
-  ctx.clearRect(0, 0, w, h);
-
-  const isDark = document.body.classList.contains('theme-dark');
-
-  // 1. Studio scope background
-  ctx.fillStyle = isDark ? '#000000' : '#14171a';
-  ctx.fillRect(0, 0, w, h);
-
-  // 2. Frequency Grid (Logarithmic)
-  const freqs = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
-  ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.08)' : '#2d333b';
-  ctx.lineWidth = 1;
-  ctx.fillStyle = isDark ? '#888888' : '#9ca3af';
-  ctx.font = '10px "Segoe UI", Tahoma, sans-serif';
-
-  freqs.forEach(f => {
-    const x = fToX(f, w);
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, h);
-    ctx.stroke();
-
-    const label = f >= 1000 ? `${f / 1000}k` : `${f}`;
-    ctx.fillText(label, x + 3, h - 6);
-  });
-
-  // 3. Decibel Grid
-  const dbs = [20, 10, 0, -10, -20];
-  dbs.forEach(db => {
-    const y = dbToY(db, h);
-    ctx.strokeStyle = db === 0 
-      ? (isDark ? 'rgba(255, 255, 255, 0.6)' : '#0284c7') 
-      : (isDark ? 'rgba(255, 255, 255, 0.05)' : '#262c34');
-    ctx.lineWidth = db === 0 ? 1.8 : 1;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(w, y);
-    ctx.stroke();
-
-    ctx.fillStyle = db === 0 
-      ? (isDark ? '#ffffff' : '#38bdf8') 
-      : (isDark ? '#666666' : '#9ca3af');
-    ctx.fillText(`${db > 0 ? '+' : ''}${db} dB`, 6, y - 3);
-  });
-
-  // 4. Real-Time Audio (RTA) Spectrum Analyzer Underlay (60 FPS)
-  if (window.isRtaActive) {
-    ctx.save();
-    const rtaCount = _rtaBins.length;
-    const rtaGradient = ctx.createLinearGradient(0, h, 0, 0);
-    if (isDark) {
-      rtaGradient.addColorStop(0, 'rgba(255, 255, 255, 0.02)');
-      rtaGradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.12)');
-      rtaGradient.addColorStop(1, 'rgba(255, 255, 255, 0.28)');
-      ctx.fillStyle = rtaGradient;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
-    } else {
-      rtaGradient.addColorStop(0, 'rgba(2, 132, 199, 0.02)');
-      rtaGradient.addColorStop(0.6, 'rgba(2, 132, 199, 0.16)');
-      rtaGradient.addColorStop(1, 'rgba(0, 210, 255, 0.38)');
-      ctx.fillStyle = rtaGradient;
-      ctx.strokeStyle = 'rgba(0, 210, 255, 0.75)';
-    }
-    ctx.lineWidth = 1.4;
-
-    // Layer A: Smooth Spline Spectrum Area Fill
-    ctx.beginPath();
-    ctx.moveTo(0, h);
-
-    const rtaPoints = [];
-    for (let i = 0; i < rtaCount; i++) {
-      const f = RTA_FREQS_32[i] || (20 * Math.pow(20000 / 20, i / (rtaCount - 1)));
-      const x = fToX(f, w);
-      const dbVal = -30.0 + (_rtaBins[i] * 45.0);
-      const y = Math.min(h, Math.max(0, dbToY(dbVal, h)));
-      rtaPoints.push({ x, y });
-    }
-
-    if (rtaPoints.length > 0) {
-      ctx.lineTo(rtaPoints[0].x, rtaPoints[0].y);
-      for (let i = 0; i < rtaPoints.length - 1; i++) {
-        const p0 = rtaPoints[Math.max(i - 1, 0)];
-        const p1 = rtaPoints[i];
-        const p2 = rtaPoints[i + 1];
-        const p3 = rtaPoints[Math.min(i + 2, rtaPoints.length - 1)];
-
-        const cp1x = p1.x + (p2.x - p0.x) / 6;
-        const cp1y = p1.y + (p2.y - p0.y) / 6;
-        const cp2x = p2.x - (p3.x - p1.x) / 6;
-        const cp2y = p2.y - (p3.y - p1.y) / 6;
-
-        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
-      }
-      ctx.lineTo(w, h);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
-
-    // Layer B: Glowing Falling Peak-Hold Line (FabFilter Pro-Q style)
-    ctx.beginPath();
-    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 230, 255, 0.9)';
-    ctx.lineWidth = 1.2;
-    ctx.setLineDash([2, 3]);
-
-    for (let i = 0; i < rtaCount; i++) {
-      const f = RTA_FREQS_32[i] || (20 * Math.pow(20000 / 20, i / (rtaCount - 1)));
-      const x = fToX(f, w);
-      const peakDbVal = -30.0 + (_rtaPeakBins[i] * 45.0);
-      const py = Math.min(h, Math.max(0, dbToY(peakDbVal, h)));
-      if (i === 0) ctx.moveTo(x, py);
-      else ctx.lineTo(x, py);
-    }
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
+function getColFreqLookup(w) {
+  const key = String(w);
+  if (_cachedColFreqs && _cachedColFreqKey === key) return _cachedColFreqs;
+  const count = Math.floor(w / 2) + 1;
+  const lut = new Float32Array(count);
+  for (let i = 0, x = 0; i < count; i++, x += 2) {
+    lut[i] = xToF(x, w);
   }
+  _cachedColFreqs = lut;
+  _cachedColFreqKey = key;
+  return lut;
+}
 
-  // 4b. FabFilter-Style Individual Filter Bandwidth Underlay (on hover/drag/select)
+function getRtaXLookup(w) {
+  const key = String(w);
+  if (_cachedRtaX && _cachedRtaXKey === key) return _cachedRtaX;
+  const arr = new Float32Array(32);
+  for (let i = 0; i < 32; i++) {
+    arr[i] = fToX(RTA_FREQS_32[i], w);
+  }
+  _cachedRtaX = arr;
+  _cachedRtaXKey = key;
+  return arr;
+}
+
+function rebuildBgGridCache(w, h, isDark) {
+  _bgCacheCanvas.width = w;
+  _bgCacheCanvas.height = h;
+  const bctx = _bgCacheCtx;
+
+  bctx.fillStyle = isDark ? '#000000' : '#14171a';
+  bctx.fillRect(0, 0, w, h);
+
+  const freqs = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+  bctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.08)' : '#2d333b';
+  bctx.lineWidth = 1;
+  bctx.fillStyle = isDark ? '#888888' : '#9ca3af';
+  bctx.font = '10px "Segoe UI", Tahoma, sans-serif';
+
+  bctx.beginPath();
+  for (let i = 0; i < freqs.length; i++) {
+    const f = freqs[i];
+    const x = fToX(f, w);
+    bctx.moveTo(x, 0);
+    bctx.lineTo(x, h);
+    bctx.fillText(f >= 1000 ? `${f / 1000}k` : `${f}`, x + 3, h - 6);
+  }
+  bctx.stroke();
+
+  const dbs = [20, 10, 0, -10, -20];
+  for (let i = 0; i < dbs.length; i++) {
+    const db = dbs[i];
+    const y = dbToY(db, h);
+    bctx.strokeStyle = db === 0
+      ? (isDark ? 'rgba(255, 255, 255, 0.6)' : '#0284c7')
+      : (isDark ? 'rgba(255, 255, 255, 0.05)' : '#262c34');
+    bctx.lineWidth = db === 0 ? 1.8 : 1;
+    bctx.beginPath();
+    bctx.moveTo(0, y);
+    bctx.lineTo(w, y);
+    bctx.stroke();
+
+    bctx.fillStyle = db === 0
+      ? (isDark ? '#ffffff' : '#38bdf8')
+      : (isDark ? '#666666' : '#9ca3af');
+    bctx.fillText(`${db > 0 ? '+' : ''}${db} dB`, 6, y - 3);
+  }
+}
+
+function rebuildEqOverlayCache(w, h, isDark) {
+  const t0 = performance.now();
+  if (_eqCacheCanvas.width !== w || _eqCacheCanvas.height !== h) {
+    _eqCacheCanvas.width = w;
+    _eqCacheCanvas.height = h;
+  }
+  const ectx = _eqCacheCtx;
+  ectx.clearRect(0, 0, w, h);
+
+  const colFreqs = getColFreqLookup(w);
+  const nCols = colFreqs.length;
+
+  // Individual filter bandwidth underlay (hover/drag/select)
   const activeFocus = window.activeDragNode || window.selectedNode || window.hoveredNode;
   if (activeFocus && activeFocus.filter && activeFocus.filter.enabled) {
     const focusFlt = activeFocus.filter;
-    ctx.save();
-    ctx.beginPath();
     const zeroY = dbToY(0, h);
-    ctx.moveTo(0, zeroY);
-
-    for (let px = 0; px <= w; px += 2) {
-      const f = xToF(px, w);
-      const fDb = evaluateBiquadDb(focusFlt.type, focusFlt.fc, focusFlt.gain, focusFlt.q, f);
-      const py = dbToY(fDb, h);
-      ctx.lineTo(px, py);
+    ectx.save();
+    ectx.beginPath();
+    ectx.moveTo(0, zeroY);
+    for (let i = 0, px = 0; i < nCols; i++, px += 2) {
+      const fDb = evaluateBiquadDb(focusFlt.type, focusFlt.fc, focusFlt.gain, focusFlt.q, colFreqs[i]);
+      ectx.lineTo(px, dbToY(fDb, h));
     }
-    ctx.lineTo(w, zeroY);
-    ctx.closePath();
-
+    ectx.lineTo(w, zeroY);
+    ectx.closePath();
     if (isDark) {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      ectx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+      ectx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
     } else {
-      ctx.fillStyle = 'rgba(2, 132, 199, 0.16)';
-      ctx.strokeStyle = 'rgba(0, 210, 255, 0.65)';
+      ectx.fillStyle = 'rgba(2, 132, 199, 0.16)';
+      ectx.strokeStyle = 'rgba(0, 210, 255, 0.65)';
     }
-    ctx.lineWidth = 1.2;
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
+    ectx.lineWidth = 1.2;
+    ectx.fill();
+    ectx.stroke();
+    ectx.restore();
   }
 
-  // 5. Calculate Total Magnitude Response Curve for active tab
+  // Flatten enabled DSP blocks once before column loop (zero per-pixel allocations)
   const tab = getActiveTab();
   const currentBlocks = tab ? tab.blocks : [];
+  let preampTotal = 0.0;
+  const activeParamFilters = [];
+  const activeGeqs = [];
+  for (let bi = 0; bi < currentBlocks.length; bi++) {
+    const b = currentBlocks[bi];
+    if (!b.enabled) continue;
+    if (b.kind === 'preamp') {
+      preampTotal += b.gain;
+    } else if (b.kind === 'parametric' && b.filters) {
+      for (let fi = 0; fi < b.filters.length; fi++) {
+        if (b.filters[fi].enabled) activeParamFilters.push(b.filters[fi]);
+      }
+    } else if ((b.kind === 'graphiceq15' || b.kind === 'graphiceq31') && b.bands) {
+      activeGeqs.push({
+        bandwidth: b.kind === 'graphiceq31' ? 0.4 : 0.8,
+        bands: b.bands
+      });
+    }
+  }
 
   let peakDb = -999;
   let peakFreq = 100;
 
-  ctx.save();
-  ctx.strokeStyle = isDark ? '#ffffff' : '#00d2ff';
-  ctx.lineWidth = 2.0;
-  if (isDark) {
-    ctx.shadowColor = 'rgba(255, 255, 255, 0.35)';
-    ctx.shadowBlur = 5;
-  } else {
-    ctx.shadowColor = 'rgba(0, 210, 255, 0.4)';
-    ctx.shadowBlur = 6;
-  }
-  ctx.beginPath();
+  ectx.save();
+  ectx.strokeStyle = isDark ? '#ffffff' : '#00d2ff';
+  ectx.lineWidth = 2.0;
+  ectx.shadowColor = isDark ? 'rgba(255, 255, 255, 0.35)' : 'rgba(0, 210, 255, 0.4)';
+  ectx.shadowBlur = isDark ? 5 : 6;
+  ectx.beginPath();
 
-  for (let x = 0; x <= w; x += 2) {
-    const f = xToF(x, w);
-    let totalDb = 0.0;
-
-    currentBlocks.forEach(b => {
-      if (!b.enabled) return;
-      if (b.kind === 'preamp') {
-        totalDb += b.gain;
-      } else if (b.kind === 'parametric') {
-        b.filters.forEach(flt => {
-          if (flt.enabled) {
-            totalDb += evaluateBiquadDb(flt.type, flt.fc, flt.gain, flt.q, f);
-          }
-        });
-      } else if (b.kind === 'graphiceq15' || b.kind === 'graphiceq31') {
-        const bandwidth = b.kind === 'graphiceq31' ? 0.4 : 0.8;
-        b.bands.forEach(band => {
-          const octDist = Math.abs(Math.log2(f / band.f));
-          if (octDist < bandwidth) {
-            totalDb += band.gain * (1.0 - (octDist / bandwidth));
-          }
-        });
+  const pLen = activeParamFilters.length;
+  const gLen = activeGeqs.length;
+  for (let i = 0, x = 0; i < nCols; i++, x += 2) {
+    const f = colFreqs[i];
+    let totalDb = preampTotal;
+    for (let fi = 0; fi < pLen; fi++) {
+      const flt = activeParamFilters[fi];
+      totalDb += evaluateBiquadDb(flt.type, flt.fc, flt.gain, flt.q, f);
+    }
+    for (let gi = 0; gi < gLen; gi++) {
+      const geq = activeGeqs[gi];
+      const bw = geq.bandwidth;
+      const bands = geq.bands;
+      for (let bi = 0; bi < bands.length; bi++) {
+        const octDist = Math.abs(Math.log2(f / bands[bi].f));
+        if (octDist < bw) {
+          totalDb += bands[bi].gain * (1.0 - (octDist / bw));
+        }
       }
-    });
-
+    }
     if (totalDb > peakDb) {
       peakDb = totalDb;
       peakFreq = f;
     }
-
     const y = dbToY(totalDb, h);
-    if (x === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+    if (i === 0) ectx.moveTo(x, y);
+    else ectx.lineTo(x, y);
   }
-  ctx.stroke();
-  ctx.restore();
+  ectx.stroke();
+  ectx.restore();
 
-  // 6. Draw Interactive Draggable Nodes for Parametric Filters
+  // Interactive Draggable Nodes
   window.interactiveNodes = [];
   let filterIndex = 0;
+  const selId = window.selectedNode?.filter.id;
+  const hovId = window.hoveredNode?.filter.id;
+  const dragId = window.activeDragNode?.filter.id;
 
-  currentBlocks.forEach(b => {
-    if (b.kind === 'parametric' && b.enabled) {
-      b.filters.forEach(flt => {
+  ectx.font = 'bold 10px "Segoe UI Mono", Consolas, monospace';
+  for (let bi = 0; bi < currentBlocks.length; bi++) {
+    const b = currentBlocks[bi];
+    if (b.kind === 'parametric' && b.enabled && b.filters) {
+      for (let fi = 0; fi < b.filters.length; fi++) {
+        const flt = b.filters[fi];
         filterIndex++;
         const x = fToX(flt.fc, w);
         const y = dbToY(flt.gain, h);
 
-        const isHovered = window.hoveredNode && window.hoveredNode.filter.id === flt.id;
-        const isDragging = window.activeDragNode && window.activeDragNode.filter.id === flt.id;
-        const isSelected = window.selectedNode && window.selectedNode.filter.id === flt.id;
+        const isHovered = hovId === flt.id;
+        const isDragging = dragId === flt.id;
+        const isSelected = selId === flt.id;
         const radius = isDragging ? 9.5 : (isSelected ? 9 : (isHovered ? 8 : 6.5));
 
-        // Store interactive hit-test record
         window.interactiveNodes.push({
           index: filterIndex,
           block: b,
           filter: flt,
-          x: x,
-          y: y,
+          x,
+          y,
           radius: 14
         });
 
-        ctx.save();
-
-        // Node Glow Halo
         if (isDragging || isHovered || isSelected) {
-          ctx.beginPath();
-          ctx.arc(x, y, radius + 8, 0, Math.PI * 2);
-          ctx.fillStyle = isDark
+          ectx.beginPath();
+          ectx.arc(x, y, radius + 8, 0, Math.PI * 2);
+          ectx.fillStyle = isDark
             ? (isDragging ? 'rgba(255, 255, 255, 0.45)' : (isSelected ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.2)'))
             : (isDragging ? 'rgba(0, 210, 255, 0.45)' : (isSelected ? 'rgba(0, 210, 255, 0.3)' : 'rgba(56, 189, 248, 0.2)'));
-          ctx.fill();
+          ectx.fill();
         }
 
-        // Filter Type Color Accent
         let nodeColor = isDark ? '#ffffff' : '#0078d7';
         if (!isDark) {
           if (flt.type === 'HP' || flt.type === 'LP') nodeColor = '#22c55e';
@@ -1797,54 +1808,152 @@ function renderAnalysis() {
           else if (flt.type === 'NO') nodeColor = '#ef4444';
         }
 
-        // Outer Ring
-        ctx.beginPath();
-        ctx.arc(x, y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = isDark ? '#000000' : '#ffffff';
-        ctx.strokeStyle = flt.enabled ? nodeColor : (isDark ? '#555555' : '#94a3b8');
-        ctx.lineWidth = isDragging ? 3 : 2;
-        if (!flt.enabled) ctx.setLineDash([2, 2]);
-        ctx.fill();
-        ctx.stroke();
-        ctx.setLineDash([]);
+        ectx.beginPath();
+        ectx.arc(x, y, radius, 0, Math.PI * 2);
+        ectx.fillStyle = isDark ? '#000000' : '#ffffff';
+        ectx.strokeStyle = flt.enabled ? nodeColor : (isDark ? '#555555' : '#94a3b8');
+        ectx.lineWidth = isDragging ? 3 : 2;
+        if (!flt.enabled) ectx.setLineDash([2, 2]);
+        ectx.fill();
+        ectx.stroke();
+        if (!flt.enabled) ectx.setLineDash([]);
 
-        // Center Pip
-        ctx.beginPath();
-        ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = flt.enabled ? nodeColor : (isDark ? '#555555' : '#94a3b8');
-        ctx.fill();
+        ectx.beginPath();
+        ectx.arc(x, y, 2.5, 0, Math.PI * 2);
+        ectx.fillStyle = flt.enabled ? nodeColor : (isDark ? '#555555' : '#94a3b8');
+        ectx.fill();
 
-        // Node Badge Label
-        ctx.fillStyle = isDark ? '#ffffff' : (flt.enabled ? '#0f172a' : '#64748b');
-        ctx.font = 'bold 10px "Segoe UI Mono", Consolas, monospace';
-        ctx.fillText(`P${filterIndex}`, x - 7, y - (radius + 5));
-
-        ctx.restore();
-      });
+        ectx.fillStyle = isDark ? '#ffffff' : (flt.enabled ? '#0f172a' : '#64748b');
+        ectx.fillText(`P${filterIndex}`, x - 7, y - (radius + 5));
+      }
     }
-  });
-
-  // 7. Update Status Badges & Metrics
-  const elapsed = (performance.now() - t0).toFixed(1);
-  analysisTimeText.textContent = window.t
-    ? window.t('analysis.calcTime', { ms: elapsed }, `Расчет: ${elapsed} мс`)
-    : `Расчет: ${elapsed} мс`;
-
-  peakGainText.textContent = window.t
-    ? window.t('analysis.peakAt', { gain: (peakDb > 0 ? '+' : '') + peakDb.toFixed(2), freq: Math.round(peakFreq) }, `Пик: ${peakDb > 0 ? '+' : ''}${peakDb.toFixed(2)} dB на ${Math.round(peakFreq)} Hz`)
-    : `Пик: ${peakDb > 0 ? '+' : ''}${peakDb.toFixed(2)} dB на ${Math.round(peakFreq)} Hz`;
-
-  if (peakDb > 0.0) {
-    clipStatusBox.className = 'status-indicator-clean clip';
-    clipStatusText.textContent = window.t
-      ? window.t('toolbar.clipOverload', { val: peakDb.toFixed(2) }, `Клиппинг: +${peakDb.toFixed(2)} dB`)
-      : `Клиппинг: +${peakDb.toFixed(2)} dB`;
-  } else {
-    clipStatusBox.className = 'status-indicator-clean ok';
-    clipStatusText.textContent = window.t
-      ? window.t('toolbar.clipOk', { val: peakDb.toFixed(1) }, `Нет клиппинга (Пик: ${peakDb.toFixed(1)} dB)`)
-      : `Нет клиппинга (Пик: ${peakDb.toFixed(1)} dB)`;
   }
+
+  // Update Status Badges ONLY when EQ metrics changed (never inside 60 FPS RTA ticks)
+  const elapsed = (performance.now() - t0).toFixed(1);
+  const roundedFreq = Math.round(peakFreq);
+  const metricKey = `${elapsed}|${peakDb.toFixed(2)}|${roundedFreq}`;
+  if (metricKey !== _lastMetricsKey) {
+    _lastMetricsKey = metricKey;
+    analysisTimeText.textContent = window.t
+      ? window.t('analysis.calcTime', { ms: elapsed }, `Расчет: ${elapsed} мс`)
+      : `Расчет: ${elapsed} мс`;
+
+    const gainTxt = (peakDb > 0 ? '+' : '') + peakDb.toFixed(2);
+    peakGainText.textContent = window.t
+      ? window.t('analysis.peakAt', { gain: gainTxt, freq: roundedFreq }, `Пик: ${gainTxt} dB на ${roundedFreq} Hz`)
+      : `Пик: ${gainTxt} dB на ${roundedFreq} Hz`;
+
+    const clipClass = peakDb > 0.0 ? 'status-indicator-clean clip' : 'status-indicator-clean ok';
+    const clipLabel = peakDb > 0.0
+      ? (window.t ? window.t('toolbar.clipOverload', { val: peakDb.toFixed(2) }, `Клиппинг: +${peakDb.toFixed(2)} dB`) : `Клиппинг: +${peakDb.toFixed(2)} dB`)
+      : (window.t ? window.t('toolbar.clipOk', { val: peakDb.toFixed(1) }, `Нет клиппинга (Пик: ${peakDb.toFixed(1)} dB)`) : `Нет клиппинга (Пик: ${peakDb.toFixed(1)} dB)`);
+    const nextClipKey = `${clipClass}|${clipLabel}`;
+    if (nextClipKey !== _lastClipDomKey && (!window.lastLiveData || !window.lastLiveData.active || window.lastLiveData.out_peak_db <= -90)) {
+      _lastClipDomKey = nextClipKey;
+      clipStatusBox.className = clipClass;
+      clipStatusText.textContent = clipLabel;
+    }
+  }
+}
+
+function drawRtaUnderlay(w, h, isDark) {
+  const gradKey = `${h}:${isDark ? 1 : 0}`;
+  if (!_cachedRtaGrad || _cachedRtaGradKey !== gradKey) {
+    const grad = ctx.createLinearGradient(0, h, 0, 0);
+    if (isDark) {
+      grad.addColorStop(0, 'rgba(255, 255, 255, 0.02)');
+      grad.addColorStop(0.6, 'rgba(255, 255, 255, 0.12)');
+      grad.addColorStop(1, 'rgba(255, 255, 255, 0.28)');
+    } else {
+      grad.addColorStop(0, 'rgba(2, 132, 199, 0.02)');
+      grad.addColorStop(0.6, 'rgba(2, 132, 199, 0.16)');
+      grad.addColorStop(1, 'rgba(0, 210, 255, 0.38)');
+    }
+    _cachedRtaGrad = grad;
+    _cachedRtaGradKey = gradKey;
+  }
+
+  const rtaX = getRtaXLookup(w);
+  for (let i = 0; i < 32; i++) {
+    _rtaCoordsX[i] = rtaX[i];
+    const dbVal = -30.0 + (_rtaBins[i] * 45.0);
+    _rtaCoordsY[i] = Math.min(h, Math.max(0, dbToY(dbVal, h)));
+  }
+
+  ctx.save();
+  ctx.fillStyle = _cachedRtaGrad;
+  ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.55)' : 'rgba(0, 210, 255, 0.75)';
+  ctx.lineWidth = 1.4;
+
+  ctx.beginPath();
+  ctx.moveTo(0, h);
+  ctx.lineTo(_rtaCoordsX[0], _rtaCoordsY[0]);
+  for (let i = 0; i < 31; i++) {
+    const x0 = _rtaCoordsX[i > 0 ? i - 1 : 0];
+    const y0 = _rtaCoordsY[i > 0 ? i - 1 : 0];
+    const x1 = _rtaCoordsX[i];
+    const y1 = _rtaCoordsY[i];
+    const x2 = _rtaCoordsX[i + 1];
+    const y2 = _rtaCoordsY[i + 1];
+    const x3 = _rtaCoordsX[i + 2 < 32 ? i + 2 : 31];
+    const y3 = _rtaCoordsY[i + 2 < 32 ? i + 2 : 31];
+
+    ctx.bezierCurveTo(
+      x1 + (x2 - x0) / 6,
+      y1 + (y2 - y0) / 6,
+      x2 - (x3 - x1) / 6,
+      y2 - (y3 - y1) / 6,
+      x2,
+      y2
+    );
+  }
+  ctx.lineTo(w, h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Falling peak-hold line
+  ctx.beginPath();
+  ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 230, 255, 0.9)';
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([2, 3]);
+  for (let i = 0; i < 32; i++) {
+    const peakDbVal = -30.0 + (_rtaPeakBins[i] * 45.0);
+    const py = Math.min(h, Math.max(0, dbToY(peakDbVal, h)));
+    if (i === 0) ctx.moveTo(_rtaCoordsX[i], py);
+    else ctx.lineTo(_rtaCoordsX[i], py);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+// --- Render Analysis Panel Graph (Layered Offscreen Blit Deck) ---
+function renderAnalysis(eqChanged = true) {
+  const w = canvas.width || 1280;
+  const h = canvas.height || 230;
+  const isDark = document.body.classList.contains('theme-dark');
+  const bgKey = `${w}x${h}:${isDark ? 1 : 0}`;
+
+  if (bgKey !== _bgCacheKey) {
+    _bgCacheKey = bgKey;
+    rebuildBgGridCache(w, h, isDark);
+    _eqDirty = true;
+  } else if (eqChanged) {
+    _eqDirty = true;
+  }
+
+  if (_eqDirty) {
+    rebuildEqOverlayCache(w, h, isDark);
+    _eqDirty = false;
+  }
+
+  ctx.drawImage(_bgCacheCanvas, 0, 0);
+  if (window.isRtaActive) {
+    drawRtaUnderlay(w, h, isDark);
+  }
+  ctx.drawImage(_eqCacheCanvas, 0, 0);
 }
 
 // Note Name Helper
@@ -1857,56 +1966,79 @@ function freqToNoteName(freq) {
   return `${note}${octave}`;
 }
 
-// --- 60 FPS RTA Spectrum Animation Loop ---
+function isRtaRunningDesired() {
+  return window.isRtaActive && !document.hidden && !(analysisPanel && analysisPanel.classList.contains('collapsed'));
+}
+
+// --- 60 FPS RTA Spectrum Animation Loop (Auto-pauses when hidden/collapsed/off) ---
 function stepRtaSpectrum() {
-  if (window.isRtaActive) {
-    const isStreamOn = isStreamActive;
-    const now = performance.now();
+  _rtaFrameId = null;
+  if (!isRtaRunningDesired()) return;
 
-    for (let i = 0; i < 32; i++) {
-      let target = 0.02;
-      if (window.liveSpectrumBins && window.liveSpectrumBins.length > i && window.liveSpectrumBins[i] > 0.01) {
-        target = window.liveSpectrumBins[i];
-      } else if (isStreamOn) {
-        const voiceBase = Math.sin((now * 0.003) + (i * 0.25)) * 0.4 + 0.5;
-        const formant = (i >= 6 && i <= 20) ? 0.38 : 0.12;
-        target = Math.min(1.0, Math.max(0.04, voiceBase * formant + Math.random() * 0.08));
-      } else {
-        target = 0.03 + Math.sin((now * 0.001) + (i * 0.4)) * 0.015;
-      }
+  const isStreamOn = isStreamActive;
+  const now = performance.now();
 
-      // Fast musical attack and smooth exponential decay
-      if (target > _rtaBins[i]) {
-        _rtaBins[i] += (target - _rtaBins[i]) * 0.40;
-      } else {
-        _rtaBins[i] += (target - _rtaBins[i]) * 0.10;
-      }
-
-      // Smooth falling peak hold line
-      if (_rtaBins[i] > _rtaPeakBins[i]) {
-        _rtaPeakBins[i] = _rtaBins[i];
-      } else {
-        _rtaPeakBins[i] = Math.max(0, _rtaPeakBins[i] - 0.005);
-      }
+  for (let i = 0; i < 32; i++) {
+    let target = 0.02;
+    if (window.liveSpectrumBins && window.liveSpectrumBins.length > i && window.liveSpectrumBins[i] > 0.01) {
+      target = window.liveSpectrumBins[i];
+    } else if (isStreamOn) {
+      const voiceBase = Math.sin((now * 0.003) + (i * 0.25)) * 0.4 + 0.5;
+      const formant = (i >= 6 && i <= 20) ? 0.38 : 0.12;
+      target = Math.min(1.0, Math.max(0.04, voiceBase * formant + Math.random() * 0.08));
+    } else {
+      target = 0.03 + Math.sin((now * 0.001) + (i * 0.4)) * 0.015;
     }
-    renderAnalysis();
+
+    if (target > _rtaBins[i]) {
+      _rtaBins[i] += (target - _rtaBins[i]) * 0.40;
+    } else {
+      _rtaBins[i] += (target - _rtaBins[i]) * 0.10;
+    }
+
+    if (_rtaBins[i] > _rtaPeakBins[i]) {
+      _rtaPeakBins[i] = _rtaBins[i];
+    } else {
+      _rtaPeakBins[i] = Math.max(0, _rtaPeakBins[i] - 0.005);
+    }
   }
+  renderAnalysis(false);
   _rtaFrameId = requestAnimationFrame(stepRtaSpectrum);
 }
-requestAnimationFrame(stepRtaSpectrum);
 
-// --- High-Speed RTA Live Feed Poller (65ms ~ 15 Hz) ---
+function ensureRtaLoop() {
+  if (isRtaRunningDesired()) {
+    if (_rtaFrameId === null) {
+      _rtaFrameId = requestAnimationFrame(stepRtaSpectrum);
+    }
+  } else if (_rtaFrameId !== null) {
+    cancelAnimationFrame(_rtaFrameId);
+    _rtaFrameId = null;
+  }
+}
+ensureRtaLoop();
+
+// --- Guarded RTA Live Feed Poller (65ms ~ 15 Hz, paused when hidden/off, drives 5 Hz telemetry) ---
+let _rtaPollInFlight = false;
 setInterval(async () => {
-  if (window.isRtaActive) {
-    try {
-      const r = await fetch('/api/live-status', { cache: 'no-store' });
-      if (r.ok) {
-        const d = await r.json();
-        if (d.spectrum && Array.isArray(d.spectrum)) {
-          window.liveSpectrumBins = d.spectrum;
-        }
+  if (!isRtaRunningDesired() || _rtaPollInFlight) return;
+  _rtaPollInFlight = true;
+  try {
+    const r = await fetch('/api/live-status', { cache: 'no-store' });
+    if (r.ok) {
+      const d = await r.json();
+      window.lastLiveData = d;
+      if (d.spectrum && Array.isArray(d.spectrum)) {
+        window.liveSpectrumBins = d.spectrum;
       }
-    } catch (_) {}
+      const now = performance.now();
+      if (now - _lastLiveDomSyncMs >= 200 && typeof applyLiveStatusData === 'function') {
+        _lastLiveDomSyncMs = now;
+        applyLiveStatusData(d);
+      }
+    }
+  } catch (_) {} finally {
+    _rtaPollInFlight = false;
   }
 }, 65);
 
@@ -2053,8 +2185,10 @@ document.addEventListener('mousedown', (e) => {
 });
 
 if (canvas) {
+  let _dragRafPending = false;
   canvas.addEventListener('mousedown', (e) => {
-    const rect = canvas.getBoundingClientRect();
+    invalidateCanvasRect();
+    const rect = getCanvasRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
@@ -2065,7 +2199,7 @@ if (canvas) {
       window.activeDragNode = hit;
       canvas.style.cursor = 'grabbing';
       renderCurveTooltip(hit);
-      renderAnalysis();
+      renderAnalysis(true);
       e.preventDefault();
     } else {
       // Clicked outside any node -> deselect and close card
@@ -2073,12 +2207,13 @@ if (canvas) {
       if (curveTooltip && !curveTooltip.matches(':hover')) {
         curveTooltip.classList.add('hidden');
       }
-      renderAnalysis();
+      renderAnalysis(true);
     }
   });
 
   canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
+    const rect = getCanvasRect();
+    if (!rect) return;
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const w = canvas.width || 1280;
@@ -2098,23 +2233,34 @@ if (canvas) {
         flt.gain = Math.max(-20, Math.min(20, Math.round(rawDb * 2) / 2));
       }
 
-      // Synchronize input fields in DOM in real-time
-      const fltRow = document.querySelector(`tr[data-filter-id="${flt.id}"]`);
-      if (fltRow) {
-        const fcInput = fltRow.querySelector('.flt-fc-input');
-        const gainInput = fltRow.querySelector('.flt-gain-input');
-        if (fcInput) fcInput.value = flt.fc;
-        if (gainInput) gainInput.value = flt.gain;
+      // Batch DOM & Canvas drag redraw to monitor vsync (<= refresh rate, never 1000Hz)
+      if (!_dragRafPending) {
+        _dragRafPending = true;
+        requestAnimationFrame(() => {
+          _dragRafPending = false;
+          const active = window.activeDragNode;
+          if (active) {
+            const curFlt = active.filter;
+            const fltRow = document.querySelector(`tr[data-filter-id="${curFlt.id}"]`);
+            if (fltRow) {
+              const fcInput = fltRow.querySelector('.flt-fc-input');
+              const gainInput = fltRow.querySelector('.flt-gain-input');
+              if (fcInput) fcInput.value = curFlt.fc;
+              if (gainInput) gainInput.value = curFlt.gain;
+            }
+            renderAnalysis(true);
+            renderCurveTooltip(active);
+          } else {
+            renderAnalysis(true);
+          }
+        });
       }
-
-      renderAnalysis();
-      renderCurveTooltip(window.activeDragNode);
       debouncedRealtimeSave();
     } else {
       const hit = findNodeAtCoord(x, y);
       if (hit !== window.hoveredNode) {
         window.hoveredNode = hit;
-        renderAnalysis();
+        renderAnalysis(true);
       }
 
       if (hit) {
@@ -2137,13 +2283,15 @@ if (canvas) {
       if (!window.selectedNode && !window.hoveredNode && curveTooltip && !curveTooltip.matches(':hover')) {
         curveTooltip.classList.add('hidden');
       }
+      renderAnalysis(true);
       saveTabsState();
       saveConfigRealtime();
     }
   });
 
   canvas.addEventListener('wheel', (e) => {
-    const rect = canvas.getBoundingClientRect();
+    invalidateCanvasRect();
+    const rect = getCanvasRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const hit = findNodeAtCoord(x, y) || window.activeDragNode;
@@ -2360,7 +2508,8 @@ function toggleRta() {
     btn.textContent = window.isRtaActive ? 'RTA Спектр [Вкл]' : 'RTA Спектр [Выкл]';
     btn.classList.toggle('off', !window.isRtaActive);
   }
-  renderAnalysis();
+  ensureRtaLoop();
+  renderAnalysis(false);
   showToast(window.isRtaActive ? '60 FPS RTA спектроанализатор активирован' : 'RTA спектроанализатор приостановлен');
 }
 
@@ -4557,10 +4706,7 @@ document.getElementById('applyRawConfigBtn').addEventListener('click', () => {
 });
 
 // Toggle bottom panel
-togglePanelBtn.addEventListener('click', () => {
-  analysisPanel.classList.toggle('collapsed');
-  togglePanelBtn.innerHTML = analysisPanel.classList.contains('collapsed') ? '&#9650;' : '&#9660;';
-});
+togglePanelBtn.addEventListener('click', toggleAnalysisPanel);
 
 // --- New Configuration Dialog (Task 10: Adds new tab) ---
 function openNewConfigModal() {
@@ -5054,7 +5200,7 @@ let lastBytesDownloaded = 0;
 let lastSpeedTime = Date.now();
 
 function syncAppVersionUI() {
-  const ver = APP_VERSION || '1.3.0';
+  const ver = APP_VERSION || '1.3.1';
   if (updateCurrentVerText) {
     updateCurrentVerText.textContent = window.t
       ? window.t('update.currentVer', { ver }, `Текущая версия: v${ver}`)
@@ -5069,7 +5215,13 @@ function syncAppVersionUI() {
     fileFullName.textContent = `EqualizerFD-Craft-Setup-v${ver}.exe`;
   }
 }
-window.addEventListener('languageChanged', syncAppVersionUI);
+window.addEventListener('languageChanged', () => {
+  _lastMetricsKey = '';
+  _lastClipDomKey = '';
+  _lastStreamUiKey = '';
+  syncAppVersionUI();
+  renderAnalysis(true);
+});
 
 function formatBytes(bytes) {
   if (!bytes || bytes <= 0) return '0 B';
@@ -5508,10 +5660,32 @@ function openConfigFile() {
   if (opener) opener.click();
 }
 
+function resolveTargetBlockIndex(tab) {
+  if (!tab || !tab.blocks || tab.blocks.length === 0) return -1;
+  if (selectedBlockId !== null) {
+    const idx = tab.blocks.findIndex(b => b.id === selectedBlockId);
+    if (idx !== -1) return idx;
+  }
+  return tab.blocks.length - 1;
+}
+
+if (blocksContainer) {
+  blocksContainer.addEventListener('mousedown', (e) => {
+    const card = e.target && e.target.closest ? e.target.closest('.filter-block-card') : null;
+    if (card && card.dataset.blockId) {
+      const id = Number(card.dataset.blockId);
+      if (!Number.isNaN(id)) selectedBlockId = id;
+    }
+  });
+}
+
 function cutBlock() {
   const tab = getActiveTab();
-  if (tab && tab.blocks.length > 0) {
-    clipboardBlock = tab.blocks.pop();
+  const idx = resolveTargetBlockIndex(tab);
+  if (idx !== -1) {
+    const [removed] = tab.blocks.splice(idx, 1);
+    clipboardBlock = JSON.parse(JSON.stringify(removed));
+    selectedBlockId = tab.blocks.length > 0 ? tab.blocks[Math.min(idx, tab.blocks.length - 1)].id : null;
     renderBlocks();
     updateAll();
     pushHistory();
@@ -5521,8 +5695,9 @@ function cutBlock() {
 
 function copyBlock() {
   const tab = getActiveTab();
-  if (tab && tab.blocks.length > 0) {
-    clipboardBlock = JSON.parse(JSON.stringify(tab.blocks[tab.blocks.length - 1]));
+  const idx = resolveTargetBlockIndex(tab);
+  if (idx !== -1) {
+    clipboardBlock = JSON.parse(JSON.stringify(tab.blocks[idx]));
     showToast("Блок скопирован в буфер");
   }
 }
@@ -5533,7 +5708,10 @@ function pasteBlock() {
     const cloned = JSON.parse(JSON.stringify(clipboardBlock));
     cloned.id = nextId();
     if (cloned.filters) cloned.filters.forEach(f => f.id = nextId());
-    tab.blocks.push(cloned);
+    const idx = resolveTargetBlockIndex(tab);
+    const insertAt = idx !== -1 ? idx + 1 : tab.blocks.length;
+    tab.blocks.splice(insertAt, 0, cloned);
+    selectedBlockId = cloned.id;
     renderBlocks();
     updateAll();
     pushHistory();
@@ -5596,10 +5774,7 @@ document.getElementById('menuCopy')?.addEventListener('click', copyBlock);
 document.getElementById('menuPaste')?.addEventListener('click', pasteBlock);
 
 // Menubar View
-document.getElementById('menuToggleAnalysis')?.addEventListener('click', () => {
-  analysisPanel.classList.toggle('collapsed');
-  togglePanelBtn.innerHTML = analysisPanel.classList.contains('collapsed') ? '&#9650;' : '&#9660;';
-});
+document.getElementById('menuToggleAnalysis')?.addEventListener('click', toggleAnalysisPanel);
 
 document.getElementById('menuResetZoom')?.addEventListener('click', () => {
   renderAnalysis();
@@ -5654,28 +5829,58 @@ document.getElementById('langEn')?.addEventListener('click', () => setAppLanguag
 // Menubar Help
 document.getElementById('menuAbout')?.addEventListener('click', openAboutModal);
 
-// Keyboard Shortcuts
+// Keyboard Shortcuts (uses e.code so shortcuts work on both EN and RU layouts)
+function isEditableEventTarget(target) {
+  if (!target || !(target instanceof Element)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
 document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+  const mod = (e.ctrlKey || e.metaKey) && !e.altKey;
+  const code = e.code || '';
+  const editable = isEditableEventTarget(e.target);
+
+  if (mod && (code === 'KeyS' || e.key.toLowerCase() === 's')) {
+    e.preventDefault();
+    saveConfigToDisk(false);
+    return;
+  }
+
+  if (e.key === 'F8') {
+    e.preventDefault();
+    toggleAnalysisPanel();
+    return;
+  }
+
+  // Keep native Cut/Copy/Paste/Undo/Redo inside inputs and textareas
+  if (editable) return;
+
+  if (mod && !e.shiftKey && code === 'KeyC') {
+    const selText = window.getSelection ? window.getSelection().toString() : '';
+    if (selText) return; // Allow copying highlighted text natively
+    e.preventDefault();
+    copyBlock();
+  } else if (mod && !e.shiftKey && code === 'KeyV') {
+    e.preventDefault();
+    pasteBlock();
+  } else if (mod && !e.shiftKey && code === 'KeyX') {
+    e.preventDefault();
+    cutBlock();
+  } else if (mod && (code === 'KeyZ' || e.key.toLowerCase() === 'z')) {
     e.preventDefault();
     if (e.shiftKey) redo();
     else undo();
-  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+  } else if (mod && !e.shiftKey && (code === 'KeyY' || e.key.toLowerCase() === 'y')) {
     e.preventDefault();
     redo();
-  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-    e.preventDefault();
-    saveConfigToDisk(false);
-  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+  } else if (mod && !e.shiftKey && (code === 'KeyN' || e.key.toLowerCase() === 'n')) {
     e.preventDefault();
     openNewConfigModal();
-  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
+  } else if (mod && !e.shiftKey && (code === 'KeyO' || e.key.toLowerCase() === 'o')) {
     e.preventDefault();
     openConfigFile();
-  } else if (e.key === 'F8') {
-    e.preventDefault();
-    analysisPanel.classList.toggle('collapsed');
-    togglePanelBtn.innerHTML = analysisPanel.classList.contains('collapsed') ? '&#9650;' : '&#9660;';
   }
 });
 
@@ -5855,8 +6060,78 @@ async function initApp() {
 
 initApp();
 
-// --- Virtual Cable Live Stream Poller & Controller ---
+// --- Virtual Cable Live Stream Poller & Controller (Diff-Guarded DOM Updates) ---
+function applyLiveStatusData(liveData) {
+  if (!liveData) return;
+  const clipBox = document.getElementById('clipStatusBox');
+  const clipTxt = document.getElementById('clipStatusText');
+  if (clipBox && clipTxt && liveData.active && liveData.out_peak_db > -90) {
+    const outPk = liveData.out_peak_db;
+    const clipClass = outPk > 0.0 ? 'status-indicator-clean clip' : 'status-indicator-clean ok';
+    const clipLabel = outPk > 0.0
+      ? (window.t
+          ? window.t('toolbar.clipOverload', { val: outPk.toFixed(1) }, `Клиппинг: +${outPk.toFixed(1)} dB`)
+          : `Клиппинг: +${outPk.toFixed(1)} dB`)
+      : (window.t
+          ? window.t('toolbar.liveSignal', { peak: outPk.toFixed(1), gain: liveData.preamp_gain_db.toFixed(1) }, `Сигнал: ${outPk.toFixed(1)} dB (Усиление: +${liveData.preamp_gain_db.toFixed(1)} dB)`)
+          : `Сигнал: ${outPk.toFixed(1)} dB (Усиление: +${liveData.preamp_gain_db.toFixed(1)} dB)`);
+    const nextClipKey = `${clipClass}|${clipLabel}`;
+    if (nextClipKey !== _lastClipDomKey) {
+      _lastClipDomKey = nextClipKey;
+      clipBox.className = clipClass;
+      clipTxt.textContent = clipLabel;
+    }
+  }
+
+  const vadEls = document.getElementsByClassName('rnnoise-vad-indicator');
+  const titleEls = document.getElementsByClassName('rnnoise-title-text');
+  if (vadEls.length === 0 && titleEls.length === 0) return;
+
+  if (liveData.rnnoise_enabled) {
+    const vadProb = Math.round((liveData.speech_prob || 0.0) * 100);
+    const isDfn3 = liveData.ai_engine_mode === 1;
+    const engineTag = isDfn3 ? 'DFN3-LL' : 'RNNoise';
+    const snrStr = (isDfn3 && liveData.ai_lsnr_db !== undefined) ? ` | SNR ${liveData.ai_lsnr_db.toFixed(0)}dB` : '';
+    const isVoice = isDfn3 ? ((liveData.ai_lsnr_db ?? -15) >= -3.0) : ((liveData.speech_prob || 0.0) >= 0.45);
+    const titleStr = isDfn3
+      ? 'Neural AI Audio (DeepFilterNet3 LL • 48 kHz)'
+      : 'Neural AI Audio (RNNoise Fallback)';
+    if (titleStr !== _lastLiveTitleKey) {
+      _lastLiveTitleKey = titleStr;
+      for (let i = 0; i < titleEls.length; i++) {
+        titleEls[i].textContent = titleStr;
+      }
+    }
+
+    const vadClass = isVoice ? 'rnnoise-vad-indicator active-voice' : 'rnnoise-vad-indicator idle-voice';
+    const vadText = isVoice
+      ? `VAD: Голос (${vadProb}%)${snrStr} • ${engineTag}`
+      : `VAD: Тишина (${vadProb}%)${snrStr} • ${engineTag}`;
+    const vadKey = `${vadClass}|${vadText}`;
+    if (vadKey !== _lastVadDomKey) {
+      _lastVadDomKey = vadKey;
+      const html = `<span class="rnnoise-vad-dot"></span> ${vadText}`;
+      for (let i = 0; i < vadEls.length; i++) {
+        vadEls[i].className = vadClass;
+        vadEls[i].innerHTML = html;
+      }
+    }
+  } else {
+    const vadKey = 'disabled';
+    if (vadKey !== _lastVadDomKey) {
+      _lastVadDomKey = vadKey;
+      for (let i = 0; i < vadEls.length; i++) {
+        vadEls[i].className = 'rnnoise-vad-indicator disabled-voice';
+        vadEls[i].innerHTML = '<span class="rnnoise-vad-dot"></span> VAD: Выключен';
+      }
+    }
+  }
+}
+
+let _streamPollInFlight = false;
 async function checkStreamStatus() {
+  if (_streamPollInFlight || document.hidden) return;
+  _streamPollInFlight = true;
   try {
     const res = await fetch('/api/stream/status');
     if (res.ok) {
@@ -5867,71 +6142,37 @@ async function checkStreamStatus() {
       const btn = document.getElementById('btnToggleStream');
       const box = document.getElementById('streamBridgeBox');
       if (btn && box) {
-        btn.dataset.active = data.active ? 'true' : 'false';
-        if (data.active) {
-          btn.classList.add('active');
-          box.classList.add('active');
-          btn.textContent = window.t ? window.t('toolbar.streamLive', null, '[В ЭФИРЕ]') : '[В ЭФИРЕ]';
-        } else {
-          btn.classList.remove('active');
-          box.classList.remove('active');
-          btn.textContent = window.t ? window.t('toolbar.streamPaused', null, '[ОСТАНОВЛЕН]') : '[ОСТАНОВЛЕН]';
+        const label = data.active
+          ? (window.t ? window.t('toolbar.streamLive', null, '[В ЭФИРЕ]') : '[В ЭФИРЕ]')
+          : (window.t ? window.t('toolbar.streamPaused', null, '[ОСТАНОВЛЕН]') : '[ОСТАНОВЛЕН]');
+        const nextKey = `${Boolean(data.active)}|${label}`;
+        if (nextKey !== _lastStreamUiKey) {
+          _lastStreamUiKey = nextKey;
+          btn.dataset.active = data.active ? 'true' : 'false';
+          btn.classList.toggle('active', Boolean(data.active));
+          box.classList.toggle('active', Boolean(data.active));
+          btn.textContent = label;
+          btn.style.background = '';
+          box.style.background = '';
+          box.style.borderColor = '';
         }
-        btn.style.background = '';
-        box.style.background = '';
-        box.style.borderColor = '';
       }
     }
 
-    const liveRes = await fetch('/api/live-status');
-    if (liveRes.ok) {
-      const liveData = await liveRes.json();
-      const clipBox = document.getElementById('clipStatusBox');
-      const clipTxt = document.getElementById('clipStatusText');
-      if (clipBox && clipTxt && liveData.active && liveData.out_peak_db > -90) {
-        const outPk = liveData.out_peak_db;
-        const isEn = window.I18N && window.I18N.lang === 'en';
-        if (outPk > 0.0) {
-          clipBox.className = 'status-indicator-clean clip';
-          clipTxt.textContent = window.t
-            ? window.t('toolbar.clipOverload', { val: outPk.toFixed(1) }, `Клиппинг: +${outPk.toFixed(1)} dB`)
-            : `Клиппинг: +${outPk.toFixed(1)} dB`;
-        } else {
-          clipBox.className = 'status-indicator-clean ok';
-          clipTxt.textContent = window.t
-            ? window.t('toolbar.liveSignal', { peak: outPk.toFixed(1), gain: liveData.preamp_gain_db.toFixed(1) }, `Сигнал: ${outPk.toFixed(1)} dB (Усиление: +${liveData.preamp_gain_db.toFixed(1)} dB)`)
-            : `Сигнал: ${outPk.toFixed(1)} dB (Усиление: +${liveData.preamp_gain_db.toFixed(1)} dB)`;
-        }
+    // Reuse RTA live poller payload when running; only fetch here if RTA loop is idle
+    if (!isRtaRunningDesired() || !window.lastLiveData) {
+      const liveRes = await fetch('/api/live-status');
+      if (liveRes.ok) {
+        const liveData = await liveRes.json();
+        window.lastLiveData = liveData;
+        applyLiveStatusData(liveData);
       }
-
-      if (liveData.rnnoise_enabled) {
-        const vadProb = Math.round((liveData.speech_prob || 0.0) * 100);
-        const isDfn3 = liveData.ai_engine_mode === 1;
-        const engineTag = isDfn3 ? 'DFN3-LL' : 'RNNoise';
-        const snrStr = (isDfn3 && liveData.ai_lsnr_db !== undefined) ? ` | SNR ${liveData.ai_lsnr_db.toFixed(0)}dB` : '';
-        const isVoice = isDfn3 ? ((liveData.ai_lsnr_db ?? -15) >= -3.0) : ((liveData.speech_prob || 0.0) >= 0.45);
-        document.querySelectorAll('.rnnoise-title-text').forEach(el => {
-          el.textContent = isDfn3
-            ? 'Neural AI Audio (DeepFilterNet3 LL • 48 kHz)'
-            : 'Neural AI Audio (RNNoise Fallback)';
-        });
-        document.querySelectorAll('.rnnoise-vad-indicator').forEach(el => {
-          if (isVoice) {
-            el.className = 'rnnoise-vad-indicator active-voice';
-            el.innerHTML = `<span class="rnnoise-vad-dot"></span> VAD: Голос (${vadProb}%)${snrStr} • ${engineTag}`;
-          } else {
-            el.className = 'rnnoise-vad-indicator idle-voice';
-            el.innerHTML = `<span class="rnnoise-vad-dot"></span> VAD: Тишина (${vadProb}%)${snrStr} • ${engineTag}`;
-          }
-        });
-      } else {
-        document.querySelectorAll('.rnnoise-vad-indicator').forEach(el => {
-          el.className = 'rnnoise-vad-indicator disabled-voice';
-          el.innerHTML = `<span class="rnnoise-vad-dot"></span> VAD: Выключен`;
-        });
-      }
+    } else {
+      applyLiveStatusData(window.lastLiveData);
     }
-  } catch (e) {}
+  } catch (e) {} finally {
+    _streamPollInFlight = false;
+  }
 }
 
 const btnToggleStream = document.getElementById('btnToggleStream');
@@ -6028,28 +6269,51 @@ if (cfgMonitorVolume) {
 }
 
 // Check monitor status along with stream status
+let _monitorPollInFlight = false;
 async function checkMonitorStatus() {
+  if (_monitorPollInFlight || document.hidden) return;
+  _monitorPollInFlight = true;
   try {
     const res = await fetch('/api/monitor/status');
     if (res.ok) {
       const data = await res.json();
-      window.isSidetoneActive = !!data.active;
-      window.activeMonitoredCapture = data.capture || '';
-      window.activeMonitoredRender = data.render || '';
-      if (data.render && data.render !== 'default') {
-        try { localStorage.setItem('resona_monitor_device', data.render); } catch (_) {}
+      const active = !!data.active;
+      const cap = data.capture || '';
+      const ren = data.render || '';
+      const volPct = data.volume !== undefined ? Math.round(data.volume * 100) : null;
+      const monKey = `${active}|${cap}|${ren}|${volPct}`;
+      if (monKey !== _lastMonitorUiKey) {
+        _lastMonitorUiKey = monKey;
+        window.isSidetoneActive = active;
+        window.activeMonitoredCapture = cap;
+        window.activeMonitoredRender = ren;
+        if (ren && ren !== 'default') {
+          try { localStorage.setItem('resona_monitor_device', ren); } catch (_) {}
+        }
+        if (volPct !== null && !document.activeElement?.matches('#toolbarMonitorVol, #cfgMonitorVolume')) {
+          syncMonitorVolumeUI(volPct);
+        }
+        updateSidetoneUI();
       }
-      if (data.volume !== undefined && !document.activeElement?.matches('#toolbarMonitorVol, #cfgMonitorVolume')) {
-        syncMonitorVolumeUI(data.volume * 100);
-      }
-      updateSidetoneUI();
     }
-  } catch (_) {}
+  } catch (_) {} finally {
+    _monitorPollInFlight = false;
+  }
 }
 
+document.addEventListener('visibilitychange', () => {
+  ensureRtaLoop();
+  if (!document.hidden) {
+    checkStreamStatus();
+    checkMonitorStatus();
+  }
+});
+
 setInterval(() => {
-  checkStreamStatus();
-  checkMonitorStatus();
+  if (!document.hidden) {
+    checkStreamStatus();
+    checkMonitorStatus();
+  }
 }, 1000);
 checkStreamStatus();
 checkMonitorStatus();

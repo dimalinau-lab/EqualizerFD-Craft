@@ -69,10 +69,6 @@ impl StreamController {
         }
     }
 
-    pub fn set_primary_publisher(&mut self, primary: bool) {
-        self.is_primary_publisher = primary;
-    }
-
     pub fn is_active(&self) -> bool {
         self.is_running.load(Ordering::SeqCst)
     }
@@ -401,21 +397,35 @@ unsafe fn write_render_from_queue(
     if frames_to_write > 0 {
         let render_buf_ptr = render_service.GetBuffer(frames_to_write as u32)?;
         let total_write_samples = frames_to_write * ren_channels;
+        let (s1, s2) = queue.as_slices();
+        let take1 = s1.len().min(total_write_samples);
+        let take2 = total_write_samples - take1;
         if ren_bits == 32 {
             let out_slice = std::slice::from_raw_parts_mut(render_buf_ptr as *mut f32, total_write_samples);
-            for item in out_slice.iter_mut() {
-                *item = queue.pop_front().unwrap_or(0.0) * vol;
+            for (dst, &src) in out_slice[..take1].iter_mut().zip(&s1[..take1]) {
+                *dst = src * vol;
+            }
+            if take2 > 0 {
+                for (dst, &src) in out_slice[take1..].iter_mut().zip(&s2[..take2]) {
+                    *dst = src * vol;
+                }
             }
         } else if ren_bits == 16 {
             let out_slice = std::slice::from_raw_parts_mut(render_buf_ptr as *mut i16, total_write_samples);
-            for item in out_slice.iter_mut() {
-                let s = queue.pop_front().unwrap_or(0.0) * vol;
-                *item = (s * 32767.0).clamp(-32768.0, 32767.0) as i16;
+            for (dst, &src) in out_slice[..take1].iter_mut().zip(&s1[..take1]) {
+                *dst = ((src * vol) * 32767.0).clamp(-32768.0, 32767.0) as i16;
+            }
+            if take2 > 0 {
+                for (dst, &src) in out_slice[take1..].iter_mut().zip(&s2[..take2]) {
+                    *dst = ((src * vol) * 32767.0).clamp(-32768.0, 32767.0) as i16;
+                }
             }
         }
+        queue.drain(..total_write_samples);
         let _ = render_service.ReleaseBuffer(frames_to_write as u32, 0);
-    } else if padding < 480 {
-        let silence_frames = (480 - padding).min(available_space as u32);
+    } else if padding < 144 {
+        // Emergency hardware-underrun guard only (< 3 ms buffered) so normal 10 ms AI hops never inject zero gaps
+        let silence_frames = (240 - padding).min(available_space as u32);
         if silence_frames > 0 {
             if let Ok(ptr) = render_service.GetBuffer(silence_frames) {
                 let byte_count = (silence_frames as usize) * ren_channels * (ren_bits as usize / 8);
@@ -523,8 +533,15 @@ unsafe fn run_tap_subscriber_session(
                 if guard.total_frames_written > read_seq {
                     let start_frame = (read_seq - earliest_seq) as usize;
                     let start_idx = start_frame * ren_channels;
-                    for &s in guard.samples.iter().skip(start_idx) {
-                        local_queue.push_back(s);
+                    let (g1, g2) = guard.samples.as_slices();
+                    if start_idx < g1.len() {
+                        local_queue.extend(g1[start_idx..].iter().copied());
+                        local_queue.extend(g2.iter().copied());
+                    } else {
+                        let off2 = start_idx - g1.len();
+                        if off2 < g2.len() {
+                            local_queue.extend(g2[off2..].iter().copied());
+                        }
                     }
                     read_seq = guard.total_frames_written;
                 }
@@ -601,6 +618,8 @@ impl StreamResampler {
         }
 
         let ratio = in_rate / out_rate;
+        let est_out_frames = (((in_frames as f64) - self.phase).max(0.0) / ratio).ceil() as usize + 1;
+        output.reserve(est_out_frames * 2);
 
         let get_sample = |idx: isize, ch: usize| -> f32 {
             if idx < 0 {
@@ -959,50 +978,62 @@ fn run_pipeline_session(
                 if num_frames_read > 0 && !data_ptr.is_null() {
                     last_packet_instant = std::time::Instant::now();
                     let total_samples = (num_frames_read as usize) * cap_channels;
-                    float_buffer.clear();
 
                     if cap_bits == 32 {
+                        float_buffer.resize(total_samples, 0.0);
                         if is_float {
                             let slice = std::slice::from_raw_parts(data_ptr as *const f32, total_samples);
-                            for &s in slice {
-                                float_buffer.push(if s.is_finite() { s.clamp(-1.5, 1.5) } else { 0.0 });
+                            for (dst, &s) in float_buffer.iter_mut().zip(slice.iter()) {
+                                *dst = if s.is_finite() { s.clamp(-1.5, 1.5) } else { 0.0 };
                             }
                         } else {
                             let slice = std::slice::from_raw_parts(data_ptr as *const i32, total_samples);
-                            for &s in slice {
-                                float_buffer.push((s as f32) / 2147483648.0);
+                            const INV_I32: f32 = 1.0 / 2147483648.0;
+                            for (dst, &s) in float_buffer.iter_mut().zip(slice.iter()) {
+                                *dst = (s as f32) * INV_I32;
                             }
                         }
                     } else if cap_bits == 16 {
+                        float_buffer.resize(total_samples, 0.0);
                         let slice = std::slice::from_raw_parts(data_ptr as *const i16, total_samples);
-                        for &s in slice {
-                            float_buffer.push((s as f32) / 32768.0);
+                        const INV_I16: f32 = 1.0 / 32768.0;
+                        for (dst, &s) in float_buffer.iter_mut().zip(slice.iter()) {
+                            *dst = (s as f32) * INV_I16;
                         }
                     } else if cap_bits == 24 {
+                        float_buffer.resize(total_samples, 0.0);
                         let bytes = std::slice::from_raw_parts(data_ptr, total_samples * 3);
-                        for i in 0..total_samples {
-                            let b0 = bytes[i * 3] as i32;
-                            let b1 = bytes[i * 3 + 1] as i32;
-                            let b2 = bytes[i * 3 + 2] as i8 as i32;
+                        const INV_I24: f32 = 1.0 / 8388608.0;
+                        for (dst, chunk) in float_buffer.iter_mut().zip(bytes.chunks_exact(3)) {
+                            let b0 = chunk[0] as i32;
+                            let b1 = chunk[1] as i32;
+                            let b2 = chunk[2] as i8 as i32;
                             let val = (b2 << 16) | (b1 << 8) | b0;
-                            float_buffer.push((val as f32) / 8388608.0);
+                            *dst = (val as f32) * INV_I24;
                         }
+                    } else {
+                        float_buffer.clear();
                     }
 
-                    // Convert to target channels (mono to stereo or matching)
-                    raw_stereo_buffer.clear();
+                    // Convert to target stereo layout without per-sample growth checks
                     if cap_channels == 1 {
-                        for &s in &float_buffer {
-                            raw_stereo_buffer.push(s);
-                            raw_stereo_buffer.push(s);
+                        raw_stereo_buffer.resize(float_buffer.len() * 2, 0.0);
+                        for (lr, &s) in raw_stereo_buffer.chunks_exact_mut(2).zip(float_buffer.iter()) {
+                            lr[0] = s;
+                            lr[1] = s;
                         }
                     } else if cap_channels == 2 {
+                        raw_stereo_buffer.clear();
                         raw_stereo_buffer.extend_from_slice(&float_buffer);
                     } else {
                         let frames = float_buffer.len() / cap_channels.max(1);
-                        for f in 0..frames {
-                            raw_stereo_buffer.push(float_buffer[f * cap_channels]);
-                            raw_stereo_buffer.push(float_buffer[f * cap_channels + 1]);
+                        raw_stereo_buffer.resize(frames * 2, 0.0);
+                        for (lr, frame) in raw_stereo_buffer
+                            .chunks_exact_mut(2)
+                            .zip(float_buffer.chunks_exact(cap_channels))
+                        {
+                            lr[0] = frame[0];
+                            lr[1] = frame[1];
                         }
                     }
 
@@ -1032,9 +1063,10 @@ fn run_pipeline_session(
                     }
 
                     // Process DSP (80Hz HPF -> DeepFilterNet3_ll -> Neural Guard -> Preamp -> EQ -> VST)
-                    let (in_pk, out_pk) = dsp.process_interleaved(&mut dsp_stereo_buffer, ren_channels);
+                    // Streaming variable-length path preserves sample continuity across non-480 capture packet sizes.
+                    let (in_pk, out_pk) = dsp.process_interleaved_vec(&mut dsp_stereo_buffer, ren_channels);
 
-                    if is_primary {
+                    if is_primary && !dsp_stereo_buffer.is_empty() {
                         let new_frames = dsp_stereo_buffer.len() / ren_channels;
                         if new_frames > 0 {
                             let (lock, cvar) = get_shared_tap();
@@ -1072,7 +1104,9 @@ fn run_pipeline_session(
                     }
 
                     // Push processed frames to jitter ring buffer
-                    jitter_buffer.extend(dsp_stereo_buffer.iter().copied());
+                    if !dsp_stereo_buffer.is_empty() {
+                        jitter_buffer.extend(dsp_stereo_buffer.iter().copied());
+                    }
 
                     // Prevent buffer overflow and latency drift
                     if jitter_buffer.len() > 16384 {
