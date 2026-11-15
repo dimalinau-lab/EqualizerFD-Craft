@@ -30,8 +30,26 @@ const ID_TRAY_OPEN_FOLDER: usize = 1005;
 const ID_TRAY_EXIT: usize = 1006;
 
 static TRAY_STARTED: AtomicBool = AtomicBool::new(false);
+static COMPANION_RUNNING: AtomicBool = AtomicBool::new(false);
 static mut GLOBAL_TRAY_HWND: HWND = HWND(std::ptr::null_mut());
 static mut WM_TASKBAR_CREATED: u32 = 0;
+
+fn is_companion_active() -> bool {
+    if COMPANION_RUNNING.load(Ordering::Relaxed) {
+        return true;
+    }
+    unsafe {
+        use windows::Win32::System::Threading::{OpenMutexW, SYNCHRONIZATION_SYNCHRONIZE};
+        if let Ok(handle) = OpenMutexW(SYNCHRONIZATION_SYNCHRONIZE, false, windows::core::w!("EqualizerFDCraftTrayMutex")) {
+            if !handle.is_invalid() {
+                let _ = windows::Win32::Foundation::CloseHandle(handle);
+                COMPANION_RUNNING.store(true, Ordering::Relaxed);
+                return true;
+            }
+        }
+    }
+    false
+}
 
 fn load_tray_icon() -> HICON {
     unsafe {
@@ -184,8 +202,10 @@ unsafe extern "system" fn tray_wndproc(
         println!("tray_wndproc msg: 0x{:04X}", msg);
     }
     if WM_TASKBAR_CREATED != 0 && msg == WM_TASKBAR_CREATED {
-        // Explorer restarted, recreate the tray icon
-        add_or_update_tray_icon(hwnd);
+        // Explorer restarted, recreate the tray icon ONLY if companion is not active
+        if !is_companion_active() {
+            add_or_update_tray_icon(hwnd);
+        }
         return LRESULT(0);
     }
 
@@ -334,7 +354,6 @@ pub fn start_tray_service() {
         Some(std::path::PathBuf::from(r"D:\testik\EqualizerTray.exe")),
     ];
 
-    let mut companion_running = false;
     let my_pid = std::process::id();
     for opt_path in candidate_tray_paths.into_iter().flatten() {
         if opt_path.exists() {
@@ -343,7 +362,7 @@ pub fn start_tray_service() {
                 .spawn()
             {
                 println!("[Tray Service] Started EqualizerTray companion: {:?}", opt_path);
-                companion_running = true;
+                COMPANION_RUNNING.store(true, Ordering::SeqCst);
                 break;
             }
         }
@@ -394,7 +413,7 @@ pub fn start_tray_service() {
         GLOBAL_TRAY_HWND = hwnd;
 
         // Register tray icon if companion tray is not active
-        if !companion_running {
+        if !is_companion_active() {
             let ok = add_or_update_tray_icon(hwnd);
             if !ok {
                 let err = GetLastError();

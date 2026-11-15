@@ -74,7 +74,7 @@ function createDefaultBlocks() {
 }
 
 // --- App Version & VST Plugins Catalog (APO-PLUGINS Suite) ---
-let APP_VERSION = '1.3.1';
+let APP_VERSION = '1.3.2';
 let VST_BASE_DIR = 'D:\\\\testik\\\\vst_plugins\\\\';
 fetch('/api/info')
   .then(res => res.json())
@@ -5200,7 +5200,7 @@ let lastBytesDownloaded = 0;
 let lastSpeedTime = Date.now();
 
 function syncAppVersionUI() {
-  const ver = APP_VERSION || '1.3.1';
+  const ver = APP_VERSION || '1.3.2';
   if (updateCurrentVerText) {
     updateCurrentVerText.textContent = window.t
       ? window.t('update.currentVer', { ver }, `Текущая версия: v${ver}`)

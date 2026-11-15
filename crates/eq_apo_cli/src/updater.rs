@@ -551,15 +551,16 @@ mod tests {
     #[test]
     fn test_current_version_matches_cargo_pkg() {
         assert_eq!(CURRENT_VERSION, env!("CARGO_PKG_VERSION"));
-        assert_eq!(CURRENT_VERSION, "1.3.1");
+        assert_eq!(CURRENT_VERSION, "1.3.2");
     }
 
     #[test]
     fn test_is_newer_version_semver() {
-        assert!(!is_newer_version("1.3.1", "1.2.0"));
-        assert!(!is_newer_version("1.3.1", "1.3.0"));
-        assert!(!is_newer_version("1.3.1", "1.3.1"));
-        assert!(is_newer_version("1.3.1", "1.3.2"));
-        assert!(is_newer_version("1.0.0", "1.3.1"));
+        assert!(!is_newer_version("1.3.2", "1.2.0"));
+        assert!(!is_newer_version("1.3.2", "1.3.0"));
+        assert!(!is_newer_version("1.3.2", "1.3.1"));
+        assert!(!is_newer_version("1.3.2", "1.3.2"));
+        assert!(is_newer_version("1.3.2", "1.3.3"));
+        assert!(is_newer_version("1.0.0", "1.3.2"));
     }
 }

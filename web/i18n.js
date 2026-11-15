@@ -38,7 +38,7 @@
       if (this.dictionaries[lang]) return this.dictionaries[lang];
 
       try {
-        const res = await fetch(`/locales/${lang}.json?v=1.3.1`);
+        const res = await fetch(`/locales/${lang}.json?v=1.3.2`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         this.dictionaries[lang] = data;
