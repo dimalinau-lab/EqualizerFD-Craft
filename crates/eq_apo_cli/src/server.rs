@@ -487,10 +487,15 @@ fn dispatch_http_request(
 ) {
     if method == "GET" || method == "HEAD" {
         match path {
-            "/api/app/quit" => {
+            "/api/app/quit" | "/api/exit" => {
+                if let Ok(mut lock) = STREAM_CONTROLLER.lock() {
+                    if let Some(ref mut ctrl) = *lock {
+                        ctrl.stop();
+                    }
+                }
                 respond_ok(&mut stream, "application/json", b"{\"status\":\"quitting\"}");
                 std::thread::spawn(|| {
-                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    std::thread::sleep(std::time::Duration::from_millis(100));
                     crate::window_manager::kill_app_browser_processes();
                     std::process::exit(0);
                 });
@@ -757,18 +762,19 @@ fn dispatch_http_request(
         }
     } else if method == "POST" {
         match path {
-            "/api/exit" => {
-                println!("[ResonaDSP] Graceful shutdown requested. Stopping audio streams and exiting...");
+            "/api/exit" | "/api/app/quit" => {
+                println!("[ResonaDSP] Graceful shutdown requested. Stopping audio streams, closing GUI, and exiting...");
                 if let Ok(mut lock) = STREAM_CONTROLLER.lock() {
                     if let Some(ref mut ctrl) = *lock {
                         ctrl.stop();
                     }
                 }
+                respond_ok(&mut stream, "application/json", b"{\"status\":\"quitting\"}");
                 thread::spawn(|| {
-                    thread::sleep(Duration::from_millis(150));
+                    thread::sleep(Duration::from_millis(100));
+                    crate::window_manager::kill_app_browser_processes();
                     std::process::exit(0);
                 });
-                respond_ok(&mut stream, "application/json", b"{\"status\":\"exiting\"}");
             }
             "/api/window/hide" => {
                 crate::window_manager::hide_window();

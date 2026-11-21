@@ -1726,8 +1726,6 @@ function rebuildEqOverlayCache(w, h, isDark) {
   ectx.save();
   ectx.strokeStyle = isDark ? '#ffffff' : '#00d2ff';
   ectx.lineWidth = 2.0;
-  ectx.shadowColor = isDark ? 'rgba(255, 255, 255, 0.35)' : 'rgba(0, 210, 255, 0.4)';
-  ectx.shadowBlur = isDark ? 5 : 6;
   ectx.beginPath();
 
   const pLen = activeParamFilters.length;
@@ -2363,6 +2361,14 @@ if (canvas) {
 function initTheme() {
   const savedTheme = localStorage.getItem('resona_theme') || 'light';
   const isDark = savedTheme === 'dark';
+  const metaColorScheme = document.querySelector('meta[name="color-scheme"]');
+  if (metaColorScheme) {
+    metaColorScheme.content = isDark ? 'dark' : 'light';
+  }
+  const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+  if (metaThemeColor) {
+    metaThemeColor.content = isDark ? '#000000' : '#f0f0f0';
+  }
   if (isDark) {
     document.body.classList.add('theme-dark');
     document.body.classList.remove('theme-light');
@@ -2395,6 +2401,14 @@ function updateThemeUI(isLight) {
 function toggleTheme() {
   const isCurrentlyDark = document.body.classList.contains('theme-dark');
   const newIsDark = !isCurrentlyDark;
+  const metaColorScheme = document.querySelector('meta[name="color-scheme"]');
+  if (metaColorScheme) {
+    metaColorScheme.content = newIsDark ? 'dark' : 'light';
+  }
+  const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+  if (metaThemeColor) {
+    metaThemeColor.content = newIsDark ? '#000000' : '#f0f0f0';
+  }
   if (newIsDark) {
     document.body.classList.add('theme-dark');
     document.body.classList.remove('theme-light');
@@ -2446,7 +2460,7 @@ function updateSidetoneUI() {
     b.classList.toggle('active', isThisActive);
     b.style.background = isThisActive ? '#107c41' : '';
     b.style.color = isThisActive ? '#ffffff' : '';
-    b.textContent = isThisActive ? '🎧 В эфире' : '🎧 Слушать';
+    b.textContent = isThisActive ? 'В эфире' : 'Слушать';
   });
 }
 
@@ -2869,7 +2883,7 @@ function renderBlocks(targetScrollBlockId = null) {
 
       let vhtml = `
         <div class="plugin-desc-banner">
-          <div class="vst-desc-title">${meta.title} — ${meta.category}</div>
+          <div class="vst-desc-title">${meta.title} · ${meta.category}</div>
           <div class="vst-desc-body"><strong>${purposeLbl}</strong> ${meta.desc}</div>
           <div class="vst-desc-how"><strong>${howLbl}</strong> ${meta.howItWorks}</div>
         </div>
@@ -2923,7 +2937,7 @@ function renderBlocks(targetScrollBlockId = null) {
 
       let rhtml = `
         <div class="plugin-desc-banner rc505-desc">
-          <div class="rc505-desc-title">${meta.title} — ${meta.category}</div>
+          <div class="rc505-desc-title">${meta.title} · ${meta.category}</div>
           <div class="rc505-desc-body"><strong>${purposeLbl}</strong> ${meta.desc}</div>
           <div class="rc505-desc-how"><strong>${howLbl}</strong> ${meta.howItWorks}</div>
         </div>
@@ -3149,6 +3163,7 @@ function attachBlockEvents() {
     inp.addEventListener('blur', commitInput);
     inp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
+        if (e.isComposing || e.keyCode === 229) return;
         commitInput();
         inp.blur();
       }
@@ -3193,6 +3208,7 @@ function attachBlockEvents() {
     inp.addEventListener('blur', commitInput);
     inp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
+        if (e.isComposing || e.keyCode === 229) return;
         commitInput();
         inp.blur();
       }
@@ -4652,7 +4668,7 @@ async function renderConfiguratorDevices() {
       </td>
       <td class="cell-center" style="white-space: nowrap;">
         <button class="win-btn cfg-listen-btn ${isThisMonitored ? 'active' : ''}" data-guid="${d.guid}" data-type="${d.endpoint_type}" data-name="${(d.name || '').replace(/"/g, '&quot;')}" style="font-size: 11px; padding: 2px 8px; font-weight: 600; margin-right: 4px; ${isThisMonitored ? 'background:#107c41; color:#fff;' : ''}">
-          ${isThisMonitored ? '🎧 В эфире' : '🎧 Слушать'}
+          ${isThisMonitored ? 'В эфире' : 'Слушать'}
         </button>
         <button class="win-btn cfg-backup-btn" data-guid="${d.guid}" data-type="${d.endpoint_type}" style="font-size: 10px; padding: 2px 6px;">.reg</button>
       </td>

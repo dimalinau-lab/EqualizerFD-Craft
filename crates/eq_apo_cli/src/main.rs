@@ -288,6 +288,14 @@ pub fn launch_desktop_program() {
     // 3. Start background embedded server on port 49200
     let _ = server::start_embedded_server(APP_PORT);
 
+    // Wait up to 1 second for embedded HTTP server to accept connections
+    for _ in 0..50 {
+        if server::is_server_alive(APP_PORT) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+
     // 4. Launch standalone desktop application window
     open_or_focus_editor();
 
@@ -369,6 +377,15 @@ fn launch_browser_window(app_url: &str) {
         "--disable-popup-blocking",
         "--disable-pinch",
         "--overscroll-history-navigation=0",
+        "--no-proxy-server",
+        "--disable-background-networking",
+        "--disable-sync",
+        "--disable-domain-reliability",
+        "--disable-client-side-phishing-detection",
+        "--dns-prefetch-disable",
+        "--no-pings",
+        "--disable-offline-auto-reload",
+        "--disable-offline-auto-reload-visible-only",
     ];
 
     for path in edge_paths.iter().chain(chrome_paths.iter()) {

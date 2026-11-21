@@ -8,10 +8,10 @@ use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{
     BringWindowToTop, EnumWindows, GetClassNameW, GetForegroundWindow,
     GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsWindow, IsZoomed,
-    LoadImageW, SendMessageW, SetForegroundWindow, SetWindowPos, ShowWindow,
+    LoadImageW, PostMessageW, SendMessageW, SetForegroundWindow, SetWindowPos, ShowWindow,
     IMAGE_ICON, LR_LOADFROMFILE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
     SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE, SW_SHOW,
-    WM_SETICON,
+    WM_CLOSE, WM_SETICON,
 };
 
 #[link(name = "user32")]
@@ -256,13 +256,18 @@ pub fn close_window() {
 }
 
 pub fn kill_app_browser_processes() {
+    if let Some(hwnd) = find_app_window() {
+        unsafe {
+            let _ = PostMessageW(hwnd, WM_CLOSE, WPARAM(0), LPARAM(0));
+        }
+    }
     let _ = Command::new("powershell")
         .args([
             "-NoProfile",
             "-WindowStyle",
             "Hidden",
             "-Command",
-            "Get-CimInstance Win32_Process -Filter \"Name = 'msedge.exe'\" | Where-Object { $_.CommandLine -like '*EqualizerFDCraft\\profile*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }",
+            "Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'msedge.exe' -or $_.Name -eq 'chrome.exe') -and $_.CommandLine -like '*EqualizerFDCraft\\profile*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }",
         ])
         .creation_flags(CREATE_NO_WINDOW)
         .output();

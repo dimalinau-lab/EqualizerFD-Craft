@@ -420,7 +420,7 @@ checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
 
 [[package]]
 name = "eq_apo_core"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "approx",
  "serde",
@@ -429,7 +429,7 @@ dependencies = [
 
 [[package]]
 name = "eq_apo_device"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "eq_apo_core",
  "resona_apo",
@@ -440,7 +440,7 @@ dependencies = [
 
 [[package]]
 name = "equalizer_fd_craft"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "eq_apo_core",
  "eq_apo_device",
@@ -1109,7 +1109,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "resona_apo"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "deep_filter",
  "eq_apo_core",

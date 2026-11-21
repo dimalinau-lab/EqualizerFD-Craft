@@ -21,6 +21,8 @@ class EqualizerTrayApp {
     static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
     [DllImport("user32.dll")]
     static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
     delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
@@ -37,6 +39,9 @@ class EqualizerTrayApp {
 
     [STAThread]
     static void Main(string[] args) {
+        // Disable WebProxy / WPAD lookups completely to avoid offline network delays
+        WebRequest.DefaultWebProxy = null;
+
         bool createdNew;
         using (Mutex mutex = new Mutex(true, APP_MUTEX_NAME, out createdNew)) {
             if (!createdNew) {
@@ -133,6 +138,7 @@ class EqualizerTrayApp {
         bool httpSuccess = false;
         try {
             HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:49200/api/window/show");
+            req.Proxy = null;
             req.Method = "POST";
             req.ContentLength = 0;
             req.Timeout = 1500;
@@ -203,6 +209,7 @@ class EqualizerTrayApp {
         ThreadPool.QueueUserWorkItem((state) => {
             try {
                 HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:49200/api/status");
+                req.Proxy = null;
                 req.Timeout = 1200;
                 using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
                 using (StreamReader reader = new StreamReader(resp.GetResponseStream())) {
@@ -227,6 +234,7 @@ class EqualizerTrayApp {
         ThreadPool.QueueUserWorkItem((state) => {
             try {
                 HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:49200/api/stream/toggle");
+                req.Proxy = null;
                 req.Method = "POST";
                 req.ContentLength = 0;
                 req.Timeout = 2000;
@@ -275,6 +283,7 @@ class EqualizerTrayApp {
             // First try internal server API (elevated without UAC prompt)
             try {
                 HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:49200/api/apo/restart-engine");
+                req.Proxy = null;
                 req.Method = "POST";
                 req.ContentLength = 0;
                 req.Timeout = 3000;
@@ -316,20 +325,49 @@ class EqualizerTrayApp {
             }
         } catch { }
 
+        // 1. Tell backend server to quit (gracefully stops audio streams and triggers browser exit)
         try {
             HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:49200/api/app/quit");
+            req.Proxy = null;
             req.Method = "POST";
             req.ContentLength = 0;
             req.Timeout = 1200;
             using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse()) { }
-        } catch {
-            try {
-                Process[] procs = Process.GetProcessesByName("EqualizerFD-Craft");
-                foreach (Process p in procs) {
-                    try { p.Kill(); } catch { }
+        } catch { }
+
+        // 2. Send WM_CLOSE to any open GUI window
+        try {
+            EnumWindows((hWnd, lParam) => {
+                System.Text.StringBuilder sb = new System.Text.StringBuilder(512);
+                if (GetWindowText(hWnd, sb, 512) > 0) {
+                    string title = sb.ToString();
+                    if (title.IndexOf("Equalizer FD CRAFT", StringComparison.OrdinalIgnoreCase) >= 0) {
+                        PostMessage(hWnd, 0x0010, IntPtr.Zero, IntPtr.Zero); // WM_CLOSE = 0x0010
+                    }
                 }
-            } catch { }
-        }
+                return true;
+            }, IntPtr.Zero);
+        } catch { }
+
+        // 3. Fallback kill of any browser processes running our profile
+        try {
+            ProcessStartInfo psi = new ProcessStartInfo("powershell", "-NoProfile -WindowStyle Hidden -Command \"Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'msedge.exe' -or $_.Name -eq 'chrome.exe') -and $_.CommandLine -like '*EqualizerFDCraft\\profile*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }\"");
+            psi.CreateNoWindow = true;
+            psi.UseShellExecute = false;
+            Process p = Process.Start(psi);
+            if (p != null) {
+                p.WaitForExit(1000);
+            }
+        } catch { }
+
+        // 4. Clean up EqualizerFD-Craft backend process
+        try {
+            Process[] procs = Process.GetProcessesByName("EqualizerFD-Craft");
+            foreach (Process p in procs) {
+                try { p.Kill(); } catch { }
+            }
+        } catch { }
+
         Application.Exit();
     }
 }

@@ -10,6 +10,18 @@
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261026">
   <link rel="manifest" href="manifest.json?v=20261026">
   <meta name="theme-color" content="#f0f0f0">
+  <meta name="color-scheme" content="light dark">
+  <script>
+    try {
+      const savedTheme = localStorage.getItem('resona_theme');
+      if (savedTheme === 'dark' || savedTheme === 'light') {
+        const metaCs = document.querySelector('meta[name="color-scheme"]');
+        if (metaCs) metaCs.content = savedTheme;
+        const metaTc = document.querySelector('meta[name="theme-color"]');
+        if (metaTc) metaTc.content = savedTheme === 'dark' ? '#1a1a1a' : '#f0f0f0';
+      }
+    } catch (e) {}
+  </script>
   <link rel="preload" href="style.css" as="style">
   <link rel="preload" href="i18n.js" as="script">
   <link rel="preload" href="app.js" as="script">
@@ -371,13 +383,13 @@
       </div>
       <div class="dialog-body" style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
         <div>
-          <label style="display: block; font-weight: 600; margin-bottom: 5px;" data-i18n="dialogs.newConfig.filenameLabel">Имя файла конфигурации / вкладки:</label>
+          <label style="display: block; font-weight: 600; margin-bottom: 4px;" data-i18n="dialogs.newConfig.filenameLabel">Имя файла конфигурации / вкладки:</label>
           <input type="text" id="newConfigFilename" class="win-select" style="width: 100%; height: 28px; padding: 4px 8px; font-weight: 600;" value="custom_preset.txt">
-          <span style="font-size: 11px; color: #64748b; margin-top: 3px; display: block;" data-i18n="dialogs.newConfig.filenameDesc">Будет добавлена новая отдельная вкладка без перезаписи текущей.</span>
+          <span style="font-size: 11px; color: #64748b; margin-top: 4px; display: block;" data-i18n="dialogs.newConfig.filenameDesc">Будет добавлена новая отдельная вкладка без перезаписи текущей.</span>
         </div>
 
         <div>
-          <label style="display: block; font-weight: 600; margin-bottom: 5px;" data-i18n="dialogs.newConfig.presetLabel">Начальный шаблон / Готовый пресет:</label>
+          <label style="display: block; font-weight: 600; margin-bottom: 4px;" data-i18n="dialogs.newConfig.presetLabel">Начальный шаблон / Готовый пресет:</label>
           <select id="newConfigPreset" class="win-select" style="width: 100%; height: 28px; padding: 2px 6px;">
             <option value="empty" data-i18n="dialogs.newConfig.presetEmpty">Чистый эквалайзер (Только Preamp 0 dB)</option>
             <option value="voice_discord" data-i18n="dialogs.newConfig.presetVoice" selected>Стрим и Discord (High-Pass 80Hz + Peaking 1.2kHz + High-Shelf)</option>
@@ -388,7 +400,7 @@
         </div>
 
         <div>
-          <label style="display: block; font-weight: 600; margin-bottom: 5px;" data-i18n="dialogs.newConfig.deviceLabel">Целевое аудиоустройство:</label>
+          <label style="display: block; font-weight: 600; margin-bottom: 4px;" data-i18n="dialogs.newConfig.deviceLabel">Целевое аудиоустройство:</label>
           <select id="newConfigDevice" class="win-select" style="width: 100%; height: 28px; padding: 2px 6px;">
             <option value="all" data-i18n="dialogs.newConfig.deviceAll">Все устройства (All Endpoints - Global)</option>
           </select>
@@ -452,7 +464,7 @@
         <span data-i18n="wizard.title">Мастер быстрой настройки микрофона</span>
         <button class="dialog-close" id="closeWizardModalBtn">&times;</button>
       </div>
-      <div class="dialog-body" style="padding: 18px; font-size: 12px; line-height: 1.5;">
+      <div class="dialog-body" style="padding: 16px; font-size: 12px; line-height: 1.5;">
         <p style="margin-bottom: 14px; font-size: 13px; color: #1e293b;" data-i18n="wizard.welcome">
           Добро пожаловать в Equalizer FD CRAFT! Давайте настроим ваш рабочий микрофон в 2 простых шага.
         </p>
@@ -574,7 +586,7 @@
         </div>
 
         <div>
-          <label style="display: block; font-weight: 600; margin-bottom: 5px;" data-i18n="vstModal.quickFolder">Быстрый выбор стандартных каталогов:</label>
+          <label style="display: block; font-weight: 600; margin-bottom: 4px;" data-i18n="vstModal.quickFolder">Быстрый выбор стандартных каталогов:</label>
           <select id="quickVstFolderSelect" class="win-select" style="width: 100%; height: 28px; padding: 2px 6px;">
             <option value="" data-i18n="vstModal.optSelectFolder">-- Выберите стандартную папку VST --</option>
             <option id="optBundledVst" value="D:\testik\vst_plugins\" data-i18n="vstModal.optBundled">Встроенная библиотека VST: D:\testik\vst_plugins\</option>
@@ -625,7 +637,7 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
               
               <!-- Fast Update Card -->
-              <div id="cardFastUpdate" style="border: 1px solid #93c5fd; background: #f0f7ff; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; transition: all 0.2s ease;">
+              <div id="cardFastUpdate" style="border: 1px solid #93c5fd; background: #f0f7ff; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; transition: border-color 150ms ease, box-shadow 150ms ease;">
                 <div>
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                     <span style="font-weight: 700; font-size: 12px; color: #1e3a8a;" data-i18n="update.fastTitle">Быстрое обновление</span>
@@ -640,7 +652,7 @@
               </div>
 
               <!-- Full Reinstallation Card -->
-              <div id="cardFullInstall" style="border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; transition: all 0.2s ease;">
+              <div id="cardFullInstall" style="border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; transition: border-color 150ms ease, box-shadow 150ms ease;">
                 <div>
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                     <span style="font-weight: 700; font-size: 12px; color: #0f172a;" data-i18n="update.fullTitle">Полная переустановка</span>
@@ -690,7 +702,7 @@
         <span data-i18n="about.title">О программе Equalizer FD CRAFT</span>
         <button class="dialog-close" id="closeAboutBtn">&times;</button>
       </div>
-      <div class="dialog-body" style="padding: 18px; line-height: 1.6; font-size: 12px;">
+      <div class="dialog-body" style="padding: 16px; line-height: 1.6; font-size: 12px;">
         <div style="display: flex; gap: 14px; align-items: center; margin-bottom: 12px;">
           <div style="width: 44px; height: 44px; border-radius: 8px; background: #0078d7; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 20px;">
             FD
@@ -729,7 +741,7 @@
       <div class="dialog-body" style="padding: 16px; font-size: 12px; line-height: 1.5; color: #1e293b;">
         <div style="background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 6px; padding: 10px; margin-bottom: 12px;">
           <div style="font-weight: 600; color: #0369a1; margin-bottom: 4px;" data-i18n="vbcable.whyTitle">Зачем нужен виртуальный кабель?</div>
-          <span data-i18n="vbcable.whyText">Equalizer FD CRAFT обрабатывает ваш микрофон в реальном времени и отправляет звук в виртуальный кабель (<strong>CABLE Input</strong>). В Discord, Telegram, OBS, CS2 и Skype вы выбираете устройство ввода <strong>CABLE Output</strong> — и собеседники слышат обработанный звук студийного качества.</span>
+          <span data-i18n="vbcable.whyText">Equalizer FD CRAFT обрабатывает ваш микрофон в реальном времени и отправляет звук в виртуальный кабель (<strong>CABLE Input</strong>). В Discord, Telegram, OBS, CS2 и Skype вы выбираете устройство ввода <strong>CABLE Output</strong>, чтобы направить обработанный звук собеседникам.</span>
         </div>
 
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 14px;">
